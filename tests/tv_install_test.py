@@ -33,13 +33,13 @@ flag = os.path.join(tmp, "opened")
 fake = os.path.join(tmp, "adb")
 open(fake, "w").write(f'''#!/bin/sh
 case "$1" in
-  mdns) printf 'adb-SONY-x\\t_adb-tls-connect._tcp\\t192.168.1.20:37123\\nother\\t_adb-tls-connect._tcp\\t192.168.1.99:40000\\n' ;;
+  mdns) printf 'adb-SONY-x\\t_adb-tls-connect._tcp\\t203.0.113.20:37123\\nother\\t_adb-tls-connect._tcp\\t203.0.113.99:40000\\n' ;;
   connect) echo "connected to $2" ;;
-  -s) [ "$2" = 192.168.1.20:37123 ] && [ "$3" = tcpip ] && touch {flag} && echo "restarting in TCP mode port: $4" ;;
+  -s) [ "$2" = 203.0.113.20:37123 ] && [ "$3" = tcpip ] && touch {flag} && echo "restarting in TCP mode port: $4" ;;
 esac
 ''')
 os.chmod(fake, os.stat(fake).st_mode | stat.S_IEXEC)
-os.environ.update(TV_HOST="192.168.1.20", TV_TRIES="3", ADB=fake)
+os.environ.update(TV_HOST="203.0.113.20", TV_TRIES="3", ADB=fake)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "optimize"))
 import tv
 tv.time.sleep = lambda s: None
