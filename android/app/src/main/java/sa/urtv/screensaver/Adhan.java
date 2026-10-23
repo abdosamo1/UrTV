@@ -168,10 +168,41 @@ final class Adhan {
 
     static final String ACTION = "sa.urtv.screensaver.ADHAN";
 
+    static final String REMIND = "sa.urtv.screensaver.ADHAN_REMINDER";
+
     private static PendingIntent alarm(Context c, int prayer, long at) {
         Intent i = new Intent(c, AdhanReceiver.class).setAction(ACTION).putExtra("prayer", prayer).putExtra("at", at);
         int flags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0);
         return PendingIntent.getBroadcast(c, 7, i, flags);
+    }
+
+    /** the notice before an adhan: its own alarm (request code 9), `at` = the adhan's time */
+    private static PendingIntent reminder(Context c, int prayer, long at) {
+        Intent i = new Intent(c, AdhanReceiver.class).setAction(REMIND).putExtra("prayer", prayer).putExtra("at", at);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0);
+        return PendingIntent.getBroadcast(c, 9, i, flags);
+    }
+
+    private static void exact(Context c, AlarmManager am, long when, PendingIntent pi) {
+        try {
+            if (Build.VERSION.SDK_INT >= 31 && !am.canScheduleExactAlarms()) throw new SecurityException("no exact alarms");
+            int flags = Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0;
+            PendingIntent show = PendingIntent.getActivity(c, 8, new Intent(c, SettingsActivity.class), flags);
+            am.setAlarmClock(new AlarmManager.AlarmClockInfo(when, show), pi);   // exact, and wakes an idle TV
+        } catch (SecurityException e) {
+            if (Build.VERSION.SDK_INT >= 23) am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, when, pi);
+            else am.set(AlarmManager.RTC_WAKEUP, when, pi);
+        }
+    }
+
+    /** The notice before the next adhan (all five prayers; it only shows while the screen is on). */
+    private static void scheduleReminder(Context c, Prefs p, AlarmManager am, JSONObject times) {
+        int mins = p.reminderMinutes();
+        if (mins <= 0) { am.cancel(reminder(c, -1, 0)); return; }
+        long lead = mins * 60_000L;
+        long[] n = AdhanTimes.next(days(times), System.currentTimeMillis() + lead + 30_000L, TimeZone.getDefault(), true);
+        if (n == null) { am.cancel(reminder(c, -1, 0)); return; }
+        exact(c, am, n[0] - lead, reminder(c, (int) n[1], n[0]));
     }
 
     /** Arms the one alarm for the next adhan from the stored timetable (no network). */
@@ -179,28 +210,21 @@ final class Adhan {
         Prefs p = new Prefs(c);
         AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
         if (am == null) return;
+        JSONObject times = read(c);
+        scheduleReminder(c, p, am, times);
         if (!p.adhanOn()) {
             am.cancel(alarm(c, -1, 0));
             p.setNextAdhan("");
             return;
         }
-        long[] n = AdhanTimes.next(days(read(c)), System.currentTimeMillis() + 30_000L, TimeZone.getDefault(),
+        long[] n = AdhanTimes.next(days(times), System.currentTimeMillis() + 30_000L, TimeZone.getDefault(),
             !p.adhanFajr().isEmpty());
         if (n == null) {
             am.cancel(alarm(c, -1, 0));
             p.setNextAdhan("لا توجد مواقيت بعد (يحتاج اتصالاً بالإنترنت مرة)");
             return;
         }
-        PendingIntent pi = alarm(c, (int) n[1], n[0]);
-        try {
-            if (Build.VERSION.SDK_INT >= 31 && !am.canScheduleExactAlarms()) throw new SecurityException("no exact alarms");
-            int flags = Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0;
-            PendingIntent show = PendingIntent.getActivity(c, 8, new Intent(c, SettingsActivity.class), flags);
-            am.setAlarmClock(new AlarmManager.AlarmClockInfo(n[0], show), pi);   // exact, and wakes an idle TV
-        } catch (SecurityException e) {
-            if (Build.VERSION.SDK_INT >= 23) am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, n[0], pi);
-            else am.set(AlarmManager.RTC_WAKEUP, n[0], pi);
-        }
+        exact(c, am, n[0], alarm(c, (int) n[1], n[0]));
         p.setNextAdhan(AdhanTimes.NAMES[(int) n[1]] + " · " + AdhanTimes.clock(n[0], TimeZone.getDefault()));
     }
 

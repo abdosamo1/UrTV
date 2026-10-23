@@ -63,24 +63,6 @@ final class Prefs {
         {"American Major League Soccer", "الدوري الأمريكي"},
     };
 
-    // TVMaze genre (sent to the page), Arabic label
-    static final String[][] GENRES = {
-        {"Drama", "دراما"}, {"Comedy", "كوميديا"}, {"Action", "أكشن"}, {"Crime", "جريمة"},
-        {"Thriller", "إثارة"}, {"Mystery", "غموض"}, {"Science-Fiction", "خيال علمي"},
-        {"Fantasy", "فانتازيا"}, {"Adventure", "مغامرة"}, {"Romance", "رومانسي"},
-        {"Family", "عائلي"}, {"History", "تاريخي"}, {"Horror", "رعب"},
-        {"Anime", "أنمي"}, {"Documentary", "وثائقي"}, {"Sports", "رياضة"},
-    };
-
-    // TVMaze language, Arabic label
-    static final String[][] LANGS = {
-        {"English", "الإنجليزية"}, {"Arabic", "العربية"}, {"Korean", "الكورية"},
-        {"Japanese", "اليابانية"}, {"Turkish", "التركية"}, {"Spanish", "الإسبانية"},
-        {"French", "الفرنسية"}, {"Hindi", "الهندية"}, {"German", "الألمانية"},
-    };
-
-    static final String[] MIN_RATINGS = {"0", "6", "6.5", "7", "7.5", "8"};
-
     // minutes between background photos (sent to the page as #photos=; 30 is what it always did)
     static final String[] PHOTO_MINUTES = {"5", "10", "15", "30", "60"};
 
@@ -147,6 +129,11 @@ final class Prefs {
     int adhanVolume() { return sp.getInt("adhanVolume", 10); }
     void setAdhanVolume(int v) { sp.edit().putInt("adhanVolume", v).apply(); }
 
+    /** minutes before each adhan for the notice at the top right; 0 = off. 30 by default */
+    int reminderMinutes() { return sp.getInt("reminderMinutes", 30); }
+    void setReminderMinutes(int v) { sp.edit().putInt("reminderMinutes", v).apply(); }
+    static final int[] REMINDER_MINUTES = {10, 15, 20, 30, 45, 60};
+
     /** «العصر · ٣:٤٩ م», written by Adhan.schedule for the settings screen */
     String nextAdhan() { return sp.getString("nextAdhan", ""); }
     void setNextAdhan(String v) { sp.edit().putString("nextAdhan", v).apply(); }
@@ -179,12 +166,18 @@ final class Prefs {
 
     // The card beside the clock: value sent to the page (#panel=), Arabic label
     static final String[][] PANELS = {
-        {"shows", "جديد المسلسلات"}, {"prayers", "مواقيت الصلاة اليوم"}, {"forecast", "طقس الأيام القادمة"},
+        {"prayers", "مواقيت الصلاة اليوم"}, {"forecast", "طقس الأيام القادمة"},
         {"matches", "مباريات فرقك القادمة"}, {"verse", "آية أو حديث اليوم"}, {"none", "لا شيء"},
     };
 
     /** Older builds had an on/off switch for the card; off becomes "none", otherwise the verse card. */
-    String panel() { return sp.getString("panel", sp.getBoolean("showWeek", true) ? "verse" : "none"); }
+    String panel() { return known(sp.getString("panel", sp.getBoolean("showWeek", true) ? "verse" : "none"), "verse"); }
+
+    /** a card that is no longer offered (the TV-shows card was removed) falls back to `instead` */
+    private static String known(String v, String instead) {
+        for (String[] p : PANELS) if (p[0].equals(v)) return v;
+        return instead;
+    }
     void setPanel(String v) { sp.edit().putString("panel", v).apply(); }
 
     static String panelLabel(String v) {
@@ -198,12 +191,6 @@ final class Prefs {
         return out;
     }
     void setList(String key, List<String> v) { sp.edit().putString(key, join(v, ";")).apply(); }
-
-    /** shows picked one by one, stored as "id|name" */
-    List<String> shows() { return list("shows"); }
-
-    String minRating() { return sp.getString("minRating", "7"); }
-    void setMinRating(String v) { sp.edit().putString("minRating", v).apply(); }
 
     String photoMinutes() { return sp.getString("photoMinutes", "30"); }
     void setPhotoMinutes(String v) { sp.edit().putString("photoMinutes", v).apply(); }
@@ -229,8 +216,6 @@ final class Prefs {
     /** Everything the page needs, as "city=..&lat=..&..."; also read by the launcher (ConfigProvider). */
     String fragment() {
         String[] city = city();
-        List<String> ids = new ArrayList<>();
-        for (String s : shows()) ids.add(s.split("\\|", 2)[0]);
         return "city=" + Uri.encode(city[0]) + "&lat=" + city[1] + "&lon=" + city[2]
             + "&tz=" + Uri.encode(tz())
             + (autoLocation() ? "&loc=auto" : "")
@@ -238,15 +223,11 @@ final class Prefs {
             + "&teams=" + join(teamIds(), ",")
             + "&panel=" + panel()
             + "&week=" + ("none".equals(panel()) ? "0" : "1")   // for a page older than #panel
-            + "&genres=" + Uri.encode(join(list("genres"), ","))
-            + "&langs=" + Uri.encode(join(list("langs"), ","))
-            + "&shows=" + join(ids, ",")
-            + "&minrating=" + minRating()
             + "&photos=" + photoMinutes();
     }
 
     /** The card on the launcher's home screen: one of PANELS, off ("none") until the user picks one. */
-    String homePanel() { return sp.getString("homePanel", "none"); }
+    String homePanel() { return known(sp.getString("homePanel", "none"), "none"); }
     void setHomePanel(String v) { sp.edit().putString("homePanel", v).apply(); }
 
     List<String> teamIds() {

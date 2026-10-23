@@ -214,8 +214,7 @@ public class MainActivity extends Activity {
         root.addView(wallFront, new FrameLayout.LayoutParams(-1, -1));
         // Scrim: darker at the top (clock, pills) and bottom (dock) so text stays readable.
         View scrim = new View(this);
-        scrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{0xB3000000, 0x40000000, 0x26000000, 0x8C000000, 0xE6000000}));
+        scrim.setBackground(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, SCRIM));
         root.addView(scrim, new FrameLayout.LayoutParams(-1, -1));
         gridShade = new View(this);
         gridShade.setBackgroundColor(0xB3000000);
@@ -269,11 +268,7 @@ public class MainActivity extends Activity {
         dockRow.setClipChildren(false);
         dockRow.setClipToPadding(false);
         dockRow.setPadding(dp(20), dp(22), dp(20), dp(22));
-        GradientDrawable band = new GradientDrawable();
-        band.setCornerRadius(dp(26));
-        band.setColor(0x1FFFFFFF);
-        band.setStroke(dp(1), 0x14FFFFFF);
-        dockRow.setBackground(band);
+        dockRow.setBackground(new Glass(dockRow, dp(30), dp(1.2f), 0x14FFFFFF, true));   // the dock: a glass shelf
         bottom.addView(dockRow, new LinearLayout.LayoutParams(-1, -2));
 
         appsLabel = text(11, "sans-serif-medium", 0x99FFFFFF);
@@ -338,6 +333,8 @@ public class MainActivity extends Activity {
         return header;
     }
 
+    private static final int PILL_GLASS = 0x24FFFFFF;
+
     /** Pill button: label with a Material icon on its right (Arabic reading order), tinted with the text. */
     private TextView pill(String label, int icon) {
         TextView p = text(12, "sans-serif-medium", 0xE6FFFFFF);
@@ -351,13 +348,13 @@ public class MainActivity extends Activity {
         p.setPadding(dp(14), 0, dp(14), 0);
         p.setFocusable(true);
         p.setId(View.generateViewId());
-        GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius(dp(15));
-        bg.setColor(0x66000000);
-        bg.setStroke(dp(1), 0x33FFFFFF);
+        // glass: the wallpaper frosted through it; focused it turns to bright frosted glass with dark text
+        Glass bg = new Glass(p, dp(15), dp(1.2f), PILL_GLASS, true);
         p.setBackground(bg);
+        p.setElevation(dp(5));   // a soft shadow under the glass (Glass.getOutline)
         p.setOnFocusChangeListener((v, has) -> {
-            bg.setColor(has ? 0xF2FFFFFF : 0x66000000);
+            bg.setGlassTint(has ? 0xE0F7F7F9 : PILL_GLASS);
+            bg.setLit(has);
             ((TextView) v).setTextColor(has ? 0xFF111111 : 0xE6FFFFFF);
             ic.setTint(has ? 0xFF111111 : 0xE6FFFFFF);
             v.animate().scaleX(has ? 1.08f : 1f).scaleY(has ? 1.08f : 1f)
@@ -437,6 +434,8 @@ public class MainActivity extends Activity {
         else if (!dockCards.isEmpty()) dockCards.get(0).requestFocus();
     }
 
+    private static final int TILE_RADIUS = 14;   // rounder, like iPhone icons
+
     /** A 16:9 card with the app's banner; the name shows under it while focused. */
     private View tile(App app, boolean inDock) {
         LinearLayout box = new LinearLayout(this);
@@ -452,12 +451,17 @@ public class MainActivity extends Activity {
         card.setClipToOutline(true);
         card.setOutlineProvider(new ViewOutlineProvider() {
             @Override public void getOutline(View v, Outline o) {
-                o.setRoundRect(0, 0, v.getWidth(), v.getHeight(), dp(10));
+                o.setRoundRect(0, 0, v.getWidth(), v.getHeight(), dp(TILE_RADIUS));
             }
         });
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(app.isBanner ? 0xFF1C1C1E : darken(app.color, 0.45f));
-        card.setBackground(bg);
+        if (app.isBanner) {
+            card.setBackgroundColor(0xFF1C1C1E);
+        } else if (inDock) {
+            // an icon on the dock: frosted glass tinted with the app's colour, the photo through it
+            card.setBackground(new Glass(card, dp(TILE_RADIUS), 0, Glass.alpha(app.color, 0.32f), true).plain());
+        } else {
+            card.setBackgroundColor(darken(app.color, 0.45f));   // the grid scrolls: a solid backing
+        }
 
         ImageView img = new ImageView(this);
         img.setImageDrawable(app.art);
@@ -470,15 +474,11 @@ public class MainActivity extends Activity {
             img.setPadding(dp(22), dp(14), dp(22), dp(14));
         }
 
-        // Focus ring and sheen, drawn above the art.
-        GradientDrawable ring = new GradientDrawable();
-        ring.setCornerRadius(dp(10));
-        ring.setStroke(dp(2), 0xE6FFFFFF);
-        ring.setOrientation(GradientDrawable.Orientation.TL_BR);
-        ring.setColors(new int[]{0x26FFFFFF, 0x00FFFFFF, 0x00FFFFFF});
+        // The glass face over the art, as on an iPhone icon: a gloss and a light-catching rim, always there,
+        // brighter when focused.
         View shine = new View(this);
-        shine.setBackground(ring);
-        shine.setAlpha(0f);
+        Glass face = new Glass(shine, dp(TILE_RADIUS), dp(1.5f), Glass.CLEAR, false);
+        shine.setBackground(face);
         card.addView(shine, new FrameLayout.LayoutParams(-1, -1));
 
         box.addView(card, new LinearLayout.LayoutParams(-1, -2));
@@ -499,7 +499,7 @@ public class MainActivity extends Activity {
             v.animate().scaleX(s).scaleY(s).translationZ(has ? dp(14) : 0)
                     .setInterpolator(has ? new OvershootInterpolator(1.8f) : new DecelerateInterpolator())
                     .setDuration(has ? 320 : 200).start();
-            shine.animate().alpha(has ? 1f : 0f).setDuration(160).start();
+            face.setLit(has);
             label.animate().alpha(has ? 1f : 0f).translationY(has ? dp(4) : 0).setDuration(200).start();
             if (!has) return;
             lastFocusedId = v.getId();
@@ -635,11 +635,7 @@ public class MainActivity extends Activity {
         LinearLayout list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
         list.setPadding(dp(8), dp(8), dp(8), dp(8));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius(dp(16));
-        bg.setColor(0xF02A2A2E);
-        bg.setStroke(dp(1), 0x26FFFFFF);
-        list.setBackground(bg);
+        list.setBackground(new Glass(list, dp(18), dp(1.2f), 0xA61C1C20, true));   // a glass menu
         PopupWindow pw = new PopupWindow(list, dp(230), -2, true);
         List<TextView> rows = new ArrayList<>();
         for (int k = 0; k < labels.size(); k++) rows.add(inputRow(labels.get(k), actions.get(k)));
@@ -665,11 +661,7 @@ public class MainActivity extends Activity {
         LinearLayout list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
         list.setPadding(dp(8), dp(8), dp(8), dp(8));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius(dp(16));
-        bg.setColor(0xF02A2A2E);
-        bg.setStroke(dp(1), 0x26FFFFFF);
-        list.setBackground(bg);
+        list.setBackground(new Glass(list, dp(18), dp(1.2f), 0xA61C1C20, true));   // a glass menu
 
         PopupWindow pw = new PopupWindow(list, dp(200), -2, true);
         List<TextView> rows = new ArrayList<>();
@@ -725,11 +717,11 @@ public class MainActivity extends Activity {
         r.setPadding(dp(14), 0, dp(14), 0);
         r.setFocusable(true);
         GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius(dp(10));
+        bg.setCornerRadius(dp(12));
         bg.setColor(Color.TRANSPARENT);
         r.setBackground(bg);
         r.setOnFocusChangeListener((v, has) -> {
-            bg.setColor(has ? 0xF2FFFFFF : Color.TRANSPARENT);
+            bg.setColor(has ? 0xE6F7F7F9 : Color.TRANSPARENT);
             r.setTextColor(has ? 0xFF111111 : Color.WHITE);
         });
         return r;
@@ -979,6 +971,8 @@ public class MainActivity extends Activity {
         root.removeView(wallFront);
         root.addView(wallFront, 1, new FrameLayout.LayoutParams(-1, -1));
         wallFront.setImageBitmap(bm);
+        android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+        Glass.setWallpaper(bm, dm.widthPixels, dm.heightPixels, SCRIM);   // the glass shows the new photo
         wallFront.setAlpha(0f);
         wallFront.animate().alpha(1f).setDuration(firstWallpaper ? 600 : 2000).withEndAction(() -> {
             wallBack.setImageDrawable(null); // release the previous photo
@@ -1071,6 +1065,8 @@ public class MainActivity extends Activity {
     }
 
     static final int GOLD = 0xFFD6AF6B;
+    // darker at the top (clock, pills) and bottom (dock); the glass's frosted wallpaper is darkened the same way
+    static final int[] SCRIM = {0xB3000000, 0x40000000, 0x26000000, 0x8C000000, 0xE6000000};
     static final String SAVER_PKG = "sa.urtv.screensaver";
     private final Map<String, Typeface> fonts = new HashMap<>();
 

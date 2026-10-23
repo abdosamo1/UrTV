@@ -23,7 +23,7 @@ One grid with three rows — `grid-template-rows: auto 1fr auto`, stage padding 
 **Middle row — card left, clock centred in the space between the card and the right edge:**
 - Clock `font-size: clamp(120px, min(17vw, 31vh), 345px)` (≈300px tall), `line-height .92`. 12-hour always, Arabic-Indic digits, gold colon, and a small gold `ص`/`م` at `.28em` at the upper left of the time. Under it a tiny muted line `بتوقيت الرياض`.
   - Browsers ignore `letter-spacing` on Arabic script, digits included, and the display font's `٤` reaches into the next digit: put every digit in its own inline box with a `.09em` margin between boxes.
-- The card on the left: translucent panel (`rgba(4,14,9,.46)`, 1px gold border, radius 12, backdrop blur), width `min(760px, 48vw)`. Its content is a setting (`#panel=`): new episodes (below, the default), today's prayer times (next one gold, past ones dim), a 5-day forecast, every followed team's games this week, a verse one day and a hadith the next, or no card.
+- The card on the left: translucent panel (`rgba(4,14,9,.46)`, 1px gold border, radius 12, backdrop blur), width `min(760px, 48vw)`. Its content is a setting (`#panel=`): a verse or hadith of the day (the default), today's prayer times (next one gold, past ones dim), a 5-day forecast, every followed team's games this week, a verse one day and a hadith the next, or no card.
   - Header `هذا الأسبوع` with a gold rule fading out to the left.
   - Exactly 5 rows, each a single flex line: show name (right, `flex:0 1 auto; max-width:68%`, ellipsis), then `الموسم ٣ · ح ٧`, then the rating `٨٫١`, then the weekday anchored at the far left (`flex:1 1 auto; text-align:left`). Hairline under every row.
   - Pool of up to 50 titles, 5 per page, a new page every 25 seconds with a staggered fade-up (`opacity` + `translateY(8px)`, 60ms per row) and wraparound at the end.
@@ -69,9 +69,6 @@ All three are built identically — small gold label, big value, small sub-line 
 - **Weather** — Open-Meteo:
   `https://api.open-meteo.com/v1/forecast?latitude=24.7136&longitude=46.6753&current=temperature_2m,weather_code&timezone=Asia/Riyadh`
   Map the WMO `weather_code` to a short Arabic phrase. Refresh every 30 minutes.
-- **Premieres** — TVMaze schedules:
-  `https://api.tvmaze.com/schedule?country=US&date=YYYY-MM-DD` and `https://api.tvmaze.com/schedule/web?date=YYYY-MM-DD`, for each of the next 7 days.
-  Keep `rating.average >= 7`, drop soaps (`genres` includes `Soap`), drop seasons above 15 and any entry without an episode number, dedupe by show name, cap the pool at 50, premieres first then by date.
 - **Fixtures** — TheSportsDB test key `123`:
   `eventsnext.php?id=136013` (Al-Hilal) and `?id=136137` (Saudi national team); `eventslast.php?id=…` for results.
   `strTimestamp` has no offset — append `Z`, then render in `Asia/Riyadh`.

@@ -87,11 +87,14 @@ if [ "$what" = saver ] || [ "$what" = all ]; then
     "settings put secure screensaver_default_component sa.urtv.screensaver/.ScreenDream" \
     "appops set sa.urtv.screensaver SCHEDULE_EXACT_ALARM allow" \
     "appops set sa.urtv.screensaver TURN_SCREEN_ON allow" \
+    "appops set sa.urtv.screensaver SYSTEM_ALERT_WINDOW allow" \
+    "pm grant sa.urtv.screensaver android.permission.POST_NOTIFICATIONS" \
     "cmd deviceidle whitelist +sa.urtv.screensaver" \
     "dpm set-active-admin --user 0 sa.urtv.screensaver/.AdminReceiver" \
     "am start -n sa.urtv.screensaver/.SettingsActivity" \
     | "$PY" -I optimize/tv.py --batch
-  # the adhan: exact alarms, turning the screen on in standby, no battery limits, and the force-lock admin that
+  # the adhan: exact alarms, turning the screen on in standby, the notice over other apps (top right), no battery
+  # limits, and the force-lock admin that
   # puts the TV back to sleep after an adhan that woke it (lines a TV doesn't know just print an error, harmless)
   echo "Screensaver installed and selected (with the adhan). Its settings screen is open on the TV."
 fi

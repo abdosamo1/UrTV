@@ -77,7 +77,7 @@ const SAMPLE = {
   },
 };
 const EXPECT = { prayers: [6, 'مواقيت اليوم'], forecast: [5, 'الأيام القادمة'], matches: [2, 'مباريات فرقك'],
-                 verse: [2, null], shows: [1, 'هذا الأسبوع'] };
+                 verse: [2, null] };
 for (const [panel, [rows, title]] of Object.entries(EXPECT)) {
   const { p, ctx, errors } = await open('tv.html', 'teams=136013&panel=' + panel);
   if (SAMPLE[panel]) await p.evaluate(`(${SAMPLE[panel]})(); renderPanel(false);`);
@@ -150,7 +150,7 @@ for (const [hash, panel, shown] of [['', 'verse', true], ['week=0', 'none', fals
 }
 
 // ---- card-only mode for the launcher: transparent, only the card, no photo
-for (const panel of ['prayers', 'verse', 'shows']) {
+for (const panel of ['prayers', 'verse']) {
   const { p, ctx, errors } = await open('tv.html', `widget=1&panel=${panel}`, { width: 461, height: 250 });
   const r = await p.evaluate(() => ({
     bg: getComputedStyle(document.body).backgroundColor,
@@ -161,17 +161,17 @@ for (const panel of ['prayers', 'verse', 'shows']) {
   await ctx.close();
 }
 
-// ---- last panels come back at once on the next start
+// ---- the TV-shows card was removed: an old #panel=shows gets the verse card, and nothing calls TVMaze
 {
   const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
-  await ctx.route(/^https?:/, r => r.abort());
+  const seen = [];
+  await ctx.route(/^https?:/, r => { seen.push(new URL(r.request().url()).host); return r.abort(); });
   const p = await ctx.newPage();
-  await p.goto(page('tv.html') + '#panel=shows');
-  await p.waitForTimeout(800);
-  await p.evaluate(() => { document.getElementById('week-list').innerHTML = '<li>SAVED</li>'; saveSnap(); });
-  await p.reload();
-  const t = await p.evaluate(() => document.getElementById('week-list').textContent);
-  check('saved panels restored on the next start', t === 'SAVED', t);
+  await p.goto(page('tv.html') + '#panel=shows&genres=Drama&shows=1&minrating=7');
+  await p.waitForTimeout(1200);
+  const r = await p.evaluate(() => ({ panel: CONFIG.panel, hd: document.getElementById('week-hd').textContent }));
+  check('old #panel=shows: the verse card instead, no TVMaze', r.panel === 'verse' && ['آية اليوم', 'حديث اليوم'].includes(r.hd)
+        && !seen.some(h => /tvmaze/.test(h)), JSON.stringify(r) + ' ' + seen.join(','));
   await ctx.close();
 }
 

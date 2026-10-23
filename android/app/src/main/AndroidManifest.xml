@@ -16,6 +16,9 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.TURN_SCREEN_ON" />
+    <!-- the notice before the adhan: a small card at the top right over any app (Reminder); a notification without it -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- the launcher (same signing key) reads the settings for its home-screen card -->
     <permission
@@ -123,6 +126,7 @@
                 <action android:name="sa.urtv.screensaver.UPDATE" />
                 <action android:name="sa.urtv.screensaver.ADHAN_TEST" />
                 <action android:name="sa.urtv.screensaver.ADHAN_STOP" />
+                <action android:name="sa.urtv.screensaver.REMINDER_TEST" />
                 <action android:name="sa.urtv.screensaver.UNADMIN" />
             </intent-filter>
         </receiver>

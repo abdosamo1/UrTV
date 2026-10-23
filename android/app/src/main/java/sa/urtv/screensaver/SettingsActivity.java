@@ -108,6 +108,11 @@ public class SettingsActivity extends Activity {
         row("الأذان عند دخول الوقت", prefs.adhanOn() ? "يعمل · فوق أي تطبيق، ويوقف الفيديو ثم يكمله" : "متوقف",
             R.drawable.ic_screensaver, new Runnable() { public void run() {
                 prefs.setAdhanOn(!prefs.adhanOn()); Adhan.update(SettingsActivity.this, false); render(); } });
+        // the notice before each adhan has its own switch: it works with the adhan off too
+        int rm = prefs.reminderMinutes();
+        row("تنبيه قبل الأذان", rm <= 0 ? "متوقف" : "قبل " + AdhanTimes.arabic(String.valueOf(rm)) + " دقيقة · أعلى يمين الشاشة"
+                + (Reminder.canDraw(this) ? "" : " (كإشعار: إذن الظهور فوق التطبيقات غير مفعّل)"),
+            R.drawable.ic_eye, new Runnable() { public void run() { pickReminder(); } });
         if (prefs.adhanOn()) {
             String next = prefs.nextAdhan();
             row("صوت الأذان", Adhan.label(prefs.adhanVoice()) + " · للظهر والعصر والمغرب والعشاء",
@@ -133,17 +138,6 @@ public class SettingsActivity extends Activity {
             new Runnable() { public void run() { pickPanel(true); } });
         row("ترتيب التطبيقات المفضلة", "قائمة ترتّب فيها المفضلة بالأسهم", R.drawable.ic_star,
             new Runnable() { public void run() { openDockSettings(); } });
-
-        if ("shows".equals(prefs.panel()) || "shows".equals(prefs.homePanel())) {   // only matter for the shows card
-        header("جديد المسلسلات");
-        row("التصنيفات", labels(Prefs.GENRES, prefs.list("genres"), "الكل"),
-            R.drawable.ic_category, new Runnable() { public void run() { pickMany("genres", "التصنيفات", Prefs.GENRES); } });
-        row("اللغات", labels(Prefs.LANGS, prefs.list("langs"), "الكل"),
-            R.drawable.ic_language, new Runnable() { public void run() { pickMany("langs", "اللغات", Prefs.LANGS); } });
-        row("مسلسلات مختارة", showsLabel(), R.drawable.ic_star, new Runnable() { public void run() { manageShows(); } });
-        row("أقل تقييم", "0".equals(prefs.minRating()) ? "بدون حد" : prefs.minRating(),
-            R.drawable.ic_star, new Runnable() { public void run() { pickRating(); } });
-        }
 
         header("التوقيت");
         row("تبديل الصورة كل", minutesLabel(Integer.parseInt(prefs.photoMinutes())), R.drawable.ic_sync,
@@ -225,6 +219,27 @@ public class SettingsActivity extends Activity {
                 Adhan.update(this, false);
                 render();
                 if (!ids.get(i).isEmpty()) toast("اضغط «جرّب الأذان الآن» لتسمعه");
+            })
+            .show();
+    }
+
+    /** Minutes before the adhan for the notice, or off; first a sample of it. */
+    private void pickReminder() {
+        final List<Integer> vals = new ArrayList<>();
+        final List<String> labels = new ArrayList<>();
+        vals.add(-1); labels.add("اعرض تنبيهاً تجريبياً الآن");
+        vals.add(0); labels.add("بدون تنبيه");
+        for (int m : Prefs.REMINDER_MINUTES) { vals.add(m); labels.add("قبل " + AdhanTimes.arabic(String.valueOf(m)) + " دقيقة"); }
+        new AlertDialog.Builder(this, DIALOG_THEME).setTitle("تنبيه قبل الأذان")
+            .setSingleChoiceItems(labels.toArray(new String[0]), Math.max(1, vals.indexOf(prefs.reminderMinutes())), (d, i) -> {
+                d.dismiss();
+                if (vals.get(i) < 0) {   // the sample: the next prayer's name, as if it were half an hour away
+                    Reminder.show(this, 2, System.currentTimeMillis() + Math.max(10, prefs.reminderMinutes()) * 60_000L);
+                    return;
+                }
+                prefs.setReminderMinutes(vals.get(i));
+                Adhan.update(this, false);
+                render();
             })
             .show();
     }
@@ -413,67 +428,6 @@ public class SettingsActivity extends Activity {
             .show();
     }
 
-    private void pickMany(final String key, String title, final String[][] options) {
-        List<String> cur = prefs.list(key);
-        String[] labels = new String[options.length];
-        final boolean[] on = new boolean[options.length];
-        for (int i = 0; i < options.length; i++) { labels[i] = options[i][1]; on[i] = cur.contains(options[i][0]); }
-        new AlertDialog.Builder(this, DIALOG_THEME).setTitle(title + " (بدون اختيار = الكل)")
-            .setMultiChoiceItems(labels, on, (d, i, checked) -> on[i] = checked)
-            .setPositiveButton("حفظ", (d, w) -> {
-                List<String> v = new ArrayList<>();
-                for (int i = 0; i < options.length; i++) if (on[i]) v.add(options[i][0]);
-                prefs.setList(key, v);
-                render();
-            })
-            .setNegativeButton("إلغاء", null).show();
-    }
-
-    private void manageShows() {
-        final List<String> cur = prefs.shows();
-        String[] labels = new String[cur.size()];
-        final boolean[] keep = new boolean[cur.size()];
-        for (int i = 0; i < cur.size(); i++) { labels[i] = cur.get(i).split("\\|", 2)[1]; keep[i] = true; }
-        AlertDialog.Builder b = new AlertDialog.Builder(this, DIALOG_THEME)
-            .setTitle(cur.isEmpty() ? "لا توجد مسلسلات مختارة" : "المسلسلات المختارة (ألغِ التحديد للحذف)")
-            .setPositiveButton("حفظ", (d, w) -> {
-                List<String> v = new ArrayList<>();
-                for (int i = 0; i < cur.size(); i++) if (keep[i]) v.add(cur.get(i));
-                prefs.setList("shows", v);
-                render();
-            })
-            .setNeutralButton("إضافة مسلسل", (d, w) -> searchShow())
-            .setNegativeButton("إلغاء", null);
-        if (!cur.isEmpty()) b.setMultiChoiceItems(labels, keep, (d, i, checked) -> keep[i] = checked);
-        b.show();
-    }
-
-    private void searchShow() {
-        ask("اسم المسلسل", q -> fetch("https://api.tvmaze.com/search/shows?q=" + Uri.encode(q), json -> {
-            JSONArray a = new JSONArray(json);
-            if (a.length() == 0) { toast("لا توجد نتائج"); return; }
-            final int n = Math.min(a.length(), 15);
-            final String[] ids = new String[n], names = new String[n], rows = new String[n];
-            for (int i = 0; i < n; i++) {
-                JSONObject s = a.getJSONObject(i).getJSONObject("show");
-                ids[i] = String.valueOf(s.optInt("id"));
-                names[i] = s.optString("name").replace("|", " ").replace(";", " ");
-                String year = s.optString("premiered", "");
-                rows[i] = names[i] + (year.length() >= 4 ? "  ·  " + year.substring(0, 4) : "")
-                    + "  ·  " + labelOf(Prefs.LANGS, s.optString("language", ""));
-            }
-            new AlertDialog.Builder(this, DIALOG_THEME).setTitle("اختر المسلسل")
-                .setItems(rows, (d, i) -> {
-                    for (String s : prefs.shows()) if (s.startsWith(ids[i] + "|")) { toast("مضاف مسبقاً"); return; }
-                    List<String> v = prefs.shows();
-                    v.add(ids[i] + "|" + names[i]);
-                    prefs.setList("shows", v);
-                    toast("تمت إضافة " + names[i]);
-                    render();
-                }).show();
-        }));
-    }
-
     /** «ترتيب المفضلة» lives in the launcher (it owns the row). */
     private void openDockSettings() {
         try {
@@ -498,16 +452,6 @@ public class SettingsActivity extends Activity {
                 d.dismiss();
                 render();
             })
-            .show();
-    }
-
-    private void pickRating() {
-        String[] labels = Prefs.MIN_RATINGS.clone();
-        labels[0] = "بدون حد";
-        int sel = 0;
-        for (int i = 0; i < Prefs.MIN_RATINGS.length; i++) if (Prefs.MIN_RATINGS[i].equals(prefs.minRating())) sel = i;
-        new AlertDialog.Builder(this, DIALOG_THEME).setTitle("أقل تقييم")
-            .setSingleChoiceItems(labels, sel, (d, i) -> { prefs.setMinRating(Prefs.MIN_RATINGS[i]); d.dismiss(); render(); })
             .show();
     }
 
@@ -598,11 +542,6 @@ public class SettingsActivity extends Activity {
         return Arabic.translit(en);
     }
 
-    private static String labelOf(String[][] options, String key) {
-        for (String[] o : options) if (o[0].equalsIgnoreCase(key)) return o[1];
-        return Arabic.translit(key);
-    }
-
     private String teamsLabel() {
         List<String> names = new ArrayList<>();
         for (String t : prefs.teams()) names.add(t.split("\\|", 2)[1]);
@@ -613,20 +552,6 @@ public class SettingsActivity extends Activity {
         StringBuilder b = new StringBuilder();
         for (char c : String.valueOf(n).toCharArray()) b.append((char) ('٠' + (c - '0')));
         return b.toString();
-    }
-
-    private String showsLabel() {
-        List<String> v = prefs.shows();
-        if (v.isEmpty()) return "لا شيء";
-        List<String> names = new ArrayList<>();
-        for (String s : v) names.add(s.split("\\|", 2)[1]);
-        return Prefs.join(names, "، ");
-    }
-
-    private static String labels(String[][] options, List<String> picked, String none) {
-        List<String> out = new ArrayList<>();
-        for (String[] o : options) if (picked.contains(o[0])) out.add(o[1]);
-        return out.isEmpty() ? none : Prefs.join(out, "، ");
     }
 
     // ---------- small UI helpers ----------

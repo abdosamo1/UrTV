@@ -329,21 +329,14 @@ const CONFIG = {
             : [_Q.has('team1') ? _Q.get('team1') : '136013', _Q.has('team2') ? _Q.get('team2') : '136137'])
     .map(x=>(x||'').trim()).filter(x=>/^\d+$/.test(x)).slice(0, 10),
   sportsKey: '123',
-  // the card beside the clock: shows | prayers | forecast | matches | verse | none (#week=0 from older builds = none)
-  panel: (p => ['shows','prayers','forecast','matches','verse','none'].includes(p) ? p : 'verse')
+  // the card beside the clock: prayers | forecast | matches | verse | none (#week=0 from older builds = none;
+  // the TV-shows card was removed, so an old #panel=shows gets the verse card)
+  panel: (p => ['prayers','forecast','matches','verse','none'].includes(p) ? p : 'verse')
          (_Q.get('panel') || (_Q.get('week') === '0' ? 'none' : 'verse')),
   matchesPerPage: 2,
   matchPageMs: 15000,
   // minutes from adhan to iqama (Ministry of Islamic Affairs defaults); Friday Dhuhr has none
   iqama: {Fajr:25, Dhuhr:20, Asr:20, Maghrib:10, Isha:20},
-  // "new this week" filters from the app: TVMaze genres, languages, countries, picked show ids
-  shows: {
-    genres: _list('genres'),
-    langs: _list('langs'),
-    ids: _list('shows').filter(x=>/^\d+$/.test(x)).slice(0, 30),
-    countries: _list('countries').length ? _list('countries') : ['US'],
-    minRating: _num('minrating', 7),
-  },
   weekWindowDays: 7,
   // minutes between background photos: #photos=5|10|15|30|60 (anything else = 30)
   photoMinutes: (m => [5,10,15,30,60].includes(m) ? m : 30)(_num('photos', 30)),
@@ -767,7 +760,7 @@ let NEXT_LIST = {};   // team id -> upcoming events
 // 1) built-in table, 2) the Arabic label on Wikidata (cached on the device), 3) transliteration meanwhile
 const AR_NAMES = (()=>{ try{ return JSON.parse(localStorage.getItem('arNames') || '{}'); }catch(e){ return {}; } })();
 const AR_PENDING = new Set();
-const AR_KIND = {team:/football|soccer|club|team|منتخب|نادي/i, show:/television|series|sitcom|anime|miniseries|show|مسلسل/i};
+const AR_KIND = {team:/football|soccer|club|team|منتخب|نادي/i};
 const hasArabic = s => /[؀-ۿ]/.test(s);
 
 const TL_WORDS = {the:'ذا',of:'أوف',and:'آند',a:'إيه',in:'إن',on:'أون',to:'تو',us:'أس',fc:'',cf:'',sc:'',afc:'',
@@ -973,102 +966,17 @@ async function fetchT(url, ms){
 }
 
 // Yahoo has no CORS headers: try it directly (works inside the app), then through public CORS gateways
-const SKIP_TYPES = ['News','Talk Show','Sports','Game Show'];
-let NET_OK = 0;   // answers received; a refresh that got none must not replace what is on screen
-async function getJSON(url, fallback){
-  try{ const r = await fetchT(url, 12000); if(!r.ok) return fallback; const j = await r.json(); NET_OK++; return j; }
-  catch(e){ return fallback; }
-}
-async function loadWeek(){
-  const F = CONFIG.shows, seen = new Set(), out = [], answered = NET_OK;
-  const days = [];
-  for(let i=0;i<7;i++) days.push(new Intl.DateTimeFormat('en-CA',{timeZone:CONFIG.timezone}).format(new Date(Date.now()+i*86400000)));
-  const inWeek = d => d && d >= days[0] && d <= days[6];
-  const add = (s, e, picked) => {
-    if(!s || !s.name || seen.has(s.name)) return;
-    seen.add(s.name);
-    const prem = e.number === 1;
-    out.push({
-      name: s.name,
-      ep: e.season ? (prem ? `الموسم ${ar(e.season)}` : `الموسم ${ar(e.season)} · ح ${ar(e.number)}`) : '',
-      date: e.airdate || '',
-      rating: (s.rating && s.rating.average) || 0,
-      prem, picked
-    });
-  };
-
-  // shows picked one by one: their next episode, if it airs this week
-  const picked = await Promise.all(F.ids.map(id => getJSON(`https://api.tvmaze.com/shows/${id}?embed=nextepisode`, null)));
-  picked.forEach(s => {
-    const e = s && s._embedded && s._embedded.nextepisode;
-    if(e && inWeek(e.airdate)) add(s, e, true);
-  });
-
-  // the schedule, narrowed by genre and language; skipped when only picked shows were chosen
-  if(!F.ids.length || F.genres.length || F.langs.length){
-    const lists = await Promise.all(days.flatMap(dt => [
-      getJSON(`https://api.tvmaze.com/schedule/web?date=${dt}`, []),
-      ...F.countries.map(c => getJSON(`https://api.tvmaze.com/schedule?country=${encodeURIComponent(c)}&date=${dt}`, []))
-    ]));
-    lists.flat().forEach(e => {
-      const s = e.show || (e._embedded && e._embedded.show) || {};
-      if(s.type && SKIP_TYPES.includes(s.type)) return;
-      if(s.genres && s.genres.includes('Soap')) return;   // no daytime soaps
-      if(!e.number || e.number < 1) return;
-      if(e.season && e.season > 15) return;               // keep it to real series
-      if(((s.rating && s.rating.average) || 0) < F.minRating) return;
-      if(F.genres.length && !(s.genres || []).some(g => F.genres.includes(g))) return;
-      if(F.langs.length && !F.langs.includes(s.language)) return;
-      add(s, e, false);
-    });
-  }
-
-  // nothing answered (offline): keep the saved list if one is shown
-  if(NET_OK === answered && document.querySelector('#week-list li:not(.empty)')) return;
-  if(out.length){                                   // keep the last good list on a failed refresh
-    WEEK_POOL = out.sort((a,b)=> (b.picked - a.picked) || (b.prem - a.prem) || a.date.localeCompare(b.date)).slice(0, 50);
-    WEEK_PAGE = 0;
-  }
-  renderWeekPage(false);
-}
-
-const WEEK_ROWS = 5;
-let WEEK_POOL = [];
-let WEEK_PAGE = 0;
-
-function renderWeekPage(animate){
-  const ul = document.getElementById('week-list');
-  if(!WEEK_POOL.length){
-    ul.classList.remove('flip');
-    ul.innerHTML = '<li class="empty">لا جديد هذا الأسبوع</li>';
-    return;
-  }
-  const start = (WEEK_PAGE * WEEK_ROWS) % WEEK_POOL.length;
-  const rows = [];
-  for(let i = 0; i < Math.min(WEEK_ROWS, WEEK_POOL.length); i++){
-    rows.push(WEEK_POOL[(start + i) % WEEK_POOL.length]);
-  }
-  ul.innerHTML = rows.map(o=>{
-    const dt = o.date ? new Intl.DateTimeFormat(GREG,{timeZone:CONFIG.timezone,weekday:'short'}).format(new Date(o.date+'T12:00:00Z')) : '';
-    return `<li><span>${esc(o.name)}</span>`
-         + (o.ep?`<span class="ep">${ar(o.ep)}</span>`:'')
-         + (o.rating ? `<span class="rt">${ar(o.rating.toFixed(1)).replace('.','٫')}</span>` : '')
-         + (dt?`<span class="dt">${dt}</span>`:'') + '</li>';
-  }).join('');
-  ul.classList.remove('flip');
-  if(animate){ void ul.offsetWidth; ul.classList.add('flip'); }
-}
+const WEEK_ROWS = 5;   // rows on the card beside the clock (a longer list pages through)
 
 // ---- the card beside the clock: one of several contents, picked in the app
 let FORECAST = [];
 try{ FORECAST = JSON.parse(localStorage.getItem('forecast:' + location.hash) || '[]') || []; }catch(e){}
 let LIST_PAGE = 0;
-const PANEL_TITLE = {shows:'هذا الأسبوع', prayers:'مواقيت اليوم', forecast:'الأيام القادمة', matches:'مباريات فرقك'};
+const PANEL_TITLE = {prayers:'مواقيت اليوم', forecast:'الأيام القادمة', matches:'مباريات فرقك'};
 
 function renderPanel(animate){
   const ul = document.getElementById('week-list'), hd = document.getElementById('week-hd');
   const P = CONFIG.panel;
-  if(P === 'shows'){ renderWeekPage(animate); return; }
   let rows = [];
   if(P === 'prayers') rows = prayerRows();
   else if(P === 'forecast') rows = forecastRows();
@@ -1308,8 +1216,8 @@ function applyBackground(force){
 }
 
 // Last painted panels, shown at once on the next start while fresh data loads.
-const SNAP_KEY = 'snap4:' + location.hash;   // bump when the panels' markup changes
-const SNAP_SEL = ['.markets', '#week-list', '#match-row'];
+const SNAP_KEY = 'snap5:' + location.hash;   // bump when the panels' markup changes
+const SNAP_SEL = ['.markets', '#match-row'];   // the card beside the clock redraws at once from local data
 function saveSnap(){
   try{ localStorage.setItem(SNAP_KEY, JSON.stringify(SNAP_SEL.map(q => (document.querySelector(q)||{}).innerHTML || ''))); }catch(e){}
 }
@@ -1351,8 +1259,8 @@ function boot(){
   setInterval(() => applyBackground(false), 60*1000);
   tickClock(); tickDates(); tickRamadan();
   if(CONFIG.panel === 'none') document.querySelector('.week').style.display = 'none';
-  else if(CONFIG.panel !== 'shows') renderPanel(false);   // its own data arrives with prayers, weather, matches
-  loadPrayers(); loadMatches(); if(CONFIG.panel === 'shows') loadWeek(); loadWeather();
+  else renderPanel(false);   // its own data arrives with prayers, weather, matches
+  loadPrayers(); loadMatches(); loadWeather();
   applyNight(); pixelShift();
 
   setInterval(tickClock, 1000);
@@ -1362,10 +1270,8 @@ function boot(){
   setInterval(loadLive, 2*60000);
   setInterval(loadPrayers, 6*3600*1000);
   setInterval(loadMatches, 30*60*1000);
-  if(CONFIG.panel === 'shows') setInterval(loadWeek, 6*3600*1000);
   setInterval(loadWeather, 30*60*1000);
   setInterval(()=>{
-    if(CONFIG.panel === 'shows' && WEEK_POOL.length > WEEK_ROWS){ WEEK_PAGE++; renderWeekPage(true); }
     if(CONFIG.panel === 'matches'){ LIST_PAGE++; renderPanel(matchRows().length > WEEK_ROWS); }
   }, 25*1000);
   setInterval(applyNight, 60*1000);
@@ -1373,7 +1279,7 @@ function boot(){
   let lastDay = new Intl.DateTimeFormat('en-CA',{timeZone:CONFIG.timezone}).format(new Date());
   setInterval(()=>{
     const d = new Intl.DateTimeFormat('en-CA',{timeZone:CONFIG.timezone}).format(new Date());
-    if(d !== lastDay){ lastDay = d; loadPhotoIndex().then(() => applyBackground(true)); tickDates(); tickRamadan(); loadPrayers(); loadMatches(); if(CONFIG.panel === 'shows') loadWeek(); loadWeather(); renderPanel(false); }
+    if(d !== lastDay){ lastDay = d; loadPhotoIndex().then(() => applyBackground(true)); tickDates(); tickRamadan(); loadPrayers(); loadMatches(); loadWeather(); renderPanel(false); }
   }, 60*1000);
 }
 
@@ -1387,13 +1293,11 @@ function bootWidget(){
   const P = CONFIG.panel;
   if(CONFIG.autoLocation && (P === 'prayers' || P === 'forecast'))
     locate(false).then(changed => { if(changed){ if(P === 'prayers') loadPrayers(); else loadWeather(); } });
-  if(P === 'shows'){ loadWeek(); setInterval(loadWeek, 6*3600*1000); }
-  else renderPanel(false);
+  renderPanel(false);
   if(P === 'prayers'){ loadPrayers(); setInterval(loadPrayers, 6*3600*1000); setInterval(() => renderPanel(false), 15000); }
   if(P === 'forecast'){ loadWeather(); setInterval(loadWeather, 30*60*1000); }
   if(P === 'matches'){ loadMatches(); setInterval(loadMatches, 30*60*1000); setInterval(loadLive, 2*60000); }
   setInterval(() => {
-    if(P === 'shows' && WEEK_POOL.length > WEEK_ROWS){ WEEK_PAGE++; renderWeekPage(true); }
     if(P === 'matches'){ LIST_PAGE++; renderPanel(matchRows().length > WEEK_ROWS); }
   }, 25*1000);
   let lastDay = riyadhDayNumber();

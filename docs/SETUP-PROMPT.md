@@ -47,7 +47,7 @@ the whole task, and to say «تم».
 > وتتابع مباريات أي أندية؟ اكتب أسماءها، أو «لا شي».
 >
 > والباقي بخليه على الافتراضي، وتقدر تطلب تغيير أي شي منه الحين أو بعدين:
-> • جنب الساعة: «آية وحديث اليوم» (أو: مواقيت الصلاة، المسلسلات، الطقس، المباريات، لا شي)
+> • جنب الساعة: «آية وحديث اليوم» (أو: مواقيت الصلاة، الطقس، المباريات، لا شي)
 > • المفضلة: أول ٦ تطبيقات من واجهتك الحالية، بنفس الترتيب
 > • بركّب TV Bro (متصفح للتلفزيون) و SmartTube (يوتيوب بدون إعلانات)، مجانيين من GitHub
 > • ما فيه بطاقة في الواجهة الرئيسية، ووقت شاشة التوقف يبقى مثل ما هو، وما أعطّل إضافات TCL الاختيارية
@@ -63,7 +63,6 @@ Those defaults, unless I change them:
 - TV Bro and SmartTube installed (`optimize/run.sh` does it; if I don't want them: `SKIP_EXTRAS=1 optimize/run.sh`);
 - no card on the home screen; the TV's own screensaver delay is kept;
 - nothing from `optimize/lists/tcl-optional.txt` is disabled (`optimize/lists/mine.txt` stays empty);
-- if I pick the episodes card: all genres and languages.
 - the adhan: on, voice `makki-1`, volume 10, no Fajr adhan (if I want one: `saver.sh adhan-fajr fajr-trabulsi`; other voices: `saver.sh adhan-voice …`; I can change all of it in the app's settings too).
 
 The location is automatic (`autoloc true`, the default): don't ask for a city. Only if I name one myself, step 4
@@ -258,7 +257,7 @@ optimize/saver.sh autoloc true                    # city, weather, time zone fro
 optimize/saver.sh mosque <the link I sent>        # or: mosque none; the screen then shows that mosque's adhan, iqama and Jumu'a
 optimize/saver.sh find-team <club as I wrote it>  # Arabic is fine (الهلال): one call per club, Saudi clubs first;
                                                   # then: optimize/saver.sh teams <id:Name> <id:Name> ...  (my order)
-optimize/saver.sh card <one of: verse, shows, prayers, forecast, matches, none>   # beside the clock (verse unless I said otherwise)
+optimize/saver.sh card <one of: verse, prayers, forecast, matches, none>   # beside the clock (verse unless I said otherwise)
 optimize/saver.sh home-card none                  # home screen: no card
 optimize/dock.sh apps                             # match my 6 apps to packages, then: optimize/dock.sh set <pkg> ... (in that order)
 optimize/dock.sh hidden                           # apps the home screen leaves out, and why

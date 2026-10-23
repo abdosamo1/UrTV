@@ -19,7 +19,7 @@ Repository: **https://github.com/abdosamo1/UrTV** (public). Work on a branch and
 - `docs/TEST-PLAN.md` — how the Android build is tested; reuse its style.
 
 Settings reach the page through the URL fragment, not a query string:
-`urtv.html#city=..&lat=..&lon=..&tz=Asia/Riyadh&teams=<id>,<id>&panel=..&genres=..&langs=..&shows=..&minrating=..`
+`urtv.html#city=..&lat=..&lon=..&tz=Asia/Riyadh&teams=<id>,<id>&panel=..`
 
 ## Step 1 — research (report before building)
 

@@ -17,10 +17,12 @@ import java.util.List;
  *   am broadcast -n sa.urtv.screensaver/.SaverReceiver -a sa.urtv.screensaver.CITIES
  *   am broadcast -n sa.urtv.screensaver/.SaverReceiver -a sa.urtv.screensaver.SET
  *       [--es city 'الرس'] [--es lat 25.86 --es lon 43.49] [--es teams '136013:Al-Hilal,150643:Al-Zulfi']
- *       [--es panel prayers] [--es home_panel none] [--es minrating 7] [--es genres Drama,Comedy] [--es langs English]
+ *       [--es panel prayers] [--es home_panel none]
  *       [--es photos 30] [--es idle 10] [--es autoloc true|false]
  *       [--es mosque https://mawaqit.net/de/SLUG | SLUG | none] [--es mosque_name 'مسجد الرحمن']
  *       [--es adhan true|false] [--es adhan_voice makki-1] [--es adhan_fajr off|fajr-trabulsi] [--es adhan_volume 10]
+ *       [--es reminder 30]   (minutes before each adhan for the notice at the top right; 0 = off)
+ *   am broadcast -n sa.urtv.screensaver/.SaverReceiver -a sa.urtv.screensaver.REMINDER_TEST   (shows it now)
  *   am broadcast -n sa.urtv.screensaver/.SaverReceiver -a sa.urtv.screensaver.ADHAN_TEST   (plays it now)
  *   am broadcast -n sa.urtv.screensaver/.SaverReceiver -a sa.urtv.screensaver.ADHAN_STOP
  *   am broadcast -n sa.urtv.screensaver/.SaverReceiver -a sa.urtv.screensaver.UNADMIN      (before uninstalling)
@@ -65,6 +67,10 @@ public class SaverReceiver extends BroadcastReceiver {
             case "sa.urtv.screensaver.ADHAN_TEST":
                 AdhanService.start(c, p.adhanVoice(), true);
                 setResultData("adhan: playing " + p.adhanVoice() + " at volume " + p.adhanVolume());
+                return;
+            case "sa.urtv.screensaver.REMINDER_TEST":
+                Reminder.show(c, 2, System.currentTimeMillis() + Math.max(10, p.reminderMinutes()) * 60_000L);
+                setResultData("reminder: shown" + (Reminder.canDraw(c) ? " at the top right" : " as a notification (no overlay permission)"));
                 return;
             case "sa.urtv.screensaver.ADHAN_STOP":
                 AdhanService.stop();
@@ -122,9 +128,6 @@ public class SaverReceiver extends BroadcastReceiver {
         String panel = i.getStringExtra("panel"), home = i.getStringExtra("home_panel");
         if (panel != null && !isPanel(panel)) return "error: panel is one of " + panels();
         if (home != null && !isPanel(home)) return "error: home_panel is one of " + panels();
-        String rating = i.getStringExtra("minrating");
-        if (rating != null && !Arrays.asList(Prefs.MIN_RATINGS).contains(rating))
-            return "error: minrating is one of " + Prefs.join(Arrays.asList(Prefs.MIN_RATINGS), " ");
         String photos = i.getStringExtra("photos");
         if (photos != null && !Arrays.asList(Prefs.PHOTO_MINUTES).contains(photos))
             return "error: photos is one of " + Prefs.join(Arrays.asList(Prefs.PHOTO_MINUTES), " ");
@@ -151,10 +154,8 @@ public class SaverReceiver extends BroadcastReceiver {
         if (adhanFajr != null && !adhanFajr.equals("off") && !Adhan.isVoice(adhanFajr))
             return "error: adhan_fajr is off or one of " + voices();
         if (adhanVolume != null && !adhanVolume.matches("\\d{1,3}") ) return "error: adhan_volume is a number, e.g. 10";
-        List<String> genres = codes(i.getStringExtra("genres"), Prefs.GENRES);
-        List<String> langs = codes(i.getStringExtra("langs"), Prefs.LANGS);
-        if (genres != null && genres.contains(null)) return "error: genres are " + names(Prefs.GENRES);
-        if (langs != null && langs.contains(null)) return "error: langs are " + names(Prefs.LANGS);
+        String reminder = i.getStringExtra("reminder");
+        if (reminder != null && !reminder.matches("\\d{1,3}")) return "error: reminder is minutes before the adhan, 0 = off";
 
         if (idle != null) {   // first: a refusal here leaves everything else unsaved
             try {
@@ -174,15 +175,13 @@ public class SaverReceiver extends BroadcastReceiver {
         if (teams != null) p.setList("teams", teams);
         if (panel != null) p.setPanel(panel);
         if (home != null) p.setHomePanel(home);
-        if (rating != null) p.setMinRating(rating);
         if (photos != null) p.setPhotoMinutes(photos);
         if (adhan != null) p.setAdhanOn(Boolean.parseBoolean(adhan));
         if (adhanVoice != null) p.setAdhanVoice(adhanVoice);
         if (adhanFajr != null) p.setAdhanFajr(adhanFajr.equals("off") ? "" : adhanFajr);
         if (adhanVolume != null) p.setAdhanVolume(Math.max(1, Integer.parseInt(adhanVolume)));
+        if (reminder != null) p.setReminderMinutes(Integer.parseInt(reminder));
         Adhan.update(c, false);   // a new mosque, city or Fajr choice moves the next adhan
-        if (genres != null) p.setList("genres", genres);
-        if (langs != null) p.setList("langs", langs);
         return "saved\n" + describe(c, p);
     }
 
@@ -194,14 +193,14 @@ public class SaverReceiver extends BroadcastReceiver {
             + "\nmosque: " + (mosque[0].isEmpty() ? "none (calculated times)" : mosque[1] + " | " + mosque[0])
             + "\nteams: " + Prefs.join(p.teams(), ", ")
             + "\npanel: " + p.panel() + "\nhome_panel: " + p.homePanel()
-            + "\nminrating: " + p.minRating()
             + "\nphotos: " + p.photoMinutes()
             + "\nidle: " + idle(Prefs.idleMs(c))
-            + "\ngenres: " + Prefs.join(p.list("genres"), ",") + "\nlangs: " + Prefs.join(p.list("langs"), ",")
             + "\nautoupdate: " + p.autoUpdate()
             + "\nadhan: " + p.adhanOn() + " | voice " + p.adhanVoice() + " | fajr " + (p.adhanFajr().isEmpty() ? "off" : p.adhanFajr())
             + " | volume " + p.adhanVolume() + " | next: " + p.nextAdhan()
-            + " | turns the TV back off: " + adminActive(c);
+            + " | turns the TV back off: " + adminActive(c)
+            + "\nreminder: " + (p.reminderMinutes() <= 0 ? "off" : p.reminderMinutes() + " min before")
+            + " | overlay: " + Reminder.canDraw(c);
     }
 
     private static String voices() {
@@ -237,17 +236,4 @@ public class SaverReceiver extends BroadcastReceiver {
         return Prefs.join(out, " ");
     }
 
-    /** "Drama,Comedy" -> the same codes, checked against the table; null entry = unknown; "" = all. */
-    private static List<String> codes(String raw, String[][] table) {
-        if (raw == null) return null;
-        List<String> out = new ArrayList<>();
-        for (String s : raw.split(",")) {
-            s = s.trim();
-            if (s.isEmpty()) continue;
-            String hit = null;
-            for (String[] x : table) if (x[0].equalsIgnoreCase(s)) hit = x[0];
-            out.add(hit);
-        }
-        return out;
-    }
 }
