@@ -135,7 +135,12 @@ public class MainActivity extends Activity {
         pf.addAction(Intent.ACTION_PACKAGE_CHANGED);
         pf.addDataScheme("package");
         registerReceiver(packages, pf);
-        registerReceiver(dockChanged, new IntentFilter(Dock.CHANGED));
+        // our own action: Android 14 refuses a dynamic receiver for it without saying who may send it
+        if (android.os.Build.VERSION.SDK_INT >= 33)
+            registerReceiver(dockChanged, new IntentFilter(Dock.CHANGED), Context.RECEIVER_NOT_EXPORTED);
+        else
+            registerReceiver(dockChanged, new IntentFilter(Dock.CHANGED));
+        watchWifiName();
     }
 
     @Override
@@ -173,6 +178,10 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         unregisterReceiver(packages);
         unregisterReceiver(dockChanged);
+        if (wifiCallback != null) {
+            try { getSystemService(android.net.ConnectivityManager.class).unregisterNetworkCallback(wifiCallback); }
+            catch (Exception ignored) { }
+        }
         homeCard.destroy();
         super.onDestroy();
     }
@@ -751,6 +760,46 @@ public class MainActivity extends Activity {
         return b.toString();
     }
 
+    // Android 12+ (and any app targeting 31+): the Wi-Fi name comes only through a NetworkCallback asking for
+    // location info, to an app holding ACCESS_FINE_LOCATION (granted over ADB by optimize/install.sh)
+    private volatile String wifiName;
+    private android.net.ConnectivityManager.NetworkCallback wifiCallback;
+
+    private void watchWifiName() {
+        if (android.os.Build.VERSION.SDK_INT < 31) return;
+        try {
+            android.net.ConnectivityManager cm = getSystemService(android.net.ConnectivityManager.class);
+            if (cm == null) return;
+            wifiCallback = new android.net.ConnectivityManager.NetworkCallback(
+                    android.net.ConnectivityManager.NetworkCallback.FLAG_INCLUDE_LOCATION_INFO) {
+                @Override
+                public void onCapabilitiesChanged(android.net.Network n, android.net.NetworkCapabilities nc) {
+                    android.net.TransportInfo ti = nc.getTransportInfo();
+                    if (ti instanceof android.net.wifi.WifiInfo) {
+                        wifiName = ssid(((android.net.wifi.WifiInfo) ti).getSSID());
+                        runOnUiThread(MainActivity.this::updateWifi);
+                    }
+                }
+                @Override
+                public void onLost(android.net.Network n) {
+                    wifiName = null;
+                    runOnUiThread(MainActivity.this::updateWifi);
+                }
+            };
+            cm.registerNetworkCallback(new android.net.NetworkRequest.Builder()
+                    .addTransportType(android.net.NetworkCapabilities.TRANSPORT_WIFI).build(), wifiCallback);
+        } catch (Exception e) {   // no location permission, or a TV without the API: the pill says «واي فاي»
+            wifiCallback = null;
+        }
+    }
+
+    /** "\"Home\"" -> "Home"; null for the hidden and unknown forms */
+    private static String ssid(String s) {
+        if (s == null) return null;
+        s = s.replace("\"", "");
+        return s.isEmpty() || s.contains("unknown ssid") || s.equals("0x") ? null : s;
+    }
+
     /** Connected or not comes from ConnectivityManager: WifiManager hides the network (id -1, "<unknown ssid>")
      *  from apps without location access, which looked like "not connected". The name only when readable. */
     private void updateWifi() {
@@ -762,9 +811,12 @@ public class MainActivity extends Activity {
                 name = "شبكة سلكية";
             } else if (nc != null && nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)) {
                 name = "واي فاي";
-                WifiManager wm = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
-                String s = wm == null || wm.getConnectionInfo() == null ? null : wm.getConnectionInfo().getSSID();
-                if (s != null && !s.contains("unknown ssid") && !s.replace("\"", "").isEmpty()) name = s.replace("\"", "");
+                String s = wifiName;
+                if (s == null) {   // Android 11 and older: WifiManager, with location granted
+                    WifiManager wm = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+                    s = ssid(wm == null || wm.getConnectionInfo() == null ? null : wm.getConnectionInfo().getSSID());
+                }
+                if (s != null) name = s;
             }
         } catch (SecurityException ignored) { }
         wifiPill.setText(name);

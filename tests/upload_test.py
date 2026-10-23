@@ -56,7 +56,7 @@ for name in ["adb_shell", "adb_shell.adb_device", "adb_shell.auth", "adb_shell.a
 sys.modules["adb_shell.adb_device"].AdbDeviceTcp = Dev
 sys.modules["adb_shell.auth.keygen"].keygen = lambda p: None
 sys.modules["adb_shell.auth.sign_pythonrsa"].PythonRSASigner = lambda a, b: None
-os.environ["TV_HOST"] = "1.2.3.4"; os.environ["TV_TRIES"] = "6"
+os.environ["TV_HOST"] = "1.2.3.4"; os.environ["TV_TRIES"] = "6"; os.environ["ADB"] = "/nonexistent/adb"   # never a real adb
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "optimize"))
 import tv
 tv.time.sleep = lambda s: None

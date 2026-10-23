@@ -133,10 +133,44 @@ def scan():
             f.write(adb[0] + "\n")
         print(f"Saved {adb[0]} to optimize/.tv_host. Next: optimize/venv/bin/python -I optimize/tv.py --probe")
         return 0
+    opened = wireless_debugging(net)
+    if opened:
+        with open(HOST_FILE, "w") as f:
+            f.write(opened + "\n")
+        print(f"Saved {opened} to optimize/.tv_host. Next: optimize/venv/bin/python -I optimize/tv.py --probe")
+        return 0
     print("No TV with ADB open. On the TV: Developer options → USB debugging (and Network debugging) on, TV awake.")
+    print("Some Android 14 sets (Sony BRAVIA, Skyworth 24AE) only have «Wireless debugging» (Debugging über WLAN):")
+    print("   install the official adb (Windows: winget install Google.PlatformTools; Mac: brew install android-platform-tools),")
+    print("   on the TV: Wireless debugging → Pair device with pairing code, then here: adb pair <IP:port> <code>,")
+    print("   then optimize/find-tv.sh again: it opens port 5555 by itself (and tv.py again after every restart).")
     if cast:
         print("(The TV is probably one of the Cast devices above: set TV_HOST=<its address> after turning debugging on.)")
     return 1
+
+
+def wireless_debugging(net):
+    """A TV paired once with the official adb but without port 5555 (it closes at every restart): find its TLS port
+    over mDNS, connect, `adb tcpip 5555`, and check 5555 answers. Returns its address, or None."""
+    import re, shutil, subprocess, time
+    adb = os.environ.get("ADB") or shutil.which("adb")
+    if not adb:
+        return None
+    run = lambda *a: subprocess.run([adb, *a], capture_output=True, text=True, timeout=30).stdout
+    try:
+        hits = re.findall(r"_adb-tls-connect\S*\s+(" + re.escape(net) + r"\.\d+):(\d+)", run("mdns", "services"))
+        for host, port in hits:
+            if "connected" not in run("connect", f"{host}:{port}"):
+                continue
+            run("-s", f"{host}:{port}", "tcpip", "5555")
+            for _ in range(6):
+                time.sleep(2)
+                if connects(host, 5555):
+                    print(f"Opened ADB port 5555 on {host} through Wireless debugging.")
+                    return host
+    except Exception:  # noqa: BLE001
+        pass
+    return None
 
 
 def connects(host, port, timeout=1.0):

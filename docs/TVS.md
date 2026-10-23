@@ -13,6 +13,7 @@ app's preview of the same page and `measure.sh` writes «not measured»). Times 
 | TCL UnionTV | 9 | works | yes | 5555 | – | 15 min |
 | Skyworth SWTV-20AE-PRO | 11 | works (tvlauncher off) | no | 5555, an occasional timeout that retries by itself | – | 14 min |
 | Skyworth SWTV-24AE-4K | 14 | works | no | port 5555 closed: pair once through Wireless debugging, then `adb tcpip 5555`; the port disappears after every reboot | reconnect after each restart; APK uploads slow | 39 min |
+| Sony BRAVIA 4K AE2 (Google TV) | 14 | builds before 3.3 were blocked by Google Play Protect («Unsichere App blockiert»: the home app targeted Android 11); fixed with targetSdk 34 | no, preview only | «Wireless debugging» only: pair once with the official `adb pair`; port 5555 closes at every restart, `find-tv.sh` and `tv.py` open it again through `adb mdns services` + `adb tcpip 5555` when adb is installed | the port comes back about a minute after boot | – |
 | Xiaomi MiTV-MOOR2 | 11 | works | no | 5555 | screenshots may fail | 17 min |
 
 ## On the computer

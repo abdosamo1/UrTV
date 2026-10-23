@@ -16,6 +16,7 @@ shift 2
 log() { echo "$*" >> "$T/log"; }
 case "$1" in
   --push-b64) exit 0 ;;
+  --install) echo Success; exit 0 ;;
   --batch)
     in=$(cat)
     case "$in" in
