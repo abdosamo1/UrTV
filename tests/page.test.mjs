@@ -252,9 +252,13 @@ for (const panel of ['prayers', 'verse', 'shows']) {
     hits[host] = (hits[host] || 0) + 1;
     if (!online) return r.abort();
     if (host === 'get.geojs.io') return r.fulfill({ headers: cors, contentType: 'application/json',
-      body: JSON.stringify({ city: 'Kirchheim unter Teck', latitude: '48.6481', longitude: '9.4519', timezone: 'Europe/Berlin' }) });
-    if (host === 'geocoding-api.open-meteo.com') return r.fulfill({ headers: cors, contentType: 'application/json',
-      body: JSON.stringify({ results: [{ name: 'كيرشهايم أونتر تيك', latitude: 48.648, longitude: 9.451 }] }) });
+      body: JSON.stringify({ city: 'Munich', latitude: '48.1374', longitude: '11.5755', timezone: 'Europe/Berlin',
+                             country_code: 'DE', country: 'Germany' }) });
+    if (host === 'geocoding-api.open-meteo.com') {
+      const lang = new URL(u).searchParams.get('language');
+      return r.fulfill({ headers: cors, contentType: 'application/json',
+        body: JSON.stringify({ results: [{ name: lang === 'de' ? 'München' : lang === 'ar' ? 'ميونخ' : 'Munich', latitude: 48.137, longitude: 11.575 }] }) });
+    }
     if (host === 'mawaqit.net') return r.fulfill({ headers: cors, contentType: 'text/html', body: html });
     return r.abort();
   });
@@ -271,8 +275,8 @@ for (const panel of ['prayers', 'verse', 'shows']) {
     panel: document.querySelector('.week').innerText }));
   let r = await read();
   check('auto location: no script errors', !errors.length, errors.join('; '));
-  check('auto location: time zone and Arabic place from the connection',
-        r.tz === 'Europe/Berlin' && r.city === 'كيرشهايم أونتر تيك' && r.sub.includes('كيرشهايم') && Math.abs(r.lat - 48.6481) < 1e-6,
+  check('auto location abroad: time zone, city and country in the local language («München, Deutschland»)',
+        r.tz === 'Europe/Berlin' && r.city === 'München, Deutschland' && r.sub === 'بتوقيت München' && Math.abs(r.lat - 48.1374) < 1e-6,
         JSON.stringify(r));
   const dhuhr = r.friday ? '13:15' : '12:30';
   check('mosque: adhan times from the Mawaqit timetable (Jumu\'a on Friday)',
@@ -287,7 +291,26 @@ for (const panel of ['prayers', 'verse', 'shows']) {
   await p.waitForFunction(() => PRAYERS.length, null, { timeout: 6000 }).catch(() => errors.push('no prayers offline'));
   r = await read();
   check('offline: the cached place and the cached mosque timetable are used',
-        r.tz === 'Europe/Berlin' && r.city === 'كيرشهايم أونتر تيك' && r.times.startsWith('Fajr=05:10'), JSON.stringify(r));
+        r.tz === 'Europe/Berlin' && r.city === 'München, Deutschland' && r.times.startsWith('Fajr=05:10'), JSON.stringify(r));
+  await ctx.close();
+}
+
+// ---- auto location in an Arab country: the Arabic name, no country
+{
+  const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  await ctx.route(/^https?:/, r => {
+    const u = r.request().url(), cors = { 'Access-Control-Allow-Origin': '*' }, host = new URL(u).host;
+    if (host === 'get.geojs.io') return r.fulfill({ headers: cors, contentType: 'application/json',
+      body: JSON.stringify({ city: 'Jeddah', latitude: '21.54', longitude: '39.17', timezone: 'Asia/Riyadh', country_code: 'SA', country: 'Saudi Arabia' }) });
+    if (host === 'geocoding-api.open-meteo.com') return r.fulfill({ headers: cors, contentType: 'application/json',
+      body: JSON.stringify({ results: [{ name: new URL(u).searchParams.get('language') === 'ar' ? 'جدة' : 'Jeddah', latitude: 21.54, longitude: 39.17 }] }) });
+    return r.abort();
+  });
+  const p = await ctx.newPage();
+  await p.goto(page('tv.html') + '#city=الرياض&lat=24.7&lon=46.7&tz=Asia/Riyadh&loc=auto');
+  await p.waitForFunction(() => GEO, null, { timeout: 6000 }).catch(() => {});
+  const r = await p.evaluate(() => ({ city: CONFIG.city, sub: document.getElementById('clock-sub').textContent }));
+  check('auto location in Saudi Arabia: Arabic name («جدة»)', r.city === 'جدة' && r.sub === 'بتوقيت جدة', JSON.stringify(r));
   await ctx.close();
 }
 

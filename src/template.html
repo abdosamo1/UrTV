@@ -366,7 +366,7 @@ const setMethod = () => { CONFIG.prayerMethod = CONFIG.timezone === 'Asia/Riyadh
 setMethod();
 
 // ---------- automatic location (#loc=auto) ----------
-const GEO_KEY = 'geo2';
+const GEO_KEY = 'geo3';   // geo2 = Arabic names everywhere
 const GEO_MAX_AGE = 6*3600*1000;
 const validTz = tz => { try{ new Intl.DateTimeFormat('en', {timeZone: tz}); return true; }catch(e){ return false; } };
 function applyGeo(g){
@@ -379,16 +379,39 @@ function applyGeo(g){
 let GEO = null;
 if(CONFIG.autoLocation){ try{ GEO = JSON.parse(localStorage.getItem(GEO_KEY) || 'null'); applyGeo(GEO); }catch(e){} }
 
-// The Arabic name of the place, from Open-Meteo's GeoNames search: the nearest hit with that name
-async function arabicPlace(name, lat, lon){
+// How the place is written: in an Arab country the Arabic name; elsewhere the country's own language in its own
+// (Latin) letters, with the country: «Stuttgart, Deutschland», «München, Deutschland», «Wien, Österreich».
+const ARAB = new Set('SA AE QA KW BH OM YE IQ SY JO LB PS EG LY TN DZ MA SD MR SO DJ KM'.split(' '));
+// the language a country names its places in; countries with another script (Greek, Cyrillic, Asian…) get English
+const LOCAL_LANG = {DE:'de', AT:'de', CH:'de', LI:'de', LU:'fr', FR:'fr', BE:'fr', MC:'fr', NL:'nl', IT:'it',
+  SM:'it', ES:'es', MX:'es', AR:'es', CL:'es', CO:'es', PE:'es', PT:'pt', BR:'pt', TR:'tr', SE:'sv', NO:'nb',
+  DK:'da', FI:'fi', IS:'is', PL:'pl', CZ:'cs', SK:'sk', SI:'sl', HR:'hr', BA:'bs', RS:'sr-Latn', HU:'hu', RO:'ro',
+  AL:'sq', LT:'lt', LV:'lv', EE:'et', IE:'en', GB:'en', US:'en', CA:'en', AU:'en', NZ:'en', MY:'ms', ID:'id'};
+const placeLang = cc => ARAB.has(cc) ? 'ar' : (LOCAL_LANG[cc] || 'en');
+function countryName(cc, lang, fallback){
+  try{ const n = new Intl.DisplayNames([lang], {type: 'region'}).of(cc); if(n && n !== cc) return n; }catch(e){}
+  return fallback || cc;
+}
+
+// The place's name in that language, from Open-Meteo's GeoNames search: the nearest hit with that name
+async function placeName(name, lat, lon, lang){
   try{
-    const r = await fetchT('https://geocoding-api.open-meteo.com/v1/search?count=10&language=ar&name='
-                           + encodeURIComponent(name), 10000);
+    const r = await fetchT('https://geocoding-api.open-meteo.com/v1/search?count=10&language=' + lang.split('-')[0]
+                           + '&name=' + encodeURIComponent(name), 10000);
     const hits = ((await r.json()).results || []).map(x => ({x, d: Math.hypot(x.latitude - lat, (x.longitude - lon) * Math.cos(lat*Math.PI/180))}));
     hits.sort((a, b) => a.d - b.d);
     if(hits.length && hits[0].d < 0.4 && hits[0].x.name) return hits[0].x.name;   // ~40 km
   }catch(e){}
   return name;
+}
+
+/** «Stuttgart, Deutschland» abroad, «جدة» in an Arab country. */
+async function displayPlace(g){
+  const cc = String(g.cc || '').toUpperCase(), lang = placeLang(cc);
+  const city = g.raw ? await placeName(g.raw, g.lat, g.lon, lang) : '';
+  if(lang === 'ar' || !cc) return city || CONFIG.city;
+  const country = countryName(cc, lang, g.country);
+  return city ? city + ', ' + country : country;
 }
 
 /** Where the connection is (IP based: the city of the internet provider, usually the right one or a
@@ -397,9 +420,12 @@ async function locate(force){
   if(!CONFIG.autoLocation) return false;
   if(!force && GEO && Date.now() - (GEO.at || 0) < GEO_MAX_AGE) return false;
   const sources = [
-    ['https://get.geojs.io/v1/ip/geo.json', j => ({city: j.city, lat: +j.latitude, lon: +j.longitude, tz: j.timezone})],
-    ['https://ipwho.is/', j => j.success === false ? null : ({city: j.city, lat: +j.latitude, lon: +j.longitude, tz: j.timezone && j.timezone.id})],
-    ['https://ipapi.co/json/', j => ({city: j.city, lat: +j.latitude, lon: +j.longitude, tz: j.timezone})],
+    ['https://get.geojs.io/v1/ip/geo.json', j => ({city: j.city, lat: +j.latitude, lon: +j.longitude, tz: j.timezone,
+                                                    cc: j.country_code, country: j.country})],
+    ['https://ipwho.is/', j => j.success === false ? null : ({city: j.city, lat: +j.latitude, lon: +j.longitude,
+                                                    tz: j.timezone && j.timezone.id, cc: j.country_code, country: j.country})],
+    ['https://ipapi.co/json/', j => ({city: j.city, lat: +j.latitude, lon: +j.longitude, tz: j.timezone,
+                                                    cc: j.country_code, country: j.country_name})],
   ];
   let g = null;
   for(const [url, pick] of sources){
@@ -415,7 +441,7 @@ async function locate(force){
   const old = GEO;
   const same = old && old.raw === g.city && Math.abs(old.lat - g.lat) < 0.05 && Math.abs(old.lon - g.lon) < 0.05;
   g.raw = g.city;
-  g.city = same ? old.city : (g.city ? await arabicPlace(g.city, g.lat, g.lon) : CONFIG.city);
+  g.city = same && old.city ? old.city : await displayPlace(g);
   g.at = Date.now();
   GEO = g;
   try{ localStorage.setItem(GEO_KEY, JSON.stringify(g)); }catch(e){}
@@ -1361,9 +1387,11 @@ function restoreSnap(){
 
 function showCity(){
   const wxCity = document.getElementById('wx-city');
-  if(wxCity) wxCity.textContent = CONFIG.city;
+  if(wxCity){ wxCity.textContent = CONFIG.city; wxCity.dir = 'auto'; }   // «Stuttgart, Deutschland» reads left to right
   const cs = document.getElementById('clock-sub');
-  if(cs) cs.textContent = 'بتوقيت ' + CONFIG.city;
+  // the line is letter-spaced for Arabic; a Latin name keeps its normal spacing
+  const name = CONFIG.city.split(', ')[0];
+  if(cs) cs.innerHTML = 'بتوقيت ' + (/[A-Za-z]/.test(name) ? `<bdi style="letter-spacing:0">${esc(name)}</bdi>` : esc(name));
 }
 
 function boot(){
