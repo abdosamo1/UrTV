@@ -234,6 +234,77 @@ for (const panel of ['prayers', 'verse', 'shows']) {
   await ctx.close();
 }
 
+// ---- automatic location + the mosque's Mawaqit timetable (adhan, iqama, Jumu'a), then offline from the cache
+{
+  const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  // a whole year where every day has the same times: 05:10 / 07:00 / 12:30 / 15:40 / 18:20 / 20:05
+  const day = ['05:10', '07:00', '12:30', '15:40', '18:20', '20:05'];
+  const month = Object.fromEntries(Array.from({ length: 31 }, (_, i) => [String(i + 1), day]));
+  const iqMonth = Object.fromEntries(Array.from({ length: 31 }, (_, i) => [String(i + 1), ['+15', '13:00', '+5', '18:30', '+12']]));
+  const conf = { name: 'Masjid Test  مسجد التجربة - TOWN', timezone: 'Europe/Berlin', iqamaEnabled: true,
+                 jumua: '13:15', jumuaAsDuhr: false, calendar: Array(12).fill(month), iqamaCalendar: Array(12).fill(iqMonth) };
+  const html = `<html><script>\n    let confData = ${JSON.stringify(conf)};\n    let x = 1;\n</script></html>`;
+  let online = true;
+  const hits = {};
+  await ctx.route(/^https?:/, r => {
+    const u = r.request().url(), cors = { 'Access-Control-Allow-Origin': '*' };
+    const host = new URL(u).host;
+    hits[host] = (hits[host] || 0) + 1;
+    if (!online) return r.abort();
+    if (host === 'get.geojs.io') return r.fulfill({ headers: cors, contentType: 'application/json',
+      body: JSON.stringify({ city: 'Kirchheim unter Teck', latitude: '48.6481', longitude: '9.4519', timezone: 'Europe/Berlin' }) });
+    if (host === 'geocoding-api.open-meteo.com') return r.fulfill({ headers: cors, contentType: 'application/json',
+      body: JSON.stringify({ results: [{ name: 'كيرشهايم أونتر تيك', latitude: 48.648, longitude: 9.451 }] }) });
+    if (host === 'mawaqit.net') return r.fulfill({ headers: cors, contentType: 'text/html', body: html });
+    return r.abort();
+  });
+  const p = await ctx.newPage();
+  const errors = [];
+  p.on('pageerror', e => errors.push(e.message));
+  await p.goto(page('tv.html') + '#city=الرياض&lat=24.7&lon=46.7&tz=Asia/Riyadh&loc=auto&mosque=test-mosque&panel=prayers');
+  await p.waitForFunction(() => PRAYERS.length && GEO, null, { timeout: 6000 }).catch(() => errors.push('no prayers/location'));
+  await p.waitForTimeout(500);
+  const read = () => p.evaluate(() => ({
+    tz: CONFIG.timezone, city: CONFIG.city, lat: CONFIG.latitude, sub: document.getElementById('clock-sub').textContent,
+    times: PRAYERS.map(x => x.key + '=' + String(x.h).padStart(2, '0') + ':' + String(x.mi).padStart(2, '0')).join(' '),
+    iqama: JSON.stringify(CONFIG.iqama), friday: isFriday(), method: CONFIG.prayerMethod,
+    panel: document.querySelector('.week').innerText }));
+  let r = await read();
+  check('auto location: no script errors', !errors.length, errors.join('; '));
+  check('auto location: time zone and Arabic place from the connection',
+        r.tz === 'Europe/Berlin' && r.city === 'كيرشهايم أونتر تيك' && r.sub.includes('كيرشهايم') && Math.abs(r.lat - 48.6481) < 1e-6,
+        JSON.stringify(r));
+  const dhuhr = r.friday ? '13:15' : '12:30';
+  check('mosque: adhan times from the Mawaqit timetable (Jumu\'a on Friday)',
+        r.times === `Fajr=05:10 Dhuhr=${dhuhr} Asr=15:40 Maghrib=18:20 Isha=20:05`, r.times);
+  check('mosque: iqama from "+N" and from "HH:MM"',
+        r.iqama === JSON.stringify({ Fajr: 15, Dhuhr: 30, Asr: 5, Maghrib: 10, Isha: 12 }), r.iqama);
+  check('fallback method outside Saudi Arabia is MWL', r.method === 3, r.method);
+  check('prayers card shows the mosque times', r.panel.includes('٥:١٠'), r.panel);
+
+  online = false;
+  await p.reload();
+  await p.waitForFunction(() => PRAYERS.length, null, { timeout: 6000 }).catch(() => errors.push('no prayers offline'));
+  r = await read();
+  check('offline: the cached place and the cached mosque timetable are used',
+        r.tz === 'Europe/Berlin' && r.city === 'كيرشهايم أونتر تيك' && r.times.startsWith('Fajr=05:10'), JSON.stringify(r));
+  await ctx.close();
+}
+
+// ---- no #loc / #mosque: the page behaves as before (fixed city, calculated times, never calls Mawaqit or IP lookups)
+{
+  const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  const seen = [];
+  await ctx.route(/^https?:/, r => { seen.push(new URL(r.request().url()).host); return r.abort(); });
+  const p = await ctx.newPage();
+  await p.goto(page('tv.html') + '#city=جدة&lat=21.5433&lon=39.1728&tz=Asia/Riyadh&panel=prayers');
+  await p.waitForFunction(() => PRAYERS.length, null, { timeout: 6000 }).catch(() => {});
+  const r = await p.evaluate(() => ({ tz: CONFIG.timezone, city: CONFIG.city, n: PRAYERS.length, method: CONFIG.prayerMethod }));
+  check('fixed city: unchanged, calculated times, Umm al-Qura', r.tz === 'Asia/Riyadh' && r.city === 'جدة' && r.n === 5 && r.method === 4, JSON.stringify(r));
+  check('fixed city: no Mawaqit or IP lookups', !seen.some(h => /mawaqit|geojs|ipwho|ipapi/.test(h)), seen.join(','));
+  await ctx.close();
+}
+
 await browser.close();
 console.log(failed ? `\n${failed} failed` : '\nall page tests passed');
 process.exit(failed ? 1 : 0);

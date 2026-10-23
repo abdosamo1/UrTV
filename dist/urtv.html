@@ -334,6 +334,10 @@ const CONFIG = {
   latitude: _num('lat', 24.7136),
   longitude: _num('lon', 46.6753),
   timezone: _Q.get('tz') || 'Asia/Riyadh',
+  // #loc=auto: city, coordinates and time zone from the internet connection (cached; #city/#lat/#lon until then)
+  autoLocation: _Q.get('loc') === 'auto',
+  // #mosque=<Mawaqit slug>: the mosque's own adhan, iqama and Jumu'a times instead of calculated ones
+  mosque: (_Q.get('mosque') || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 160),
   prayerMethod: 4,
   // followed teams in priority order: #teams=id,id,... (up to 10); older builds send team1/team2
   teamIds: (_Q.has('teams') ? _Q.get('teams').split(',')
@@ -361,6 +365,68 @@ const CONFIG = {
   // #widget=1: only the card, on a transparent page (the launcher's home screen shows it)
   widget: _Q.get('widget') === '1',
 };
+// Aladhan's method for the fallback (no mosque, or Mawaqit unreachable): Umm al-Qura in Saudi Arabia, else MWL
+const setMethod = () => { CONFIG.prayerMethod = CONFIG.timezone === 'Asia/Riyadh' ? 4 : 3; };
+setMethod();
+
+// ---------- automatic location (#loc=auto) ----------
+const GEO_KEY = 'geo2';
+const GEO_MAX_AGE = 6*3600*1000;
+const validTz = tz => { try{ new Intl.DateTimeFormat('en', {timeZone: tz}); return true; }catch(e){ return false; } };
+function applyGeo(g){
+  if(!g || !isFinite(g.lat) || !isFinite(g.lon)) return;
+  if(g.city) CONFIG.city = g.city;
+  CONFIG.latitude = +g.lat; CONFIG.longitude = +g.lon;
+  if(g.tz && validTz(g.tz)) CONFIG.timezone = g.tz;
+  setMethod();
+}
+let GEO = null;
+if(CONFIG.autoLocation){ try{ GEO = JSON.parse(localStorage.getItem(GEO_KEY) || 'null'); applyGeo(GEO); }catch(e){} }
+
+// The Arabic name of the place, from Open-Meteo's GeoNames search: the nearest hit with that name
+async function arabicPlace(name, lat, lon){
+  try{
+    const r = await fetchT('https://geocoding-api.open-meteo.com/v1/search?count=10&language=ar&name='
+                           + encodeURIComponent(name), 10000);
+    const hits = ((await r.json()).results || []).map(x => ({x, d: Math.hypot(x.latitude - lat, (x.longitude - lon) * Math.cos(lat*Math.PI/180))}));
+    hits.sort((a, b) => a.d - b.d);
+    if(hits.length && hits[0].d < 0.4 && hits[0].x.name) return hits[0].x.name;   // ~40 km
+  }catch(e){}
+  return name;
+}
+
+/** Where the connection is (IP based: the city of the internet provider, usually the right one or a
+ *  neighbour). Returns true when the place or time zone changed, so callers reload what depends on it. */
+async function locate(force){
+  if(!CONFIG.autoLocation) return false;
+  if(!force && GEO && Date.now() - (GEO.at || 0) < GEO_MAX_AGE) return false;
+  const sources = [
+    ['https://get.geojs.io/v1/ip/geo.json', j => ({city: j.city, lat: +j.latitude, lon: +j.longitude, tz: j.timezone})],
+    ['https://ipwho.is/', j => j.success === false ? null : ({city: j.city, lat: +j.latitude, lon: +j.longitude, tz: j.timezone && j.timezone.id})],
+    ['https://ipapi.co/json/', j => ({city: j.city, lat: +j.latitude, lon: +j.longitude, tz: j.timezone})],
+  ];
+  let g = null;
+  for(const [url, pick] of sources){
+    try{
+      const r = await fetchT(url, 10000);
+      if(!r.ok) continue;
+      g = pick(await r.json());
+      if(g && isFinite(g.lat) && isFinite(g.lon) && (g.lat || g.lon)) break;
+      g = null;
+    }catch(e){}
+  }
+  if(!g) return false;
+  const old = GEO;
+  const same = old && old.raw === g.city && Math.abs(old.lat - g.lat) < 0.05 && Math.abs(old.lon - g.lon) < 0.05;
+  g.raw = g.city;
+  g.city = same ? old.city : (g.city ? await arabicPlace(g.city, g.lat, g.lon) : CONFIG.city);
+  g.at = Date.now();
+  GEO = g;
+  try{ localStorage.setItem(GEO_KEY, JSON.stringify(g)); }catch(e){}
+  const changed = !old || !same || old.tz !== g.tz || old.city !== g.city;
+  applyGeo(g);
+  return changed;
+}
 
 const GREG = 'ar-SA-u-ca-gregory-nu-arab';
 const AR = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
@@ -460,7 +526,65 @@ function computePrayers(){
   return {Fajr:hm(fajr), Sunrise:hm(sunrise), Dhuhr:hm(dhuhr), Asr:hm(asr), Maghrib:hm(maghrib), Isha:hm(isha)};
 }
 
+// ---------- the mosque's own times, from its Mawaqit page (#mosque=<slug>) ----------
+// The page carries `let confData = {...};` with the year's timetable: calendar[month-1][day] =
+// [fajr, shuruq, dhuhr, asr, maghrib, isha], iqamaCalendar[month-1][day] = 5 x ("+10" minutes after adhan, or
+// "HH:MM"), and jumua. Kept in localStorage, so the times stay right offline; refreshed once a day.
+const MOSQUE_KEY = 'mawaqit:' + CONFIG.mosque;
+const DEFAULT_IQAMA = Object.assign({}, CONFIG.iqama);
+let MOSQUE = (() => { try{ return CONFIG.mosque ? JSON.parse(localStorage.getItem(MOSQUE_KEY) || 'null') : null; }catch(e){ return null; } })();
+
+async function loadMosque(){
+  if(!CONFIG.mosque) return null;
+  if(MOSQUE && Date.now() - (MOSQUE.at || 0) < 20*3600*1000) return MOSQUE;
+  try{
+    const r = await fetchT('https://mawaqit.net/en/' + CONFIG.mosque, 20000);
+    if(!r.ok) throw 0;
+    const m = (await r.text()).match(/confData\s*=\s*(\{.*?\});\s*\n/s);
+    if(!m) throw 0;
+    const c = JSON.parse(m[1]);
+    if(!Array.isArray(c.calendar) || c.calendar.length !== 12) throw 0;
+    MOSQUE = {at: Date.now(), name: c.name || '', calendar: c.calendar, iqamaCalendar: c.iqamaCalendar || [],
+              iqamaEnabled: c.iqamaEnabled !== false, jumua: c.jumua || '', jumuaAsDuhr: !!c.jumuaAsDuhr};
+    try{ localStorage.setItem(MOSQUE_KEY, JSON.stringify(MOSQUE)); }catch(e){}
+  }catch(e){}   // keep yesterday's copy (the timetable is for the whole year)
+  return MOSQUE;
+}
+
+const hhmm = t => /^\d{1,2}:\d{2}$/.test(String(t || '').trim());
+const toMin = t => { const [h, m] = String(t).trim().split(':').map(Number); return h*60 + m; };
+
+/** Today's times from the mosque's timetable, and its iqama minutes into CONFIG.iqama. null if missing. */
+function mosqueToday(M){
+  const p = riyadhParts();
+  const day = M && M.calendar[p.mo - 1] && M.calendar[p.mo - 1][String(p.d)];
+  if(!Array.isArray(day) || day.length < 6 || !day.every(hhmm)) return null;
+  const t = {Fajr:day[0], Sunrise:day[1], Dhuhr:day[2], Asr:day[3], Maghrib:day[4], Isha:day[5]};
+  const iq = M.iqamaCalendar[p.mo - 1] && M.iqamaCalendar[p.mo - 1][String(p.d)];
+  PRAYER_KEYS.forEach((k, i) => {
+    let mins = DEFAULT_IQAMA[k];
+    const v = Array.isArray(iq) ? String(iq[i] || '').trim() : '';
+    if(/^\+?\d{1,3}$/.test(v)) mins = +v.replace('+', '');
+    else if(hhmm(v)){ const d = toMin(v) - toMin(t[k]); if(d >= 0 && d <= 120) mins = d; }
+    CONFIG.iqama[k] = M.iqamaEnabled ? mins : 0;
+  });
+  // Friday: the Jumu'a time replaces Dhuhr (unless the mosque prays it at Dhuhr time)
+  if(isFriday() && !M.jumuaAsDuhr && hhmm(M.jumua)) t.Dhuhr = M.jumua.trim();
+  return t;
+}
+
 async function loadPrayers(){
+  if(CONFIG.mosque){
+    const t = mosqueToday(await loadMosque());
+    if(t){
+      buildPrayers(t);
+      tickPrayer();
+      tickRamadan();
+      if(CONFIG.panel === 'prayers') renderPanel(false);
+      return;
+    }
+  }
+  Object.assign(CONFIG.iqama, DEFAULT_IQAMA);
   const p = riyadhParts();
   const url = `https://api.aladhan.com/v1/timings/${pad(p.d)}-${pad(p.mo)}-${p.y}`
             + `?latitude=${CONFIG.latitude}&longitude=${CONFIG.longitude}`
@@ -1239,16 +1363,29 @@ function restoreSnap(){
   }catch(e){}
 }
 
+function showCity(){
+  const wxCity = document.getElementById('wx-city');
+  if(wxCity) wxCity.textContent = CONFIG.city;
+  const cs = document.getElementById('clock-sub');
+  if(cs) cs.textContent = 'بتوقيت ' + CONFIG.city;
+}
+
 function boot(){
   if(CONFIG.widget){ bootWidget(); return; }
   restoreSnap();
   setTimeout(saveSnap, 15*1000);   // the dream can be killed before pagehide
   setInterval(saveSnap, 60*1000);
   addEventListener('pagehide', saveSnap);
-  const wxCity = document.getElementById('wx-city');
-  if(wxCity) wxCity.textContent = CONFIG.city;
-  const cs = document.getElementById('clock-sub');
-  if(cs) cs.textContent = 'بتوقيت ' + CONFIG.city;
+  showCity();
+  if(CONFIG.autoLocation){
+    const relocate = force => locate(force).then(changed => {
+      if(!changed) return;
+      showCity(); tickClock.last = null; tickClock(); tickDates(); applyNight();
+      loadWeather(); loadPrayers();
+    });
+    relocate(false);
+    setInterval(() => relocate(true), GEO_MAX_AGE);
+  }
   document.title = 'شاشة تلفزيونك';
   applyBackground(true);
   loadPhotoIndex().then(() => applyBackground(true));
@@ -1291,6 +1428,8 @@ function bootWidget(){
   setInterval(saveSnap, 60*1000);
   addEventListener('pagehide', saveSnap);
   const P = CONFIG.panel;
+  if(CONFIG.autoLocation && (P === 'prayers' || P === 'forecast'))
+    locate(false).then(changed => { if(changed){ if(P === 'prayers') loadPrayers(); else loadWeather(); } });
   if(P === 'shows'){ loadWeek(); setInterval(loadWeek, 6*3600*1000); }
   else renderPanel(false);
   if(P === 'prayers'){ loadPrayers(); setInterval(loadPrayers, 6*3600*1000); setInterval(() => renderPanel(false), 15000); }

@@ -12,7 +12,31 @@ import java.util.List;
 
 /** Everything the user picks in settings, and the dashboard URL built from it. */
 final class Prefs {
-    static final String TZ = "Asia/Riyadh";
+    /** The TV's own time zone (the page switches to the connection's one when the location is automatic). */
+    static String tz() { return java.util.TimeZone.getDefault().getID(); }
+
+    // The mosque whose Mawaqit timetable gives the adhan, iqama and Jumu'a times: {slug, display name}.
+    // Until the user picks another one (or none), this one.
+    static final String DEFAULT_MOSQUE_SLUG = "masjid-tawasul-kirchheim-unter-teck-73230-germany";
+    static final String DEFAULT_MOSQUE_NAME = "مسجد الرحمن · كيرشهايم";
+
+    /** "https://mawaqit.net/de/some-mosque?x" or "some-mosque" -> "some-mosque"; null when it is neither. */
+    static String mosqueSlug(String raw) {
+        if (raw == null) return null;
+        String s = raw.trim();
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("mawaqit\\.net/(?:[a-z]{2}(?:-[A-Za-z]{2})?/)?([A-Za-z0-9_-]+)").matcher(s);
+        if (m.find()) s = m.group(1);
+        return s.matches("[A-Za-z0-9_-]{3,160}") ? s : null;
+    }
+
+    /** The Arabic part of a Mawaqit name like "Masjid Alrahman  مسجد الرحمن - KIRCHHEIM", else the name. */
+    static String mosqueLabel(String name) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("[\\u0600-\\u06FF][\\u0600-\\u06FF\\s]*").matcher(name);
+        String best = "";
+        while (m.find()) if (m.group().trim().length() > best.length()) best = m.group().trim();
+        return best.length() >= 3 ? best : name.trim();
+    }
 
     // TheSportsDB id, Arabic name; more teams come from the in-app search
     static final String[][] TEAM_PRESETS = {
@@ -81,8 +105,22 @@ final class Prefs {
     String[] city() {
         return new String[] {sp.getString("cityName", "الرياض"), sp.getString("cityLat", "24.6877"), sp.getString("cityLon", "46.7219")};
     }
+    /** Picking a city by hand turns the automatic location off. */
     void setCity(String name, String lat, String lon) {
-        sp.edit().putString("cityName", name).putString("cityLat", lat).putString("cityLon", lon).apply();
+        sp.edit().putString("cityName", name).putString("cityLat", lat).putString("cityLon", lon)
+            .putBoolean("autoLocation", false).apply();
+    }
+
+    /** City, weather and time zone from the internet connection; on until a city is picked by hand. */
+    boolean autoLocation() { return sp.getBoolean("autoLocation", true); }
+    void setAutoLocation(boolean v) { sp.edit().putBoolean("autoLocation", v).apply(); }
+
+    /** {slug, name}; slug "" = no mosque (calculated times). */
+    String[] mosque() {
+        return new String[] {sp.getString("mosqueSlug", DEFAULT_MOSQUE_SLUG), sp.getString("mosqueName", DEFAULT_MOSQUE_NAME)};
+    }
+    void setMosque(String slug, String name) {
+        sp.edit().putString("mosqueSlug", slug == null ? "" : slug).putString("mosqueName", name == null ? "" : name).apply();
     }
 
     static final int MAX_TEAMS = 10;
@@ -166,7 +204,9 @@ final class Prefs {
         List<String> ids = new ArrayList<>();
         for (String s : shows()) ids.add(s.split("\\|", 2)[0]);
         return "city=" + Uri.encode(city[0]) + "&lat=" + city[1] + "&lon=" + city[2]
-            + "&tz=" + Uri.encode(TZ)
+            + "&tz=" + Uri.encode(tz())
+            + (autoLocation() ? "&loc=auto" : "")
+            + (mosque()[0].isEmpty() ? "" : "&mosque=" + Uri.encode(mosque()[0]))
             + "&teams=" + join(teamIds(), ",")
             + "&panel=" + panel()
             + "&week=" + ("none".equals(panel()) ? "0" : "1")   // for a page older than #panel

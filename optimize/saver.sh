@@ -4,6 +4,10 @@
 #   optimize/saver.sh cities                       built-in Saudi cities by region
 #   optimize/saver.sh city الرس                    a built-in city (Arabic name as listed)
 #   optimize/saver.sh city 'اسم' 25.86 43.49       any place: name, latitude, longitude
+#   optimize/saver.sh autoloc true                 city, weather and time zone from the connection (true|false);
+#                                                  picking a city turns it off
+#   optimize/saver.sh mosque URL ['اسم']           adhan, iqama and Jumu'a from the mosque's Mawaqit page
+#                                                  (https://mawaqit.net/de/SLUG, or SLUG); `mosque none` = calculated
 #   optimize/saver.sh find-team الهلال             a club's id (Arabic or English name): id:Name | league
 #   optimize/saver.sh teams 136013:Al-Hilal 150643:Al-Zulfi    followed teams in order (up to 10)
 #   optimize/saver.sh card prayers                 beside the clock: shows prayers forecast matches verse none
@@ -46,6 +50,12 @@ case "${1:-}" in
     shift
     [ $# -gt 0 ] || { echo "usage: optimize/saver.sh teams ID:EnglishName ..."; exit 1; }
     send SET "--es teams $(quote "$(IFS=,; echo "$*")")" ;;
+  autoloc)   send SET "--es autoloc $(quote "${2:?usage: optimize/saver.sh autoloc true|false}")" ;;
+  mosque)
+    [ $# -ge 2 ] || { echo "usage: optimize/saver.sh mosque https://mawaqit.net/de/SLUG ['Arabic name'] | none"; exit 1; }
+    extra="--es mosque $(quote "$2")"
+    [ $# -ge 3 ] && extra="$extra --es mosque_name $(quote "$3")"
+    send SET "$extra" ;;
   card)      send SET "--es panel $(quote "${2:?usage: optimize/saver.sh card prayers}")" ;;
   home-card) send SET "--es home_panel $(quote "${2:?usage: optimize/saver.sh home-card none}")" ;;
   genres)    send SET "--es genres $(quote "${2-}")" ;;

@@ -18,7 +18,8 @@ import java.util.List;
  *   am broadcast -n sa.urtv.screensaver/.SaverReceiver -a sa.urtv.screensaver.SET
  *       [--es city 'الرس'] [--es lat 25.86 --es lon 43.49] [--es teams '136013:Al-Hilal,150643:Al-Zulfi']
  *       [--es panel prayers] [--es home_panel none] [--es minrating 7] [--es genres Drama,Comedy] [--es langs English]
- *       [--es photos 30] [--es idle 10]
+ *       [--es photos 30] [--es idle 10] [--es autoloc true|false]
+ *       [--es mosque https://mawaqit.net/de/SLUG | SLUG | none] [--es mosque_name 'مسجد الرحمن']
  *   am broadcast -n sa.urtv.screensaver/.SaverReceiver -a sa.urtv.screensaver.UPDATE
  *
  * photos = minutes between background photos (Prefs.PHOTO_MINUTES). idle = minutes before the TV starts the
@@ -115,6 +116,14 @@ public class SaverReceiver extends BroadcastReceiver {
                 return "error: idle not allowed: this app may not change system settings on this TV"
                     + " (the TV's own screensaver settings can, or the shell: settings put system screen_off_timeout)";
         }
+        String autoloc = i.getStringExtra("autoloc");
+        if (autoloc != null && !autoloc.matches("true|false")) return "error: autoloc is true or false";
+        String mosque = i.getStringExtra("mosque"), mosqueName = i.getStringExtra("mosque_name");
+        String slug = null;
+        if (mosque != null && !mosque.matches("none|")) {
+            slug = Prefs.mosqueSlug(mosque);
+            if (slug == null) return "error: mosque is a mawaqit.net link, its last part (slug), or none";
+        }
         List<String> genres = codes(i.getStringExtra("genres"), Prefs.GENRES);
         List<String> langs = codes(i.getStringExtra("langs"), Prefs.LANGS);
         if (genres != null && genres.contains(null)) return "error: genres are " + names(Prefs.GENRES);
@@ -128,7 +137,13 @@ public class SaverReceiver extends BroadcastReceiver {
                 return "error: idle not allowed: the TV refused the change";
             }
         }
-        if (city != null) p.setCity(city[0], city[1], city[2]);
+        if (city != null) p.setCity(city[0], city[1], city[2]);   // also turns the automatic location off
+        if (autoloc != null) p.setAutoLocation(Boolean.parseBoolean(autoloc));
+        if (mosque != null) {
+            if (slug == null) p.setMosque("", "");
+            else p.setMosque(slug, mosqueName != null && !mosqueName.trim().isEmpty() ? mosqueName.trim()
+                : slug.equals(p.mosque()[0]) ? p.mosque()[1] : slug);
+        }
         if (teams != null) p.setList("teams", teams);
         if (panel != null) p.setPanel(panel);
         if (home != null) p.setHomePanel(home);
@@ -141,7 +156,10 @@ public class SaverReceiver extends BroadcastReceiver {
 
     private static String describe(Context c, Prefs p) {
         String[] city = p.city();
-        return "city: " + city[0] + " (" + city[1] + ", " + city[2] + ")"
+        String[] mosque = p.mosque();
+        return "autoloc: " + p.autoLocation() + (p.autoLocation() ? " (city below is only the fallback)" : "")
+            + "\ncity: " + city[0] + " (" + city[1] + ", " + city[2] + ")"
+            + "\nmosque: " + (mosque[0].isEmpty() ? "none (calculated times)" : mosque[1] + " | " + mosque[0])
             + "\nteams: " + Prefs.join(p.teams(), ", ")
             + "\npanel: " + p.panel() + "\nhome_panel: " + p.homePanel()
             + "\nminrating: " + p.minRating()

@@ -36,10 +36,11 @@ debugging?» on the TV). Cloning the repo and reading this file before message 1
 Any other agent: the same in your words: ask me to allow running commands and network access in this folder for
 the whole task, and to say «تم».
 
-**Message 2, the city:**
+**Message 2, the mosque:**
 
-> وش مدينتك؟
-> (لمواقيت الصلاة والطقس. مثال: الرياض، جدة، الرس)
+> المدينة والطقس والتوقيت بيتحددوا تلقائياً حسب موقع الاتصال.
+> ولمواقيت الصلاة والإقامة: ابعتلي رابط جامعك من موقع مواقيت (mawaqit.net)، أو اكتب «جامع الرحمن» لجامع التواصل
+> في كيرشهايم، أو «حساب» إذا بدك مواقيت محسوبة بدون جامع.
 
 **Message 3, the clubs and the defaults:**
 
@@ -63,8 +64,10 @@ Those defaults, unless I change them:
 - nothing from `optimize/lists/tcl-optional.txt` is disabled (`optimize/lists/mine.txt` stays empty);
 - if I pick the episodes card: all genres and languages.
 
-My city is checked later against `android/app/src/main/java/sa/urtv/screensaver/Cities.java`; if it isn't there,
-step 4 sets it with its coordinates (`city <name> <lat> <lon>`) without asking me again.
+The location is automatic (`autoloc true`, the default): don't ask for a city. Only if I name one myself, step 4
+sets it (`city <name> <lat> <lon>`, which turns the automatic location off). The mosque: a mawaqit.net link as I
+sent it, «جامع الرحمن» = https://mawaqit.net/de/masjid-tawasul-kirchheim-unter-teck-73230-germany (the default),
+«حساب» = `mosque none`.
 
 ## 0. Can you reach my TV? (check this first, 1 minute)
 
@@ -247,7 +250,8 @@ itself) and tell me. Some TCL firmware keeps its own home: then `SKIP_LAUNCHER=1
 ## 4. Apply my choices (5 minutes; no remote needed)
 
 ```
-optimize/saver.sh cities                          # find my city, then: optimize/saver.sh city <name>   (not listed: city <name> <lat> <lon>)
+optimize/saver.sh autoloc true                    # city, weather, time zone from the connection (city <name> <lat> <lon> ONLY if I named one)
+optimize/saver.sh mosque <the link I sent>        # or: mosque none; the screen then shows that mosque's adhan, iqama and Jumu'a
 optimize/saver.sh find-team <club as I wrote it>  # Arabic is fine (الهلال): one call per club, Saudi clubs first;
                                                   # then: optimize/saver.sh teams <id:Name> <id:Name> ...  (my order)
 optimize/saver.sh card <one of: verse, shows, prayers, forecast, matches, none>   # beside the clock (verse unless I said otherwise)
@@ -291,7 +295,7 @@ optimize/run.sh status                            # every step ✓, and «report
 ```
 - `report.md` shows Home as `sa.urtv.home` (or the stock home if we used `SKIP_LAUNCHER=1`) and the screensaver
   as `sa.urtv.screensaver`.
-- You looked at the step 5 screenshots yourself and they show my city, my card and my favourites.
+- You looked at the step 5 screenshots yourself and they show my city (the automatic one), my card and my favourites.
 
 ## 7. Tell me
 

@@ -91,7 +91,12 @@ public class SettingsActivity extends Activity {
             startActivity(new Intent(SettingsActivity.this, MainActivity.class)); } }).requestFocus();
 
         header("الموقع");
-        row("المدينة", prefs.city()[0], R.drawable.ic_place, new Runnable() { public void run() { pickCity(); } });
+        row("المدينة", prefs.autoLocation() ? "تلقائي حسب الاتصال" : prefs.city()[0], R.drawable.ic_place,
+            new Runnable() { public void run() { pickCity(); } });
+
+        header("مواقيت الصلاة");
+        row("الجامع", prefs.mosque()[0].isEmpty() ? "بدون جامع · حساب فلكي" : prefs.mosque()[1] + " · من مواقيت",
+            R.drawable.ic_place, new Runnable() { public void run() { pickMosque(); } });
 
         header("المباريات");
         row("الفرق المتابعة (" + arabicNum(prefs.teams().size()) + "/" + arabicNum(Prefs.MAX_TEAMS) + ")", teamsLabel(),
@@ -133,11 +138,16 @@ public class SettingsActivity extends Activity {
 
     private void pickCity() {
         final Cities.Region[] regions = Cities.REGIONS;
-        String[] labels = new String[regions.length + 1];
-        labels[0] = "بحث عن مدينة أو قرية…";
-        for (int i = 0; i < regions.length; i++) labels[i + 1] = regions[i].name + "  (" + regions[i].cities.length + ")";
-        new AlertDialog.Builder(this, DIALOG_THEME).setTitle("المنطقة")
-            .setItems(labels, (d, i) -> { if (i == 0) searchCity(); else pickCityIn(regions[i - 1]); })
+        String[] labels = new String[regions.length + 2];
+        labels[0] = (prefs.autoLocation() ? "✓ " : "") + "تلقائي حسب موقع الاتصال (المدينة والطقس والتوقيت)";
+        labels[1] = "بحث عن مدينة أو قرية…";
+        for (int i = 0; i < regions.length; i++) labels[i + 2] = regions[i].name + "  (" + regions[i].cities.length + ")";
+        new AlertDialog.Builder(this, DIALOG_THEME).setTitle("المدينة")
+            .setItems(labels, (d, i) -> {
+                if (i == 0) { prefs.setAutoLocation(true); render(); }
+                else if (i == 1) searchCity();
+                else pickCityIn(regions[i - 2]);
+            })
             .show();
     }
 
@@ -156,9 +166,9 @@ public class SettingsActivity extends Activity {
             }).show();
     }
 
-    // any place in Saudi Arabia, from Open-Meteo's GeoNames search
+    // any place in the world, from Open-Meteo's GeoNames search
     private void searchCity() {
-        ask("اسم المدينة أو القرية", q -> fetch("https://geocoding-api.open-meteo.com/v1/search?count=20&language=ar&countryCode=SA&name="
+        ask("اسم المدينة أو القرية", q -> fetch("https://geocoding-api.open-meteo.com/v1/search?count=20&language=ar&name="
             + Uri.encode(q), json -> {
                 JSONArray a = new JSONObject(json).optJSONArray("results");
                 if (a == null || a.length() == 0) { toast("لا توجد نتائج"); return; }
@@ -169,12 +179,48 @@ public class SettingsActivity extends Activity {
                     names[i] = c.optString("name");
                     lats[i] = String.valueOf(c.optDouble("latitude"));
                     lons[i] = String.valueOf(c.optDouble("longitude"));
-                    String region = c.optString("admin1", "");
-                    rows[i] = region.isEmpty() ? names[i] : names[i] + "  ·  " + region;
+                    String region = c.optString("admin1", ""), country = c.optString("country", "");
+                    rows[i] = names[i] + (region.isEmpty() ? "" : "  ·  " + region) + (country.isEmpty() ? "" : "  ·  " + country);
                 }
                 new AlertDialog.Builder(this, DIALOG_THEME).setTitle("اختر المكان")
                     .setItems(rows, (d, i) -> { prefs.setCity(names[i], lats[i], lons[i]); render(); }).show();
             }));
+    }
+
+    /** The mosque whose Mawaqit timetable the screen shows: by its link, or none (calculated times). */
+    private void pickMosque() {
+        String[] mine = prefs.mosque();
+        String[] items = {
+            "إدخال رابط جامع من موقع مواقيت (mawaqit.net)",
+            (mine[0].isEmpty() ? "✓ " : "") + "بدون جامع · حساب فلكي حسب الموقع",
+        };
+        new AlertDialog.Builder(this, DIALOG_THEME).setTitle("الجامع")
+            .setMessage(mine[0].isEmpty() ? null : "الحالي: " + mine[1])
+            .setItems(items, (d, i) -> {
+                if (i == 0) askMosque();
+                else { prefs.setMosque("", ""); render(); }
+            })
+            .show();
+    }
+
+    // The link of the mosque's page, e.g. https://mawaqit.net/de/masjid-tawasul-kirchheim-unter-teck-73230-germany:
+    // fetched once to check it is a Mawaqit mosque with a timetable, and to take its name
+    private void askMosque() {
+        ask("رابط الجامع من mawaqit.net", q -> {
+            final String slug = Prefs.mosqueSlug(q);
+            if (slug == null) { toast("الرابط غير صحيح"); return; }
+            fetch("https://mawaqit.net/en/" + slug, html -> {
+                java.util.regex.Matcher m = java.util.regex.Pattern
+                    .compile("confData\\s*=\\s*(\\{.*?\\});\\s*\\n", java.util.regex.Pattern.DOTALL).matcher(html);
+                if (!m.find()) { toast("لم يُعثر على مواقيت هذا الجامع"); return; }
+                JSONObject c = new JSONObject(m.group(1));
+                if (c.optJSONArray("calendar") == null) { toast("لا توجد مواقيت لهذا الجامع"); return; }
+                String name = Prefs.mosqueLabel(c.optString("name", slug));
+                prefs.setMosque(slug, name);
+                toast("تم اختيار " + name);
+                render();
+            });
+        });
     }
 
     /** Followed teams: untick to remove, or add one (presets, league browsing, search). Up to 10. */
