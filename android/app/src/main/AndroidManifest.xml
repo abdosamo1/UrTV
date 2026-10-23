@@ -7,6 +7,16 @@
     <!-- only used if the owner allows it for the app: the idle delay row and SaverReceiver's idle -->
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
 
+    <!-- the adhan (Adhan, AdhanService): an exact alarm at each prayer, played in a foreground service over other
+         apps, with its own volume; on a TV in standby it turns the screen on and back off (AdminReceiver) -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.TURN_SCREEN_ON" />
+
     <!-- the launcher (same signing key) reads the settings for its home-screen card -->
     <permission
         android:name="sa.urtv.screensaver.READ_CONFIG"
@@ -72,6 +82,32 @@
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <!-- the next adhan's alarm is a wall-clock time: re-arm it when the clock or time zone changes -->
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- the adhan: the alarm, the player, and the force-lock admin that puts a TV it woke back to sleep -->
+        <receiver
+            android:name=".AdhanReceiver"
+            android:exported="false" />
+
+        <service
+            android:name=".AdhanService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <receiver
+            android:name=".AdminReceiver"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
             </intent-filter>
         </receiver>
 
@@ -85,6 +121,9 @@
                 <action android:name="sa.urtv.screensaver.SET" />
                 <action android:name="sa.urtv.screensaver.CITIES" />
                 <action android:name="sa.urtv.screensaver.UPDATE" />
+                <action android:name="sa.urtv.screensaver.ADHAN_TEST" />
+                <action android:name="sa.urtv.screensaver.ADHAN_STOP" />
+                <action android:name="sa.urtv.screensaver.UNADMIN" />
             </intent-filter>
         </receiver>
 

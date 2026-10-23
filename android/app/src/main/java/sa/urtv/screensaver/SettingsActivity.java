@@ -66,6 +66,12 @@ public class SettingsActivity extends Activity {
     }
 
     @Override
+    protected void onPause() {   // a new mosque or city moves the adhan times
+        super.onPause();
+        Adhan.update(this, false);
+    }
+
+    @Override
     protected void onResume() {   // back in front (from the TV's settings, or opened again over itself): show what is set now
         super.onResume();
         render();
@@ -97,6 +103,23 @@ public class SettingsActivity extends Activity {
         header("مواقيت الصلاة");
         row("الجامع", prefs.mosque()[0].isEmpty() ? "بدون جامع · حساب فلكي" : prefs.mosque()[1] + " · من مواقيت",
             R.drawable.ic_place, new Runnable() { public void run() { pickMosque(); } });
+
+        header("الأذان");
+        row("الأذان عند دخول الوقت", prefs.adhanOn() ? "يعمل · فوق أي تطبيق، ويوقف الفيديو ثم يكمله" : "متوقف",
+            R.drawable.ic_screensaver, new Runnable() { public void run() {
+                prefs.setAdhanOn(!prefs.adhanOn()); Adhan.update(SettingsActivity.this, false); render(); } });
+        if (prefs.adhanOn()) {
+            String next = prefs.nextAdhan();
+            row("صوت الأذان", Adhan.label(prefs.adhanVoice()) + " · للظهر والعصر والمغرب والعشاء",
+                R.drawable.ic_star, new Runnable() { public void run() { pickAdhanVoice(false); } });
+            row("أذان الفجر", prefs.adhanFajr().isEmpty() ? "بدون أذان للفجر" : Adhan.label(prefs.adhanFajr()),
+                R.drawable.ic_star, new Runnable() { public void run() { pickAdhanVoice(true); } });
+            row("مستوى صوت الأذان", AdhanTimes.arabic(String.valueOf(prefs.adhanVolume()))
+                    + " · ثم يرجع الصوت كما كان", R.drawable.ic_sync,
+                new Runnable() { public void run() { pickAdhanVolume(); } });
+            row("جرّب الأذان الآن", next.isEmpty() ? "يشغّل الصوت المختار بمستواه" : "الأذان القادم: " + next,
+                R.drawable.ic_play, new Runnable() { public void run() { testAdhan(); } });
+        }
 
         header("المباريات");
         row("الفرق المتابعة (" + arabicNum(prefs.teams().size()) + "/" + arabicNum(Prefs.MAX_TEAMS) + ")", teamsLabel(),
@@ -185,6 +208,53 @@ public class SettingsActivity extends Activity {
                 new AlertDialog.Builder(this, DIALOG_THEME).setTitle("اختر المكان")
                     .setItems(rows, (d, i) -> { prefs.setCity(names[i], lats[i], lons[i]); render(); }).show();
             }));
+    }
+
+    /** The voice for the four prayers, or for Fajr (with «بدون أذان للفجر» first: Fajr is optional). */
+    private void pickAdhanVoice(final boolean fajr) {
+        final List<String> ids = new ArrayList<>();
+        final List<String> labels = new ArrayList<>();
+        if (fajr) { ids.add(""); labels.add("بدون أذان للفجر"); }
+        for (String f : Adhan.FAJR_FIRST) if (fajr) { ids.add(f); labels.add(Adhan.label(f)); }
+        for (String[] v : Adhan.VOICES) if (!ids.contains(v[0])) { ids.add(v[0]); labels.add(v[1]); }
+        String cur = fajr ? prefs.adhanFajr() : prefs.adhanVoice();
+        new AlertDialog.Builder(this, DIALOG_THEME).setTitle(fajr ? "أذان الفجر" : "صوت الأذان")
+            .setSingleChoiceItems(labels.toArray(new String[0]), Math.max(0, ids.indexOf(cur)), (d, i) -> {
+                if (fajr) prefs.setAdhanFajr(ids.get(i)); else prefs.setAdhanVoice(ids.get(i));
+                d.dismiss();
+                Adhan.update(this, false);
+                render();
+                if (!ids.get(i).isEmpty()) toast("اضغط «جرّب الأذان الآن» لتسمعه");
+            })
+            .show();
+    }
+
+    /** Volume steps up to the TV's own maximum. */
+    private void pickAdhanVolume() {
+        android.media.AudioManager am = (android.media.AudioManager) getSystemService(AUDIO_SERVICE);
+        int max = am == null ? 100 : am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC);
+        final List<Integer> vals = new ArrayList<>();
+        for (int v : Adhan.VOLUMES) if (v <= max) vals.add(v);
+        if (!vals.contains(max)) vals.add(max);
+        String[] labels = new String[vals.size()];
+        int sel = 0;
+        for (int i = 0; i < vals.size(); i++) {
+            labels[i] = AdhanTimes.arabic(String.valueOf(vals.get(i))) + (vals.get(i) == max ? "  (الأعلى)" : "");
+            if (vals.get(i) == prefs.adhanVolume()) sel = i;
+        }
+        new AlertDialog.Builder(this, DIALOG_THEME).setTitle("مستوى صوت الأذان (من " + AdhanTimes.arabic(String.valueOf(max)) + ")")
+            .setSingleChoiceItems(labels, sel, (d, i) -> { prefs.setAdhanVolume(vals.get(i)); d.dismiss(); render(); })
+            .show();
+    }
+
+    /** Plays the chosen voice now, at the adhan volume; «إيقاف» or Back stops it and puts the volume back. */
+    private void testAdhan() {
+        AdhanService.start(this, prefs.adhanVoice(), true);
+        new AlertDialog.Builder(this, DIALOG_THEME).setTitle(Adhan.label(prefs.adhanVoice()))
+            .setMessage("يعمل الأذان الآن")
+            .setPositiveButton("إيقاف", null)
+            .setOnDismissListener(d -> AdhanService.stop())
+            .show();
     }
 
     /** The mosque whose Mawaqit timetable the screen shows: by its link, or none (calculated times). */

@@ -8,6 +8,12 @@
 #                                                  picking a city turns it off
 #   optimize/saver.sh mosque URL ['اسم']           adhan, iqama and Jumu'a from the mosque's Mawaqit page
 #                                                  (https://mawaqit.net/de/SLUG, or SLUG); `mosque none` = calculated
+#   optimize/saver.sh adhan true                   the adhan at each prayer time (true|false; on by default)
+#   optimize/saver.sh adhan-voice makki-1          makki-1 makki-2 madani aqsa ahmad-jalal-yahya voice-7 voice-8
+#                                                  fajr-trabulsi  (Dhuhr, Asr, Maghrib, Isha)
+#   optimize/saver.sh adhan-fajr off               Fajr: off (the default) or one of the voices
+#   optimize/saver.sh adhan-volume 10              the TV volume it plays at (then the volume goes back)
+#   optimize/saver.sh adhan-test | adhan-stop      play the adhan now / stop it
 #   optimize/saver.sh find-team الهلال             a club's id (Arabic or English name): id:Name | league
 #   optimize/saver.sh teams 136013:Al-Hilal 150643:Al-Zulfi    followed teams in order (up to 10)
 #   optimize/saver.sh card prayers                 beside the clock: shows prayers forecast matches verse none
@@ -56,6 +62,12 @@ case "${1:-}" in
     extra="--es mosque $(quote "$2")"
     [ $# -ge 3 ] && extra="$extra --es mosque_name $(quote "$3")"
     send SET "$extra" ;;
+  adhan)        send SET "--es adhan $(quote "${2:?usage: optimize/saver.sh adhan true|false}")" ;;
+  adhan-voice)  send SET "--es adhan_voice $(quote "${2:?usage: optimize/saver.sh adhan-voice makki-1}")" ;;
+  adhan-fajr)   send SET "--es adhan_fajr $(quote "${2:?usage: optimize/saver.sh adhan-fajr off|fajr-trabulsi}")" ;;
+  adhan-volume) send SET "--es adhan_volume $(quote "${2:?usage: optimize/saver.sh adhan-volume 10}")" ;;
+  adhan-test)   send ADHAN_TEST ;;
+  adhan-stop)   send ADHAN_STOP ;;
   card)      send SET "--es panel $(quote "${2:?usage: optimize/saver.sh card prayers}")" ;;
   home-card) send SET "--es home_panel $(quote "${2:?usage: optimize/saver.sh home-card none}")" ;;
   genres)    send SET "--es genres $(quote "${2-}")" ;;

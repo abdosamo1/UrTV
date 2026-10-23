@@ -20,6 +20,10 @@ import java.util.List;
  *       [--es panel prayers] [--es home_panel none] [--es minrating 7] [--es genres Drama,Comedy] [--es langs English]
  *       [--es photos 30] [--es idle 10] [--es autoloc true|false]
  *       [--es mosque https://mawaqit.net/de/SLUG | SLUG | none] [--es mosque_name 'مسجد الرحمن']
+ *       [--es adhan true|false] [--es adhan_voice makki-1] [--es adhan_fajr off|fajr-trabulsi] [--es adhan_volume 10]
+ *   am broadcast -n sa.urtv.screensaver/.SaverReceiver -a sa.urtv.screensaver.ADHAN_TEST   (plays it now)
+ *   am broadcast -n sa.urtv.screensaver/.SaverReceiver -a sa.urtv.screensaver.ADHAN_STOP
+ *   am broadcast -n sa.urtv.screensaver/.SaverReceiver -a sa.urtv.screensaver.UNADMIN      (before uninstalling)
  *   am broadcast -n sa.urtv.screensaver/.SaverReceiver -a sa.urtv.screensaver.UPDATE
  *
  * photos = minutes between background photos (Prefs.PHOTO_MINUTES). idle = minutes before the TV starts the
@@ -56,6 +60,22 @@ public class SaverReceiver extends BroadcastReceiver {
                     pending.setResultData("update: " + Updater.check(app, true));
                     pending.finish();
                 }).start();
+                return;
+            }
+            case "sa.urtv.screensaver.ADHAN_TEST":
+                AdhanService.start(c, p.adhanVoice(), true);
+                setResultData("adhan: playing " + p.adhanVoice() + " at volume " + p.adhanVolume());
+                return;
+            case "sa.urtv.screensaver.ADHAN_STOP":
+                AdhanService.stop();
+                setResultData("adhan: stopped");
+                return;
+            case "sa.urtv.screensaver.UNADMIN": {   // an active device admin can't be uninstalled
+                android.app.admin.DevicePolicyManager dpm =
+                    (android.app.admin.DevicePolicyManager) c.getSystemService(Context.DEVICE_POLICY_SERVICE);
+                android.content.ComponentName admin = new android.content.ComponentName(c, AdminReceiver.class);
+                if (dpm != null && dpm.isAdminActive(admin)) dpm.removeActiveAdmin(admin);
+                setResultData("admin: removed");
                 return;
             }
             case "sa.urtv.screensaver.SET":
@@ -124,6 +144,13 @@ public class SaverReceiver extends BroadcastReceiver {
             slug = Prefs.mosqueSlug(mosque);
             if (slug == null) return "error: mosque is a mawaqit.net link, its last part (slug), or none";
         }
+        String adhan = i.getStringExtra("adhan"), adhanVoice = i.getStringExtra("adhan_voice"),
+            adhanFajr = i.getStringExtra("adhan_fajr"), adhanVolume = i.getStringExtra("adhan_volume");
+        if (adhan != null && !adhan.matches("true|false")) return "error: adhan is true or false";
+        if (adhanVoice != null && !Adhan.isVoice(adhanVoice)) return "error: adhan_voice is one of " + voices();
+        if (adhanFajr != null && !adhanFajr.equals("off") && !Adhan.isVoice(adhanFajr))
+            return "error: adhan_fajr is off or one of " + voices();
+        if (adhanVolume != null && !adhanVolume.matches("\\d{1,3}") ) return "error: adhan_volume is a number, e.g. 10";
         List<String> genres = codes(i.getStringExtra("genres"), Prefs.GENRES);
         List<String> langs = codes(i.getStringExtra("langs"), Prefs.LANGS);
         if (genres != null && genres.contains(null)) return "error: genres are " + names(Prefs.GENRES);
@@ -149,6 +176,11 @@ public class SaverReceiver extends BroadcastReceiver {
         if (home != null) p.setHomePanel(home);
         if (rating != null) p.setMinRating(rating);
         if (photos != null) p.setPhotoMinutes(photos);
+        if (adhan != null) p.setAdhanOn(Boolean.parseBoolean(adhan));
+        if (adhanVoice != null) p.setAdhanVoice(adhanVoice);
+        if (adhanFajr != null) p.setAdhanFajr(adhanFajr.equals("off") ? "" : adhanFajr);
+        if (adhanVolume != null) p.setAdhanVolume(Math.max(1, Integer.parseInt(adhanVolume)));
+        Adhan.update(c, false);   // a new mosque, city or Fajr choice moves the next adhan
         if (genres != null) p.setList("genres", genres);
         if (langs != null) p.setList("langs", langs);
         return "saved\n" + describe(c, p);
@@ -166,7 +198,22 @@ public class SaverReceiver extends BroadcastReceiver {
             + "\nphotos: " + p.photoMinutes()
             + "\nidle: " + idle(Prefs.idleMs(c))
             + "\ngenres: " + Prefs.join(p.list("genres"), ",") + "\nlangs: " + Prefs.join(p.list("langs"), ",")
-            + "\nautoupdate: " + p.autoUpdate();
+            + "\nautoupdate: " + p.autoUpdate()
+            + "\nadhan: " + p.adhanOn() + " | voice " + p.adhanVoice() + " | fajr " + (p.adhanFajr().isEmpty() ? "off" : p.adhanFajr())
+            + " | volume " + p.adhanVolume() + " | next: " + p.nextAdhan()
+            + " | turns the TV back off: " + adminActive(c);
+    }
+
+    private static String voices() {
+        List<String> out = new ArrayList<>();
+        for (String[] v : Adhan.VOICES) out.add(v[0]);
+        return Prefs.join(out, " ");
+    }
+
+    private static boolean adminActive(Context c) {
+        android.app.admin.DevicePolicyManager dpm =
+            (android.app.admin.DevicePolicyManager) c.getSystemService(Context.DEVICE_POLICY_SERVICE);
+        return dpm != null && dpm.isAdminActive(new android.content.ComponentName(c, AdminReceiver.class));
     }
 
     /** minutes the TV waits before the screensaver, "unknown" when it does not say */

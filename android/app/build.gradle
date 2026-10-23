@@ -47,6 +47,11 @@ android {
         main { assets.srcDirs = ['../../dist', '../launcher/src/main/assets', '../../assets'] }   // page, Thmanyah fonts, backgrounds/, shared/ (the club lists)
     }
 
+    // the adhan files are played straight from the APK (AssetFileDescriptor), which needs them stored uncompressed
+    androidResources {
+        noCompress 'mp3'
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8

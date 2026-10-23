@@ -29,6 +29,8 @@ push_install() {   # $1 apk name, $2 package
       echo "An older $2 signed with another key is installed: removing it, then installing again."
       # removing the home app while the stock one is off would leave the TV with no home at all
       [ "$2" = sa.urtv.home ] && "$PY" -I optimize/tv.py "pm enable ${STOCK%%/*}" > /dev/null || true
+      # an active device admin (the adhan's force-lock) can't be uninstalled: let the app give it up first
+      [ "$2" = sa.urtv.screensaver ] && "$PY" -I optimize/tv.py "am broadcast -n sa.urtv.screensaver/.SaverReceiver -a sa.urtv.screensaver.UNADMIN" > /dev/null || true
       "$PY" -I optimize/tv.py "pm uninstall $2" || true
       out=$("$PY" -I optimize/tv.py --install "/data/local/tmp/$1") || { echo "$out"; exit 1; }
       grep -q Success <<< "$out" || { echo "!! Install of $1 failed again: $out"; exit 1; }
@@ -83,9 +85,15 @@ if [ "$what" = saver ] || [ "$what" = all ]; then
     "settings put secure screensaver_enabled 1" \
     "settings put secure screensaver_components sa.urtv.screensaver/.ScreenDream" \
     "settings put secure screensaver_default_component sa.urtv.screensaver/.ScreenDream" \
+    "appops set sa.urtv.screensaver SCHEDULE_EXACT_ALARM allow" \
+    "appops set sa.urtv.screensaver TURN_SCREEN_ON allow" \
+    "cmd deviceidle whitelist +sa.urtv.screensaver" \
+    "dpm set-active-admin --user 0 sa.urtv.screensaver/.AdminReceiver" \
     "am start -n sa.urtv.screensaver/.SettingsActivity" \
     | "$PY" -I optimize/tv.py --batch
-  echo "Screensaver installed and selected. Its settings screen is open on the TV."
+  # the adhan: exact alarms, turning the screen on in standby, no battery limits, and the force-lock admin that
+  # puts the TV back to sleep after an adhan that woke it (lines a TV doesn't know just print an error, harmless)
+  echo "Screensaver installed and selected (with the adhan). Its settings screen is open on the TV."
 fi
 
 if [ "$what" = launcher ] || [ "$what" = all ]; then

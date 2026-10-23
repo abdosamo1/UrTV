@@ -30,6 +30,8 @@ public class UpdateJob extends JobService {
         new Thread(new Runnable() {
             @Override public void run() {
                 Updater.check(getApplicationContext(), false);
+                Adhan.refresh(getApplicationContext(), false);   // the mosque may change its times
+                Adhan.schedule(getApplicationContext());
                 jobFinished(p, false);
             }
         }).start();

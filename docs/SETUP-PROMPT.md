@@ -51,6 +51,7 @@ the whole task, and to say «تم».
 > • المفضلة: أول ٦ تطبيقات من واجهتك الحالية، بنفس الترتيب
 > • بركّب TV Bro (متصفح للتلفزيون) و SmartTube (يوتيوب بدون إعلانات)، مجانيين من GitHub
 > • ما فيه بطاقة في الواجهة الرئيسية، ووقت شاشة التوقف يبقى مثل ما هو، وما أعطّل إضافات TCL الاختيارية
+> • الأذان عند كل صلاة بصوت الحرم المكي على مستوى صوت ١٠ (ثم يرجع الصوت كما كان)، وبدون أذان للفجر
 
 After my answer to message 3, start steps 0 and 1 at once, in the same turn: don't end your turn to wait for me
 again. The only other thing I do is press Allow on the TV, and step 1 tells me when, without stopping.
@@ -63,6 +64,7 @@ Those defaults, unless I change them:
 - no card on the home screen; the TV's own screensaver delay is kept;
 - nothing from `optimize/lists/tcl-optional.txt` is disabled (`optimize/lists/mine.txt` stays empty);
 - if I pick the episodes card: all genres and languages.
+- the adhan: on, voice `makki-1`, volume 10, no Fajr adhan (if I want one: `saver.sh adhan-fajr fajr-trabulsi`; other voices: `saver.sh adhan-voice …`; I can change all of it in the app's settings too).
 
 The location is automatic (`autoloc true`, the default): don't ask for a city. Only if I name one myself, step 4
 sets it (`city <name> <lat> <lon>`, which turns the automatic location off). The mosque: a mawaqit.net link as I

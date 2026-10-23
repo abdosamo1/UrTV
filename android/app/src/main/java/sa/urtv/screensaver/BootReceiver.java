@@ -13,5 +13,13 @@ public class BootReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context c, Intent i) {
         UpdateJob.schedule(c);
+        // alarms do not survive a restart, and a changed clock moves the next adhan
+        final PendingResult r = goAsync();
+        final Context app = c.getApplicationContext();
+        new Thread(() -> {
+            Adhan.refresh(app, false);
+            Adhan.schedule(app);
+            r.finish();
+        }).start();
     }
 }

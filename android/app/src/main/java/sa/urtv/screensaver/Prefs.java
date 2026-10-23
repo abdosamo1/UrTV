@@ -123,6 +123,34 @@ final class Prefs {
         sp.edit().putString("mosqueSlug", slug == null ? "" : slug).putString("mosqueName", name == null ? "" : name).apply();
     }
 
+    // ---- the adhan (Adhan, AdhanService)
+
+    /** on by default */
+    boolean adhanOn() { return sp.getBoolean("adhanOn", true); }
+    void setAdhanOn(boolean v) { sp.edit().putBoolean("adhanOn", v).apply(); }
+
+    /** the voice for Dhuhr, Asr, Maghrib and Isha (a file in assets/adhan) */
+    String adhanVoice() {
+        String v = sp.getString("adhanVoice", Adhan.DEFAULT_VOICE);
+        return Adhan.isVoice(v) ? v : Adhan.DEFAULT_VOICE;
+    }
+    void setAdhanVoice(String v) { sp.edit().putString("adhanVoice", v).apply(); }
+
+    /** Fajr's voice; "" = no adhan at Fajr (the default: it is at night) */
+    String adhanFajr() {
+        String v = sp.getString("adhanFajr", "");
+        return v.isEmpty() || Adhan.isVoice(v) ? v : "";
+    }
+    void setAdhanFajr(String v) { sp.edit().putString("adhanFajr", v).apply(); }
+
+    /** the TV volume the adhan plays at (its own units; the volume before it comes back afterwards) */
+    int adhanVolume() { return sp.getInt("adhanVolume", 10); }
+    void setAdhanVolume(int v) { sp.edit().putInt("adhanVolume", v).apply(); }
+
+    /** «العصر · ٣:٤٩ م», written by Adhan.schedule for the settings screen */
+    String nextAdhan() { return sp.getString("nextAdhan", ""); }
+    void setNextAdhan(String v) { sp.edit().putString("nextAdhan", v).apply(); }
+
     static final int MAX_TEAMS = 10;
 
     /** Followed teams in priority order, "id|name". Migrates the old two team fields once. */

@@ -44,6 +44,8 @@ else
 fi
 
 echo "3/4 Removing our apps (old and new names; missing ones are skipped)…"
+# the adhan's device admin (force-lock) must go first, or Android refuses to uninstall the screensaver
+tv "am broadcast -n sa.urtv.screensaver/.SaverReceiver -a sa.urtv.screensaver.UNADMIN" > /dev/null || true
 for p in sa.urtv.home sa.urtv.screensaver sa.yourtv.home sa.yourtv.screensaver com.abdullah.tvhome com.abdullah.tvsaver; do
   tv "pm uninstall $p" | grep -q Success && echo "   removed $p" || true
 done
