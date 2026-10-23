@@ -217,7 +217,7 @@
   }
   @media (prefers-reduced-motion:no-preference){.photo.settle{animation:settle 60s ease-out both}}
 
-  /* ===== top left: weather and markets, set like the date block on the right (no boxes) ===== */
+  /* ===== top left: weather, set like the date block on the right (no boxes) ===== */
   .markets{text-align:left;flex-shrink:0}
   .wxline{display:flex;align-items:baseline;gap:.5em;justify-content:flex-end;line-height:1.3;
     font-size:clamp(19px,1.86vw,37px);font-weight:500;color:var(--sand)}
@@ -228,12 +228,6 @@
   .wxr:not(:empty)::before{content:'  ·  ';white-space:pre;color:rgba(214,175,107,.7)}
   .wxt:empty,.wxd:empty,.wxr:empty{display:none}
   .rule.l{margin-left:0;margin-right:auto;background:linear-gradient(90deg,var(--gold),rgba(220,184,111,0))}
-  .mk{margin-top:1.2vh;display:flex;justify-content:flex-end;gap:1.6em;white-space:nowrap;
-    font-size:clamp(12px,1.06vw,21px);font-weight:400;color:#D8CDB6}
-  .mk .m{display:inline-flex;align-items:baseline;gap:.45em}
-  .mk .delta{font-size:.72em}
-  .mk .delta.up{color:#79D6A0}
-  .mk .delta.down{color:#EE8B70}
   .p-prayer.now .big{color:#FFE9B8;text-shadow:0 0 40px rgba(220,184,111,.45)}
   .p-prayer.now .label{color:#F1CF8A}
   .live{color:#EE8B70;font-weight:500}
@@ -271,11 +265,6 @@
       <div class="wxline"><span class="wxt" id="wx-temp"></span><span class="wxd" id="wx-desc"></span></div>
       <div class="wxsub"><span id="wx-city">الرياض</span><span class="wxr" id="wx-range"></span></div>
       <div class="rule l"></div>
-      <div class="mk">
-        <span class="m"><span>تاسي</span><span id="tasi-chg" class="delta" hidden></span></span>
-        <span class="m"><span>S&amp;P 500</span><span id="spx-chg" class="delta" hidden></span></span>
-        <span class="m"><span>بيتكوين</span><span id="btc-chg" class="delta" hidden></span></span>
-      </div>
     </div>
   </header>
 
@@ -981,21 +970,6 @@ async function loadMatches(){
   if(CONFIG.panel === 'matches') renderPanel(false);
 }
 
-const TICKERS = [
-  {sym:'^TASI.SR', chg:'tasi-chg'},
-  {sym:'^GSPC',    chg:'spx-chg'},
-  {cg:'bitcoin',   chg:'btc-chg'},
-];
-
-// never invent a direction: unknown hides the marker
-function paintDir(t, up){
-  const chEl = document.getElementById(t.chg);
-  if(up === null || up === undefined){ chEl.style.display='none'; chEl.hidden = true; chEl.textContent=''; return; }
-  chEl.hidden = false; chEl.style.display='';
-  chEl.textContent = up ? '▲' : '▼';
-  chEl.className = 'delta ' + (up ? 'up' : 'down');
-}
-
 async function fetchT(url, ms){
   const c = new AbortController(); const id = setTimeout(()=>c.abort(), ms||12000);
   try{ return await fetch(url,{cache:'no-store', signal:c.signal}); }
@@ -1003,45 +977,6 @@ async function fetchT(url, ms){
 }
 
 // Yahoo has no CORS headers: try it directly (works inside the app), then through public CORS gateways
-async function yahooChart(sym){
-  const direct = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`;
-  const routes = [
-    [direct, 7000, j => j],
-    ['https://api.allorigins.win/get?url=' + encodeURIComponent(direct), 15000, w => JSON.parse(w.contents)],
-    ['https://corsproxy.io/?url=' + encodeURIComponent(direct), 12000, j => j],
-  ];
-  for(const [url, ms, unwrap] of routes){
-    try{
-      const r = await fetchT(url, ms);
-      if(!r.ok) continue;
-      const j = unwrap(await r.json());
-      if(j && j.chart && j.chart.result) return j;
-    }catch(e){}
-  }
-  throw 0;
-}
-
-async function loadTicker(t){
-  try{
-    if(t.cg){                                  // crypto: CoinGecko, CORS friendly
-      const r = await fetchT(`https://api.coingecko.com/api/v3/simple/price?ids=${t.cg}&vs_currencies=usd&include_24hr_change=true`, 10000);
-      if(!r.ok) throw 0;
-      const j = await r.json();
-      const c = j && j[t.cg] ? j[t.cg] : null;
-      const d = c ? (c.usd_24h_change ?? c.usd_24hr_change ?? null) : null;
-      paintDir(t, typeof d === 'number' ? d >= 0 : null);
-      return;
-    }
-    const j = await yahooChart(t.sym);
-    const res = j.chart.result[0];
-    const price = res.meta.regularMarketPrice;
-    const closes = (res.indicators.quote[0].close || []).filter(x=>x != null);
-    const prev = closes.length >= 2 ? closes[closes.length-2]
-               : (res.meta.chartPreviousClose || res.meta.previousClose || null);
-    paintDir(t, prev == null ? null : price >= prev);
-  }catch(e){ if(!document.getElementById(t.chg).textContent) paintDir(t, null); }   // offline: keep the arrow on screen
-}
-
 const SKIP_TYPES = ['News','Talk Show','Sports','Game Show'];
 let NET_OK = 0;   // answers received; a refresh that got none must not replace what is on screen
 async function getJSON(url, fallback){
@@ -1377,7 +1312,7 @@ function applyBackground(force){
 }
 
 // Last painted panels, shown at once on the next start while fresh data loads.
-const SNAP_KEY = 'snap3:' + location.hash;   // bump when the panels' markup changes
+const SNAP_KEY = 'snap4:' + location.hash;   // bump when the panels' markup changes
 const SNAP_SEL = ['.markets', '#week-list', '#match-row'];
 function saveSnap(){
   try{ localStorage.setItem(SNAP_KEY, JSON.stringify(SNAP_SEL.map(q => (document.querySelector(q)||{}).innerHTML || ''))); }catch(e){}
@@ -1419,7 +1354,6 @@ function boot(){
   loadPhotoIndex().then(() => applyBackground(true));
   setInterval(() => applyBackground(false), 60*1000);
   tickClock(); tickDates(); tickRamadan();
-  TICKERS.forEach(loadTicker);
   if(CONFIG.panel === 'none') document.querySelector('.week').style.display = 'none';
   else if(CONFIG.panel !== 'shows') renderPanel(false);   // its own data arrives with prayers, weather, matches
   loadPrayers(); loadMatches(); if(CONFIG.panel === 'shows') loadWeek(); loadWeather();
@@ -1432,7 +1366,6 @@ function boot(){
   setInterval(loadLive, 2*60000);
   setInterval(loadPrayers, 6*3600*1000);
   setInterval(loadMatches, 30*60*1000);
-  setInterval(()=>TICKERS.forEach(loadTicker), 15*60*1000);
   if(CONFIG.panel === 'shows') setInterval(loadWeek, 6*3600*1000);
   setInterval(loadWeather, 30*60*1000);
   setInterval(()=>{
