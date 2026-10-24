@@ -126,6 +126,7 @@ final class Dock {
     static Map<String, String> launchable(Context c) {
         PackageManager pm = c.getPackageManager();
         Map<String, String> out = new LinkedHashMap<>();
+        for (WebApps.Site s : WebApps.all(c)) out.put(WebApps.PREFIX + s.id, s.name);   // websites added as apps
         for (ResolveInfo ri : catalogue(c)) out.put(ri.activityInfo.packageName, String.valueOf(ri.loadLabel(pm)));
         return out;
     }
@@ -139,6 +140,16 @@ final class Dock {
         Collections.sort(rest, (x, y) -> apps.get(x).compareToIgnoreCase(apps.get(y)));
         while (row.size() < MIN && !rest.isEmpty()) row.add(rest.remove(0));
         return row;
+    }
+
+    /** A row set from ADB (setup picks the favourites from the stock home's) keeps the websites added as apps,
+     *  first: they were added on purpose. */
+    static List<String> keepWebApps(Context c, List<String> row) {
+        List<String> out = new ArrayList<>();
+        for (WebApps.Site s : WebApps.all(c)) if (!row.contains(WebApps.PREFIX + s.id)) out.add(WebApps.PREFIX + s.id);
+        out.addAll(row);
+        while (out.size() > MAX) out.remove(out.size() - 1);
+        return out;
     }
 
     static void save(Context c, List<String> row) {

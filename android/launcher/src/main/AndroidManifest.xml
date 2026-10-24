@@ -69,6 +69,14 @@
             android:screenOrientation="landscape"
             android:theme="@android:style/Theme.Material.NoActionBar" />
 
+        <!-- a website added as an app (optional, optimize/dock.sh webapp add): full screen, splash first -->
+        <activity
+            android:name=".WebAppActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|uiMode|density"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+
         <!-- favourites row from ADB (agents, optimize/dock.sh); DUMP = only the shell can send it -->
         <receiver
             android:name=".DockReceiver"
@@ -82,6 +90,9 @@
                 <action android:name="sa.urtv.home.HIDDEN" />
                 <action android:name="sa.urtv.home.HIDE" />
                 <action android:name="sa.urtv.home.SHOW" />
+                <action android:name="sa.urtv.home.WEBAPP_ADD" />
+                <action android:name="sa.urtv.home.WEBAPP_REMOVE" />
+                <action android:name="sa.urtv.home.WEBAPPS" />
             </intent-filter>
         </receiver>
     </application>

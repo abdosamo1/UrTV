@@ -7,6 +7,9 @@
 #   optimize/dock.sh hidden                apps left off the home screen, and why: package | reason
 #   optimize/dock.sh hide PKG ...          take these off the home screen (all its lists)
 #   optimize/dock.sh show PKG ...          put these on it, even against the rules (the TV's own home doesn't list them)
+#   optimize/dock.sh webapp add URL [NAME] a website as an app (optional): its manifest's name, icon and colours,
+#                                          full screen with a splash; first in the favourites (set keeps it there)
+#   optimize/dock.sh webapp remove web:ID  take it off again;  optimize/dock.sh webapp list
 # The home screen redraws at once. Only ADB can do this (sa.urtv.home/.DockReceiver needs the shell's DUMP).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -31,5 +34,21 @@ case "${1:-}:$#" in
     [ $# -gt 0 ] || { echo "usage: optimize/dock.sh set PKG1 PKG2 ..."; exit 1; }
     for p in "$@"; do [[ "$p" =~ ^[A-Za-z0-9_.]+$ ]] || { echo "not a package name: $p"; exit 1; }; done
     send SET_DOCK "--es apps $(IFS=,; echo "$*")" ;;
-  *) sed -n '2,10p' "$0"; exit 1 ;;
+  webapp:*)
+    case "${2:-}" in
+      add)
+        [[ "${3:-}" =~ ^https?://[^\ \']+$ ]] || { echo "usage: optimize/dock.sh webapp add https://… [NAME]"; exit 1; }
+        extra="--es url '$3'"
+        if [ $# -ge 4 ]; then
+          case "$4" in *"'"*) echo "no apostrophes in the name please"; exit 1 ;; esac
+          extra="$extra --es name '$4'"
+        fi
+        send WEBAPP_ADD "$extra" ;;
+      remove)
+        [[ "${3:-}" =~ ^web:[A-Za-z0-9-]+$ ]] || { echo "usage: optimize/dock.sh webapp remove web:ID (webapp list shows it)"; exit 1; }
+        send WEBAPP_REMOVE "--es id $3" ;;
+      list) send WEBAPPS ;;
+      *) echo "usage: optimize/dock.sh webapp add URL [NAME] | remove web:ID | list"; exit 1 ;;
+    esac ;;
+  *) sed -n '2,13p' "$0"; exit 1 ;;
 esac

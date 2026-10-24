@@ -385,6 +385,18 @@ public class MainActivity extends Activity {
             a.color = sampleColor(a.pkg, a.art);
             byPkg.put(a.pkg, a);
         }
+        // websites added as apps (optional: optimize/dock.sh webapp add): their icon, on glass like other icons
+        for (WebApps.Site site : WebApps.all(this)) {
+            App a = new App();
+            a.pkg = WebApps.PREFIX + site.id;
+            a.label = site.name;
+            a.isBanner = false;
+            Bitmap ic = WebApps.iconBitmap(this, site.id);
+            a.art = ic != null ? new android.graphics.drawable.BitmapDrawable(getResources(), ic)
+                               : getDrawable(R.drawable.ic_settings);
+            a.color = sampleColor(a.pkg, a.art);
+            byPkg.put(a.pkg, a);
+        }
 
         List<App> dock = new ArrayList<>();
         for (String p : dockApps) if (byPkg.containsKey(p)) dock.add(byPkg.remove(p));
@@ -490,7 +502,9 @@ public class MainActivity extends Activity {
         label.setAlpha(0f);
         if (!inDock) box.addView(label, llp(-1, -2, 0, dp(10), 0, 0));
 
-        card.setOnClickListener(v -> launch(new Intent(Intent.ACTION_MAIN)
+        card.setOnClickListener(v -> launch(WebApps.isWeb(app.pkg)
+                ? WebApps.intent(this, app.pkg.substring(WebApps.PREFIX.length()))
+                : new Intent(Intent.ACTION_MAIN)
                 .addCategory(app.category)
                 .setComponent(app.component)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)));

@@ -371,6 +371,33 @@ for (const [hash, dimmed] of [['', false], ['night=0', false], ['night=1', true]
   await ctx.close();
 }
 
+// ---- a website as an app on the TV: the remote's arrows move between links, fields and buttons; OK clicks
+{
+  const java = readFileSync(path.join(ROOT, 'android/launcher/src/main/java/sa/urtv/home/WebAppActivity.java'), 'utf8');
+  let block = java.slice(java.indexOf('static final String NAV ='));
+  block = block.slice(0, block.indexOf('";\n}') + 2).replace(/^\s*\/\/.*$/mg, '');
+  const nav = [...block.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map(m => m[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\')).join('');
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const p = await ctx.newPage();
+  const errors = [];
+  p.on('pageerror', e => errors.push(e.message));
+  await p.setContent(`<html dir="rtl"><body style="font:20px sans-serif">
+    <div><a href="#a" id="a1">دخول</a> <a href="#b" id="a2" style="margin-right:200px">تسجيل</a></div>
+    <div style="margin-top:80px"><input id="user"></div>
+    <div style="margin-top:80px"><button id="btn" onclick="this.textContent='clicked'">إرسال</button></div></body></html>`);
+  await p.evaluate(nav); await p.evaluate(nav);
+  await p.waitForTimeout(400);
+  const at = () => p.evaluate(() => (document.querySelector('.urtv-f') || {}).id);
+  const seq = [await at()];
+  for (const k of ['ArrowLeft', 'ArrowDown', 'ArrowDown']) { await p.keyboard.press(k); seq.push(await at()); }
+  await p.keyboard.press('Enter');
+  const clicked = await p.evaluate(() => document.getElementById('btn').textContent);
+  await p.keyboard.press('ArrowUp'); seq.push(await at());
+  check('web app on the TV: arrows move link → link → field → button → back up to the field, OK clicks',
+        !errors.length && seq.join(',') === 'a1,a2,user,btn,user' && clicked === 'clicked', JSON.stringify({ seq, clicked, errors }));
+  await ctx.close();
+}
+
 await browser.close();
 console.log(failed ? `\n${failed} failed` : '\nall page tests passed');
 process.exit(failed ? 1 : 0);

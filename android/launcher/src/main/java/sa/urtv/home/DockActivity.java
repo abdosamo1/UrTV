@@ -151,8 +151,13 @@ public class DockActivity extends Activity {
         if (pkg != null) {
             ImageView ic = new ImageView(this);
             try {
-                Drawable d = getPackageManager().getApplicationIcon(pkg);
-                ic.setImageDrawable(d);
+                if (WebApps.isWeb(pkg)) {
+                    android.graphics.Bitmap b = WebApps.iconBitmap(this, pkg.substring(WebApps.PREFIX.length()));
+                    if (b != null) ic.setImageBitmap(b);
+                } else {
+                    Drawable d = getPackageManager().getApplicationIcon(pkg);
+                    ic.setImageDrawable(d);
+                }
             } catch (Exception ignored) { }
             LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(dp(30), dp(30));
             ip.leftMargin = dp(12);

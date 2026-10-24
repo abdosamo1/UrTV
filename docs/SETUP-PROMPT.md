@@ -52,12 +52,16 @@ the whole task, and to say «تم».
 > • بركّب TV Bro (متصفح للتلفزيون) و SmartTube (يوتيوب بدون إعلانات)، مجانيين من GitHub
 > • نفس البطاقة كمان بالواجهة الرئيسية، بدون تعتيم ليلي، ووقت شاشة التوقف يبقى مثل ما هو، وما أعطّل إضافات TCL الاختيارية
 > • الأذان عند كل صلاة بصوت الحرم المكي على مستوى صوت ١٠ (ثم يرجع الصوت كما كان)، وبدون أذان للفجر
+>
+> وسؤال أخير: بدك أضيف موقع كتطبيق على الشاشة الرئيسية، أول المفضلة؟ (مثلاً موقع دار الفرح:
+> https://daralfarah.pythonanywhere.com/) ابعتلي الرابط، أو «دار الفرح»، أو «لا».
 
 After my answer to message 3, start steps 0 and 1 at once, in the same turn: don't end your turn to wait for me
 again. The only other thing I do is press Allow on the TV, and step 1 tells me when, without stopping.
 
 Those defaults, unless I change them:
 - the card beside the clock: auto (verse/hadith, prayers, forecast, matches in turn every 30 s);
+- no website as an app unless I asked for one in message 3 («دار الفرح» = https://daralfarah.pythonanywhere.com/);
 - the favourites row: the first 6 apps of my current home screen (you note them in step 1), in that order; an icon
   you couldn't name is left out;
 - TV Bro and SmartTube installed (`optimize/run.sh` does it; if I don't want them: `SKIP_EXTRAS=1 optimize/run.sh`);
@@ -260,6 +264,7 @@ optimize/saver.sh find-team <club as I wrote it>  # Arabic is fine (الهلال
 optimize/saver.sh card <one of: auto, verse, prayers, forecast, matches, none>   # beside the clock (auto unless I said otherwise)
 optimize/saver.sh home-card auto                  # home screen: the same cards in turn
 optimize/dock.sh apps                             # match my 6 apps to packages, then: optimize/dock.sh set <pkg> ... (in that order)
+optimize/dock.sh webapp add <the link>            # ONLY if I asked for a website as an app (message 3); after `set`: it goes first
 optimize/dock.sh hidden                           # apps the home screen leaves out, and why
 optimize/saver.sh photos <5, 10, 15, 30 or 60>   # ONLY if I asked how often the photo changes (default 30 minutes: leave it)
 optimize/saver.sh idle <1, 2, 5, 10, 15 or 30>   # ONLY if I asked when the screensaver starts after the TV idles (the TV's own timer: leave it)

@@ -19,6 +19,10 @@ import java.util.Map;
  *   am broadcast -n sa.urtv.home/.DockReceiver -a sa.urtv.home.HIDDEN                 left out, and why
  *   am broadcast -n sa.urtv.home/.DockReceiver -a sa.urtv.home.HIDE --es apps pkg1,pkg2,...
  *   am broadcast -n sa.urtv.home/.DockReceiver -a sa.urtv.home.SHOW --es apps pkg1,pkg2,...
+ *   am broadcast -n sa.urtv.home/.DockReceiver -a sa.urtv.home.WEBAPP_ADD --es url https://… [--es name 'اسم']
+ *   am broadcast -n sa.urtv.home/.DockReceiver -a sa.urtv.home.WEBAPP_REMOVE --es id web:…
+ *   am broadcast -n sa.urtv.home/.DockReceiver -a sa.urtv.home.WEBAPPS
+ * A website added as an app goes first in the favourites row, and SET_DOCK keeps it there.
  *
  * The answer is in the "data" of am's output. optimize/dock.sh wraps them all. People use «ترتيب المفضلة»
  * (DockActivity) instead.
@@ -52,10 +56,36 @@ public class DockReceiver extends BroadcastReceiver {
                     if (apps.containsKey(p) && row.size() < Dock.MAX) row.add(p); else skipped.add(p);
                 }
                 if (row.isEmpty()) { setResultData("error: none of these apps are on this TV's home screen"); return; }
-                Dock.save(c, row);
+                Dock.save(c, Dock.keepWebApps(c, row));
                 setResultData("dock: " + String.join(",", Dock.shown(c, apps))
                     + (skipped.isEmpty() ? "" : "  skipped (not installed, hidden or over " + Dock.MAX + "): "
                        + String.join(",", skipped)));
+                return;
+            }
+            case "sa.urtv.home.WEBAPP_ADD": {   // reads the site and its manifest: off the main thread
+                final String url = i.getStringExtra("url"), name = i.getStringExtra("name");
+                if (url == null) { setResultData("error: add --es url https://…"); return; }
+                final PendingResult pending = goAsync();
+                final Context app = c.getApplicationContext();
+                new Thread(() -> {
+                    String out;
+                    try { out = WebApps.add(app, url.trim(), name); }
+                    catch (Exception e) { out = "error: " + e.getMessage(); }
+                    pending.setResultData(out);
+                    pending.finish();
+                }).start();
+                return;
+            }
+            case "sa.urtv.home.WEBAPP_REMOVE": {
+                String id = i.getStringExtra("id");
+                if (id == null) { setResultData("error: add --es id web:…"); return; }
+                setResultData(WebApps.remove(c, id.trim()) ? "removed " + id : "error: no such web app " + id);
+                return;
+            }
+            case "sa.urtv.home.WEBAPPS": {
+                StringBuilder b = new StringBuilder();
+                for (WebApps.Site s : WebApps.all(c)) b.append(WebApps.PREFIX).append(s.id).append(" | ").append(s.name).append(" | ").append(s.url).append('\n');
+                setResultData(b.length() == 0 ? "no web apps" : b.toString().trim());
                 return;
             }
             case "sa.urtv.home.HIDDEN": {
