@@ -267,11 +267,33 @@ for (const [hash, dimmed] of [['', false], ['night=0', false], ['night=1', true]
   await p.evaluate(() => renderPanel(false));
   const r = await p.evaluate(() => ({ rows: [...document.querySelectorAll('.week li')].map(x => x.textContent),
                                       hd: document.getElementById('week-hd').textContent }));
+  check('football-data: each game with its date; a game whose time is not set says so', r.rows.length === 5
+        && /أكتوبر|نوفمبر|ديسمبر|يناير/.test(r.rows[2]) && r.rows[4].includes('الوقت لم يُحدد') && !r.rows[3].includes('الوقت لم يُحدد'), JSON.stringify(r.rows));
   check('football-data: the next five games, Arabic names', !errors.length && r.rows.length === 5
         && r.rows[0].includes('برشلونة') && r.rows[0].includes('ريال مدريد') && !r.rows.some(x => x.includes('٣ - ١')) && r.hd === 'مباريات فرقك القادمة', JSON.stringify({ r, errors }));
   check('football-data: the key goes in the X-Auth-Token header, TheSportsDB not asked for that club',
         calls.length && calls.every(c => c.key === 'abc123') && !calls.some(c => c.path.includes('abc123'))
         && !tsdb.some(x => /eventsnext|eventslast/.test(x)), JSON.stringify({ calls: calls.slice(0, 3), tsdb }));
+  await ctx.close();
+}
+
+// ---- in the app (#fdnative=1) the page sends no key at all: the app adds it (FdProxy), so no CORS preflight
+{
+  const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  const seen = [];
+  await ctx.route(/^https?:/, r => {
+    const u = new URL(r.request().url());
+    if (u.host === 'api.football-data.org') {
+      seen.push({ method: r.request().method(), key: r.request().headers()['x-auth-token'] || null });
+      return r.fulfill({ headers: { 'Access-Control-Allow-Origin': '*' }, contentType: 'application/json', body: '{"teams":[],"matches":[]}' });
+    }
+    return r.abort();
+  });
+  const p = await ctx.newPage();
+  await p.goto(page('tv.html') + '#teams=133739&panel=matches&fdkey=abc123&fdnative=1');
+  await p.waitForTimeout(1500);
+  check('in the app: plain GETs to football-data, no key header from the page', seen.length > 0
+        && seen.every(x => x.method === 'GET' && x.key === null), JSON.stringify(seen.slice(0, 3)));
   await ctx.close();
 }
 

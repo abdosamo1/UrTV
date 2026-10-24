@@ -374,6 +374,7 @@ const CONFIG = {
   // #fdkey=: a free football-data.org key (kept on the TV only): the next five games of each followed club it
   // covers (European leagues, Champions League), home and away; the other clubs stay on TheSportsDB
   fdKey: (_Q.get('fdkey') || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 64),
+  fdNative: _Q.get('fdnative') === '1',
   // the card beside the clock: auto (the four in turn, every 30 s) | verse | prayers | forecast | matches | none
   // (#week=0 from older builds = none; the TV-shows card was removed, so an old #panel=shows gets auto)
   panel: (p => ['auto','prayers','forecast','matches','verse','none'].includes(p) ? p : 'auto')
@@ -938,7 +939,8 @@ function matchSlot(id, now, shown){
     .formatToParts(d).reduce((a,x)=>(a[x.type]=x.value,a),{});
   const t12 = ar(fmt12(+p.hour % 24, +p.minute));
   const live = diff <= 0 && ev.intHomeScore != null && ev.intAwayScore != null;
-  const sub = diff > 0 ? `بعد ${shortRemaining(diff)} · ${t12}` : `<span class="live">مباشر</span> · ${liveStatus(ev, t12)}`;
+  const sub = ev.timeTbc ? `${matchDay(d)} · الوقت لم يُحدد`
+    : diff > 0 ? `بعد ${shortRemaining(diff)} · ${t12}` : `<span class="live">مباشر</span> · ${liveStatus(ev, t12)}`;
   const mid = live ? ` <span class="sc">${ar(+ev.intHomeScore)} - ${ar(+ev.intAwayScore)}</span> ` : ' × ';
   return `<div class="mblock">`
        + `<div class="big"><span>${home}${mid}${away}</span></div>`
@@ -999,7 +1001,10 @@ let FD_PAUSE = 6500;   // between the team-list calls: the free plan allows 10 a
 async function fdGet(path){
   const c = new AbortController(), t = setTimeout(() => c.abort(), 15000);
   try{
-    const r = await fetch(FD + path, {headers: {'X-Auth-Token': CONFIG.fdKey}, cache: 'no-store', signal: c.signal});
+    // in the app (#fdnative=1) a plain request: the app adds the key (FdProxy). In a browser, the key header.
+    const opts = {cache: 'no-store', signal: c.signal};
+    if(!CONFIG.fdNative) opts.headers = {'X-Auth-Token': CONFIG.fdKey};
+    const r = await fetch(FD + path, opts);
     if(!r.ok) throw r.status;
     return await r.json();
   }finally{ clearTimeout(t); }
@@ -1037,7 +1042,8 @@ function fdEvent(m){
           strHomeTeam: m.homeTeam.shortName || m.homeTeam.name, idHomeTeam: fdTeamId(m.homeTeam),
           strAwayTeam: m.awayTeam.shortName || m.awayTeam.name, idAwayTeam: fdTeamId(m.awayTeam),
           intHomeScore: ft.home == null ? null : ft.home, intAwayScore: ft.away == null ? null : ft.away,
-          strStatus: FD_STATUS[m.status] || 'NS', strProgress: m.minute || ''};
+          strStatus: FD_STATUS[m.status] || 'NS', strProgress: m.minute || '',
+          timeTbc: m.status === 'SCHEDULED'};
 }
 /** true when football-data answered for this club (then TheSportsDB is not asked) */
 async function fdLoad(id){
@@ -1235,6 +1241,15 @@ function forecastRows(){
 }
 
 // every followed team's games this week, plus results from the last day, in time order
+/** «اليوم», «غداً», else «الأحد ٢٥ أكتوبر»: the date too, so the games read in order however far apart */
+function matchDay(d){
+  const key = x => new Intl.DateTimeFormat('en-CA', {timeZone:CONFIG.timezone}).format(x);
+  if(key(d) === key(new Date())) return 'اليوم';
+  if(key(d) === key(new Date(Date.now() + 86400000))) return 'غداً';
+  return new Intl.DateTimeFormat(GREG, {timeZone:CONFIG.timezone, weekday:'long', day:'numeric', month:'long'})
+    .format(d).replace('،', '');
+}
+
 function matchRows(){
   const now = Date.now(), seen = new Set(), evs = [];
   CONFIG.teamIds.forEach(id => {
@@ -1242,8 +1257,6 @@ function matchRows(){
     next.forEach(ev => { if(ev && ev.idEvent && !seen.has(ev.idEvent)){ seen.add(ev.idEvent); evs.push(MATCHES[id] && MATCHES[id].idEvent === ev.idEvent ? MATCHES[id] : ev); } });
     resultsFor(id).forEach(ev => { if(!seen.has(ev.idEvent)){ seen.add(ev.idEvent); evs.push(ev); } });
   });
-  const day = d => new Intl.DateTimeFormat(GREG, {timeZone:CONFIG.timezone, weekday:'long'}).format(d);
-  const today = new Intl.DateTimeFormat('en-CA', {timeZone:CONFIG.timezone}).format(new Date());
   // the next five (and one in progress), however far ahead; the last result has its place at the bottom
   return evs.map(ev => ({ev, t: toDate(ev).getTime()}))
     .filter(x => !finishedRecently(x.ev, now)
@@ -1256,9 +1269,8 @@ function matchRows(){
       const p = new Intl.DateTimeFormat('en-GB', {timeZone:CONFIG.timezone, hour:'2-digit', minute:'2-digit', hour12:false})
         .formatToParts(d).reduce((a, x) => (a[x.type] = x.value, a), {});
       const when = finishedRecently(ev, now) ? 'انتهت'
-        : now >= t ? '<span class="live">مباشر</span>'
-        : (new Intl.DateTimeFormat('en-CA', {timeZone:CONFIG.timezone}).format(d) === today ? 'اليوم' : day(d))
-          + ' ' + fmt12(+p.hour % 24, +p.minute);
+        : now >= t && !ev.timeTbc ? '<span class="live">مباشر</span>'
+        : matchDay(d) + ' · ' + (ev.timeTbc ? 'الوقت لم يُحدد' : fmt12(+p.hour % 24, +p.minute));
       return `<li><span>${esc(teamAr(ev.strHomeTeam, ev.idHomeTeam))}${mid}${esc(teamAr(ev.strAwayTeam, ev.idAwayTeam))}</span><span class="dt">${when}</span></li>`;
     });
 }

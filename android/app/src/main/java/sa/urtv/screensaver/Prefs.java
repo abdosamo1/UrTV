@@ -234,7 +234,7 @@ final class Prefs {
             + "&week=" + ("none".equals(panel()) ? "0" : "1")   // for a page older than #panel
             + "&photos=" + photoMinutes()
             + "&night=" + (nightDim() ? "1" : "0")
-            + (fdKey().isEmpty() ? "" : "&fdkey=" + fdKey());
+            + (fdKey().isEmpty() ? "" : "&fdkey=" + fdKey() + "&fdnative=1");   // the app adds the key (FdProxy)
     }
 
     /** The card on the launcher's home screen: one of PANELS; the four in turn («auto») unless picked otherwise. */

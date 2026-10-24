@@ -178,7 +178,8 @@ public class SettingsActivity extends Activity {
         header("المباريات");
         row("الفرق المتابعة (" + arabicNum(prefs.teams().size()) + "/" + arabicNum(Prefs.MAX_TEAMS) + ")", teamsLabel(),
             R.drawable.ic_trophy, new Runnable() { public void run() { manageTeams(); } });
-        row("مصدر المباريات", prefs.fdKey().isEmpty() ? "TheSportsDB" : "football-data.org",
+        row("مصدر المباريات", prefs.fdKey().isEmpty() ? "TheSportsDB"
+                : "football-data.org" + (FdProxy.status(this).isEmpty() ? " · لم يتصل بعد" : " · " + FdProxy.status(this)),
             R.drawable.ic_trophy, new Runnable() { public void run() { askFdKey(); } });
 
         header("بجانب الساعة");

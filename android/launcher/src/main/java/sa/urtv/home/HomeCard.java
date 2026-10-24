@@ -124,7 +124,11 @@ final class HomeCard {
 
     @SuppressLint("SetJavaScriptEnabled")
     @SuppressWarnings("deprecation")
+    private String fdKey = "";
+
     private void create(String u) {
+        java.util.regex.Matcher km = java.util.regex.Pattern.compile("[#&]fdkey=([A-Za-z0-9]+)").matcher(u);
+        fdKey = km.find() ? km.group(1) : "";
         web = new WebView(activity);
         web.setBackgroundColor(Color.TRANSPARENT);
         web.setFocusable(false);
@@ -138,6 +142,8 @@ final class HomeCard {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
                 String s = r.getUrl().toString();
+                WebResourceResponse fd = FdProxy.serve(activity, s, fdKey);   // football-data.org, with the key
+                if (fd != null) return fd;
                 if (s.startsWith(FONTS)) {
                     String name = s.substring(FONTS.length());
                     if (name.matches("[A-Za-z0-9_-]+\\.woff2")) {

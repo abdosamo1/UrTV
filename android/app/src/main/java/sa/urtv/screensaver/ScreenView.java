@@ -28,6 +28,9 @@ final class ScreenView {
         w.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
+                // football-data.org: asked by the app with the key (FdProxy), never by the page itself
+                WebResourceResponse fd = FdProxy.serve(c, r.getUrl().toString(), new Prefs(c).fdKey());
+                if (fd != null) return fd;
                 WebResourceResponse res = PhotoCache.serve(c, r.getUrl().toString());
                 return res != null ? res : super.shouldInterceptRequest(v, r);
             }

@@ -214,7 +214,8 @@ public class SaverReceiver extends BroadcastReceiver {
             + "\nphotos: " + p.photoMinutes()
             + "\nidle: " + idle(Prefs.idleMs(c))
             + "\nnight dimming: " + p.nightDim()
-            + "\nmatches from: " + (p.fdKey().isEmpty() ? "TheSportsDB" : "football-data.org (key set)")
+            + "\nmatches from: " + (p.fdKey().isEmpty() ? "TheSportsDB" : "football-data.org (key set) | last: "
+                + (FdProxy.status(c).isEmpty() ? "no request yet" : FdProxy.status(c)))
             + "\nautoupdate: " + p.autoUpdate()
             + "\nadhan: " + p.adhanOn() + " | voice " + p.adhanVoice() + " | fajr " + (p.adhanFajr().isEmpty() ? "off" : p.adhanFajr())
             + " | volume " + p.adhanVolume() + " | next: " + p.nextAdhan()
