@@ -251,7 +251,7 @@ for (const [hash, dimmed] of [['', false], ['night=0', false], ['night=1', true]
       if (u.pathname === '/v4/teams/81/matches' && u.searchParams.get('status').startsWith('SCHEDULED'))
         body = { matches: [m(1, BAR, RMA, 2, 'TIMED'), m(2, OPP(1), BAR, 6, 'TIMED'), m(3, BAR, OPP(2), 9, 'TIMED'),
                            m(4, OPP(3), BAR, 13, 'TIMED'), m(5, BAR, OPP(4), 20, 'SCHEDULED')] };
-      if (u.pathname === '/v4/teams/81/matches' && u.searchParams.get('status') === 'FINISHED')
+      if (u.pathname === '/v4/teams/81/matches' && u.searchParams.get('status') === 'FINISHED' && !u.searchParams.has('dateFrom'))
         body = { matches: [m(0, BAR, OPP(9), -0.3, 'FINISHED', [3, 1])] };
       return r.fulfill({ headers: cors, contentType: 'application/json', body: JSON.stringify(body) });
     }

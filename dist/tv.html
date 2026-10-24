@@ -1056,7 +1056,6 @@ async function fdLoad(id){
   if(!en) return false;
   const fid = (await fdIndex())[teamKey(en)];
   if(!fid) return false;   // not in the free competitions (a Saudi club): TheSportsDB
-  const day = n => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
   const COMING = ['SCHEDULED', 'TIMED', 'IN_PLAY', 'PAUSED'];
   let up, done = null;
   try{ up = (await fdGet(`teams/${fid}/matches?status=${COMING.join(',')}&limit=5`)).matches || []; }
@@ -1073,9 +1072,13 @@ async function fdLoad(id){
   NEXT_LIST[id] = evs;
   const ev = evs[0];
   if(ev){ if(MATCHES[id] && MATCHES[id].idEvent !== ev.idEvent) keepResult(id, MATCHES[id]); MATCHES[id] = ev; }
+  // the last results: by status only (the free plan refused dateFrom/dateTo, «Your API token is invalid»)
+  if(!done) try{
+    const since = Date.now() - 3 * 86400000;
+    done = ((await fdGet(`teams/${fid}/matches?status=FINISHED&limit=100`)).matches || [])
+      .filter(m => new Date(m.utcDate).getTime() >= since);
+  }catch(e){}
   if(done) RESULTS[id] = done.map(fdEvent);
-  else try{ RESULTS[id] = ((await fdGet(`teams/${fid}/matches?status=FINISHED&dateFrom=${day(-3)}&dateTo=${day(0)}`)).matches || []).map(fdEvent); }
-  catch(e){}
   return true;
 }
 

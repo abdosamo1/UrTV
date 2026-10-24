@@ -59,7 +59,10 @@ final class FdProxy {
         String[] old = sp(c).getString("log", "").split("\n");
         StringBuilder log = new StringBuilder(line);
         for (int i = 0; i < old.length && i < 7; i++) if (!old[i].isEmpty()) log.append('\n').append(old[i]);
-        sp(c).edit().putInt("code", code).putLong("at", System.currentTimeMillis()).putString("log", log.toString()).apply();
+        SharedPreferences.Editor e = sp(c).edit().putInt("code", code).putLong("at", System.currentTimeMillis())
+            .putString("log", log.toString());
+        if (code == 200) e.putLong("okAt", System.currentTimeMillis());
+        e.apply();
     }
 
     /** the site's own words: {"error": "..."} or {"message": "..."} */
@@ -80,6 +83,8 @@ final class FdProxy {
         SharedPreferences p = sp(c);
         if (!p.contains("code")) return "";
         int code = p.getInt("code", 0);
+        // working if anything got through in the last half hour (a side request may still be refused)
+        if (System.currentTimeMillis() - p.getLong("okAt", 0) < 30 * 60_000L) return "تعمل";
         return code == 200 ? "تعمل"
             : code == 400 ? "طلب مرفوض (٤٠٠)"
             : code == 401 || code == 403 ? "المفتاح مرفوض أو غير مفعّل"
