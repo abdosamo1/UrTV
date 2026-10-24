@@ -35,6 +35,15 @@ public class SettingsActivity extends Activity {
 
     private Prefs prefs;
     private LinearLayout list;
+    private ScrollView scroll;
+
+    // where you are: the rows in order, the one focused last (kept across a redraw), and the side rail
+    private final List<View> rows = new ArrayList<>();
+    private String lastLabel;
+    private int lastIndex = -1;
+    private boolean rendering;
+    private View railFill;
+    private TextView railCount;
 
     /** Arabic locale for this screen, so every dialog title, list and button is laid out right-to-left. */
     @Override
@@ -50,19 +59,23 @@ public class SettingsActivity extends Activity {
         super.onCreate(b);
         prefs = new Prefs(this);
         UpdateJob.schedule(this);
-        ScrollView scroll = new ScrollView(this);
-        scroll.setBackground(new android.graphics.drawable.GradientDrawable(
-            android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xFF0A2016, 0xFF04120C, 0xFF020806}));
+        scroll = new ScrollView(this);
         scroll.setVerticalScrollBarEnabled(false);
         android.widget.FrameLayout frame = new android.widget.FrameLayout(this);
         list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
         list.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
         list.setPadding(dp(8), dp(36), dp(8), dp(48));
-        int width = Math.min(getResources().getDisplayMetrics().widthPixels - dp(64), dp(860));
+        int width = Math.min(getResources().getDisplayMetrics().widthPixels - dp(170), dp(860));   // room for the rail
         frame.addView(list, new android.widget.FrameLayout.LayoutParams(width, -2, Gravity.CENTER_HORIZONTAL));
         scroll.addView(frame);
-        setContentView(scroll);
+
+        android.widget.FrameLayout root = new android.widget.FrameLayout(this);
+        root.setBackground(new android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xFF0A2016, 0xFF04120C, 0xFF020806}));
+        root.addView(scroll, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        root.addView(rail(), new android.widget.FrameLayout.LayoutParams(-2, -2, Gravity.LEFT | Gravity.CENTER_VERTICAL));
+        setContentView(root);
         render();
     }
 
@@ -80,7 +93,53 @@ public class SettingsActivity extends Activity {
         render();
     }
 
+    /** The rail on the left: a track that fills (gold) as you go down the settings, full on the last row,
+     *  with «١٢ من ٢٤» under it. */
+    private View rail() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER_HORIZONTAL);
+        box.setPadding(dp(22), 0, dp(10), 0);
+        android.widget.FrameLayout track = new android.widget.FrameLayout(this);
+        android.graphics.drawable.GradientDrawable tbg = new android.graphics.drawable.GradientDrawable();
+        tbg.setCornerRadius(dp(4));
+        tbg.setColor(0x1FFFFFFF);
+        track.setBackground(tbg);
+        track.setClipToOutline(true);
+        railFill = new View(this);
+        android.graphics.drawable.GradientDrawable fbg = new android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xFFF1CF8A, 0xFFD6AF6B});
+        fbg.setCornerRadius(dp(4));
+        railFill.setBackground(fbg);
+        railFill.setPivotY(0);
+        railFill.setScaleY(0);
+        track.addView(railFill, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        int h = Math.round(getResources().getDisplayMetrics().heightPixels * 0.62f);
+        box.addView(track, new LinearLayout.LayoutParams(dp(6), h));
+        railCount = new TextView(this);
+        railCount.setTextColor(0xFFC6BBA4);
+        railCount.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        railCount.setTypeface(font("Thmanyah-Medium"));
+        railCount.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-2, -2);
+        cp.topMargin = dp(10);
+        box.addView(railCount, cp);
+        return box;
+    }
+
+    private void showPlace(int index) {
+        if (railFill == null || rows.isEmpty() || index < 0) return;
+        float f = (index + 1) / (float) rows.size();
+        railFill.animate().scaleY(f).setDuration(220).start();
+        railCount.setText(arabicNum(index + 1) + "\nمن " + arabicNum(rows.size()));
+    }
+
+    /** Redraws the settings and stays where you were: the same row focused, the list scrolled as it was. */
     private void render() {
+        final String keepLabel = lastLabel;
+        final int keepIndex = lastIndex, keepY = scroll.getScrollY();
+        rendering = true;
+        rows.clear();
         list.removeAllViews();
         TextView title = new TextView(this);
         title.setText("تلفزيونك");
@@ -97,7 +156,7 @@ public class SettingsActivity extends Activity {
         list.addView(sub);
 
         row("معاينة الشاشة", "شاهد الشاشة الآن", R.drawable.ic_play, new Runnable() { public void run() {
-            startActivity(new Intent(SettingsActivity.this, MainActivity.class)); } }).requestFocus();
+            startActivity(new Intent(SettingsActivity.this, MainActivity.class)); } });
 
         header("الموقع");
         row("المدينة", prefs.autoLocation() ? "تلقائي حسب الاتصال" : prefs.city()[0], R.drawable.ic_place,
@@ -157,6 +216,21 @@ public class SettingsActivity extends Activity {
         row("حدّث الآن", "الإصدار ٣٫" + SelfUpdate.arabic(SelfUpdate.mine(this)) + (upd.isEmpty() ? "" : " · " + upd)
                 + ". ينزّل أحدث نسخة من الشاشة والتطبيقين من الإنترنت ويثبّتها، وإعداداتك كلها تبقى.",
             R.drawable.ic_sync, new Runnable() { public void run() { updateNow(); } });
+
+        // after the layout pass: the scroll as it was, then the same row (by its name; else the same place)
+        scroll.getViewTreeObserver().addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
+            @Override public boolean onPreDraw() {
+                scroll.getViewTreeObserver().removeOnPreDrawListener(this);
+                View target = null;
+                if (keepLabel != null) for (View r : rows) if (keepLabel.equals(r.getTag())) target = r;
+                if (target == null && keepIndex >= 0 && !rows.isEmpty()) target = rows.get(Math.min(keepIndex, rows.size() - 1));
+                if (target == null && !rows.isEmpty()) target = rows.get(0);
+                scroll.scrollTo(0, keepLabel == null ? 0 : keepY);
+                rendering = false;
+                if (target != null) { target.requestFocus(); showPlace(rows.indexOf(target)); }
+                return true;
+            }
+        });
     }
 
     // ---------- pickers ----------
@@ -601,6 +675,8 @@ public class SettingsActivity extends Activity {
         card.setPadding(dp(18), dp(12), dp(18), dp(12));
         card.setFocusable(true);
         card.setClickable(true);
+        card.setTag(label.replaceAll("\\s*\\(.*\\)$", ""));   // its name, without a changing count: «الفرق المتابعة»
+        rows.add(card);
         final android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
         bg.setCornerRadius(dp(14));
         bg.setColor(0x14FFFFFF);
@@ -648,6 +724,11 @@ public class SettingsActivity extends Activity {
             bg.setColor(has ? 0x33D6AF6B : 0x14FFFFFF);
             bg.setStroke(dp(2), has ? 0xFFD6AF6B : 0x1FD6AF6B);
             chevron.setTextColor(has ? 0xFFD6AF6B : 0x99C6BBA4);
+            if (has && !rendering) {   // remembered for the next redraw, and shown on the rail
+                lastLabel = (String) v.getTag();
+                lastIndex = rows.indexOf(v);
+                showPlace(lastIndex);
+            }
         });
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.bottomMargin = dp(8);

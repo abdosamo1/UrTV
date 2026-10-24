@@ -58,7 +58,7 @@ for (const file of ['urtv.html', 'tv.html']) {
                sub: document.getElementById('clock-sub').textContent, off, latin,
                photo: !!document.querySelector('.photo').style.backgroundImage };
     });
-    check(`${tag}: 12-hour clock in Arabic digits`, /^[٠-٩]{1,2}$/.test(r.hh) && r.h >= 1 && r.h <= 12
+    check(`${tag}: 12-hour clock in Arabic digits, two-digit hours`, /^[٠-٩]{2}$/.test(r.hh) && r.h >= 1 && r.h <= 12
       && /^[٠-٩]{2}$/.test(r.mm) && r.m < 60 && ['ص', 'م'].includes(r.ap), JSON.stringify(r));
     check(`${tag}: city from the settings`, r.sub === 'بتوقيت جدة', r.sub);
     check(`${tag}: nothing off screen`, !r.off.length, r.off.join(', '));

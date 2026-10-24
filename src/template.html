@@ -492,7 +492,7 @@ function tickClock(){
   const key = h12 + ':' + p.mi;
   if(key === tickClock.last) return;   // ticks every second, redraws once a minute
   tickClock.last = key;
-  document.getElementById('ck-h').innerHTML = digits(ar(h12));
+  document.getElementById('ck-h').innerHTML = digits(ar(pad(h12)));   // two digits: ٠٢:٥١
   document.getElementById('ck-m').innerHTML = digits(ar(pad(p.mi)));
   document.getElementById('ck-ap').textContent = p.h < 12 ? 'ص' : 'م';
 }

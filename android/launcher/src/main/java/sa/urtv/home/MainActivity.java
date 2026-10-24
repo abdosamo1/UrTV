@@ -754,7 +754,7 @@ public class MainActivity extends Activity {
         int h = now.get(Calendar.HOUR_OF_DAY);
         greeting.setText(h < 4 ? "تصبح على خير" : h < 12 ? "صباح الخير" : "مساء الخير");
         int hh = h % 12 == 0 ? 12 : h % 12;   // always 12-hour
-        clock.setText(arabicDigits(hh + ":" + String.format(Locale.ROOT, "%02d", now.get(Calendar.MINUTE))));
+        clock.setText(arabicDigits(String.format(Locale.ROOT, "%02d:%02d", hh, now.get(Calendar.MINUTE))));   // ٠٢:٥١
         ampm.setText(h < 12 ? "ص" : "م");
         String hijri = "";
         try {
