@@ -2,6 +2,7 @@ package sa.urtv.screensaver;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.os.Bundle;
 import android.webkit.WebResourceResponse;
 
 import java.io.ByteArrayInputStream;
@@ -53,19 +54,37 @@ final class FdProxy {
     }
 
     /** null when the address is not football-data's (the WebView then loads it as usual) */
-    static synchronized WebResourceResponse serve(Context c, String url, String key) {
+    static WebResourceResponse serve(Context c, String url, String key) {
         if (url == null || !url.startsWith(API) || key == null || key.isEmpty()) return null;
         String path = url.substring(API.length());
+        try {   // the home screen asks the site for both apps: one line of requests (the free plan: 10 a minute)
+            Bundle extra = new Bundle();
+            extra.putString("key", key);
+            Bundle b = c.getContentResolver().call(HOME, "fd", path, extra);
+            if (b != null && b.containsKey("code")) {
+                byte[] body = b.getByteArray("body");
+                return json(b.getInt("code"), body == null ? new byte[0] : body);
+            }
+            if (b != null && b.getBoolean("offline")) return null;
+        } catch (Exception ignored) { }   // an older home screen: ask the site from here
+        Object[] r = get(c, path, key);
+        return r == null ? null : json((Integer) r[0], (byte[]) r[1]);
+    }
+
+    /** {code, body}, or null (offline, nothing kept). Only when the home screen cannot (an older one). */
+    static synchronized Object[] get(Context c, String path, String key) {
+        String url = API + path;
         java.io.File cached = cacheFile(c, path);
         if (cached.isFile() && System.currentTimeMillis() - cached.lastModified() < ttl(path)) {
             byte[] b = read(cached);
-            if (b != null) return json(200, b);   // asked a moment ago (another screen): no new request
+            if (b != null) return new Object[] {200, b};   // asked a moment ago (another screen): no new request
         }
         long wait = lastCall + GAP_MS - System.currentTimeMillis();
         if (wait > 0) { try { Thread.sleep(wait); } catch (InterruptedException ignored) { } }
         lastCall = System.currentTimeMillis();
         int code = 0;
         byte[] body;
+        String left = "";
         HttpURLConnection con = null;
         try {
             con = (HttpURLConnection) new URL(url).openConnection();
@@ -74,24 +93,27 @@ final class FdProxy {
             con.setRequestProperty("X-Auth-Token", key);
             con.setRequestProperty("Accept", "application/json");
             code = con.getResponseCode();
+            String n = con.getHeaderField("X-Requests-Available-Minute");   // the minute's requests left
+            if (n != null) left = "بقي " + n;
             InputStream in = code >= 400 ? con.getErrorStream() : con.getInputStream();
             body = in == null ? new byte[0] : readAll(in);
         } catch (Exception e) {
             note(c, -1, url, "");
             byte[] old = cached.isFile() ? read(cached) : null;
-            return old != null ? json(200, old) : null;   // offline: the last good answer, else the page keeps its own
+            return old != null ? new Object[] {200, old} : null;   // offline: the last good answer, else the page keeps its own
         } finally {
             if (con != null) con.disconnect();
         }
-        note(c, code, url, code >= 400 ? reason(body) : "");
+        String why = code >= 400 ? reason(body) : "";
+        note(c, code, url, why.isEmpty() ? left : left.isEmpty() ? why : why + " · " + left);
         if (code == 200) {
             try (java.io.FileOutputStream o = new java.io.FileOutputStream(cached)) { o.write(body); }
             catch (Exception ignored) { }
-            return json(200, body);
+            return new Object[] {200, body};
         }
         // refused (over the minute's limit, or a filter it does not like): the last good answer if there is one
         byte[] old = cached.isFile() ? read(cached) : null;
-        return old != null ? json(200, old) : json(code, body);
+        return old != null ? new Object[] {200, old} : new Object[] {code, body};
     }
 
     private static SharedPreferences sp(Context c) { return c.getSharedPreferences("fdproxy", Context.MODE_PRIVATE); }
@@ -120,10 +142,23 @@ final class FdProxy {
         }
     }
 
-    static String log(Context c) { return sp(c).getString("log", ""); }
+    static final android.net.Uri HOME = android.net.Uri.parse("content://sa.urtv.home.fd");
+
+    /** the home screen's log and status (it asks the site), else this app's */
+    private static Bundle home(Context c) {
+        try { return c.getContentResolver().call(HOME, "fdlog", null, null); } catch (Exception e) { return null; }
+    }
+
+    static String log(Context c) {
+        Bundle b = home(c);
+        String h = b == null ? "" : b.getString("log", "");
+        return h.isEmpty() ? sp(c).getString("log", "") : h;
+    }
 
     /** «تعمل», «المفتاح مرفوض», …, or "" before the first request */
     static String status(Context c) {
+        Bundle b = home(c);
+        if (b != null && !b.getString("status", "").isEmpty()) return b.getString("status");
         SharedPreferences p = sp(c);
         if (!p.contains("code")) return "";
         int code = p.getInt("code", 0);

@@ -28,6 +28,9 @@
         android:name="sa.urtv.screensaver.READ_CONFIG"
         android:protectionLevel="signature" />
 
+    <!-- held by this app too: the home screen's FdProvider answers only the same-key apps -->
+    <uses-permission android:name="sa.urtv.screensaver.READ_CONFIG" />
+
     <!-- opens the launcher's «ترتيب المفضلة» from settings -->
     <queries>
         <package android:name="sa.urtv.home" />

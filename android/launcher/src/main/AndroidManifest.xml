@@ -81,6 +81,12 @@
             android:exported="true"
             android:writePermission="android.permission.DUMP" />
 
+        <!-- football-data for the screensaver app (same key): the home screen asks the site for both -->
+        <provider
+            android:name=".FdProvider"
+            android:authorities="sa.urtv.home.fd"
+            android:exported="true" />
+
         <!-- self-update: the installer's answer, and «look now» from the screensaver (it only makes it check) -->
         <receiver
             android:name=".UpdateReceiver"
