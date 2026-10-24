@@ -360,6 +360,9 @@ const CONFIG = {
             : [_Q.has('team1') ? _Q.get('team1') : '136013', _Q.has('team2') ? _Q.get('team2') : '136137'])
     .map(x=>(x||'').trim()).filter(x=>/^\d+$/.test(x)).slice(0, 10),
   sportsKey: '123',
+  // #fdkey=: a free football-data.org key (kept on the TV only): the next five games of each followed club it
+  // covers (European leagues, Champions League), home and away; the other clubs stay on TheSportsDB
+  fdKey: (_Q.get('fdkey') || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 64),
   // the card beside the clock: auto (the four in turn, every 30 s) | verse | prayers | forecast | matches | none
   // (#week=0 from older builds = none; the TV-shows card was removed, so an old #panel=shows gets auto)
   panel: (p => ['auto','prayers','forecast','matches','verse','none'].includes(p) ? p : 'auto')
@@ -781,6 +784,7 @@ const teamKey = s => String(s).replace(/ı/g,'i').replace(/ß/g,'ss').normalize(
   .toLowerCase().replace(/\b(fc|sc|cf|afc|club|saudi club)\b/g,'')
   .replace(/[^a-z0-9]+/g,' ').trim().replace(/^al /,'al');
 const TEAM_BY_ID = __TEAMS_BY_ID__;   // assets/shared/teams.json: TheSportsDB id -> Arabic
+const TEAM_EN = __TEAMS_EN__;         // and -> English, to find the club on football-data.org
 const TEAM_KEYS = {};
 // first entry wins on a clash: the Saudi "Al-Faisaly" before the Jordanian "Al Faisaly"
 for(const [en, arName] of Object.entries(TEAM_AR)) if(!(teamKey(en) in TEAM_KEYS)) TEAM_KEYS[teamKey(en)] = arName;
@@ -946,6 +950,11 @@ async function loadLive(){
     if(!ev || !ev.idEvent) return;
     const k = toDate(ev).getTime();
     if(now < k - 5*60000 || now > k + 2.5*3600000) return;
+    if(ev.fdId){   // a football-data game: its own live score
+      try{ const j = await fdGet(`matches/${ev.fdId}`); MATCHES[id] = Object.assign({}, ev, fdEvent(j.match || j)); keepResult(id, MATCHES[id]); }
+      catch(e){}
+      return;
+    }
     try{
       const r = await fetchT(`https://www.thesportsdb.com/api/v1/json/${CONFIG.sportsKey}/lookupevent.php?id=${ev.idEvent}`, 10000);
       const j = await r.json();
@@ -970,6 +979,73 @@ function renderMatches(turn){
   if(turn && pages > 1){ row.classList.remove('flip'); void row.offsetWidth; row.classList.add('flip'); }
 }
 
+// ---------- football-data.org (#fdkey): the next five games, home and away, for the clubs it covers ----------
+const FD = 'https://api.football-data.org/v4/';
+const FD_COMPS = ['PD', 'PL', 'SA', 'BL1', 'FL1', 'DED', 'PPL', 'CL'];   // the free plan's club competitions
+const FD_KEY = 'fdIndex1';
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let FD_PAUSE = 6500;   // between the team-list calls: the free plan allows 10 a minute
+async function fdGet(path){
+  const c = new AbortController(), t = setTimeout(() => c.abort(), 15000);
+  try{
+    const r = await fetch(FD + path, {headers: {'X-Auth-Token': CONFIG.fdKey}, cache: 'no-store', signal: c.signal});
+    if(!r.ok) throw r.status;
+    return await r.json();
+  }finally{ clearTimeout(t); }
+}
+// club name -> football-data id, from the competitions' team lists: built once a month, slowly (10 calls a minute)
+let FD_INDEX = (() => { try{ return JSON.parse(localStorage.getItem(FD_KEY) || 'null'); }catch(e){ return null; } })();
+let FD_BUILDING = null;
+function fdIndex(){
+  if(FD_INDEX && Date.now() - FD_INDEX.at < 30 * 86400000) return Promise.resolve(FD_INDEX.map);
+  if(FD_BUILDING) return FD_BUILDING;
+  FD_BUILDING = (async () => {
+    const map = {};
+    for(let i = 0; i < FD_COMPS.length; i++){
+      if(i) await sleep(FD_PAUSE);
+      try{
+        for(const t of (await fdGet(`competitions/${FD_COMPS[i]}/teams`)).teams || [])
+          for(const n of [t.name, t.shortName]) if(n && !(teamKey(n) in map)) map[teamKey(n)] = t.id;
+      }catch(e){ if(e === 401 || e === 403) break; }   // a wrong key: no use asking the rest
+    }
+    if(Object.keys(map).length){ FD_INDEX = {at: Date.now(), map}; try{ localStorage.setItem(FD_KEY, JSON.stringify(FD_INDEX)); }catch(e){} }
+    FD_BUILDING = null;
+    return map;
+  })();
+  return FD_BUILDING;
+}
+// a football-data club name -> the TheSportsDB id we know it by (for its curated Arabic name)
+const TEAM_ID_BY_KEY = {};
+for(const [id, en] of Object.entries(TEAM_EN)) if(!(teamKey(en) in TEAM_ID_BY_KEY)) TEAM_ID_BY_KEY[teamKey(en)] = id;
+const fdTeamId = t => TEAM_ID_BY_KEY[teamKey(t.name || '')] || TEAM_ID_BY_KEY[teamKey(t.shortName || '')] || null;
+const FD_STATUS = {FINISHED: 'FT', AWARDED: 'FT', PAUSED: 'HT', IN_PLAY: '1H', LIVE: '1H'};
+/** a football-data match in TheSportsDB's shape, so the rest of the page needs no change */
+function fdEvent(m){
+  const ft = (m.score && m.score.fullTime) || {};
+  return {idEvent: 'fd' + m.id, fdId: m.id, strTimestamp: m.utcDate,
+          strHomeTeam: m.homeTeam.shortName || m.homeTeam.name, idHomeTeam: fdTeamId(m.homeTeam),
+          strAwayTeam: m.awayTeam.shortName || m.awayTeam.name, idAwayTeam: fdTeamId(m.awayTeam),
+          intHomeScore: ft.home == null ? null : ft.home, intAwayScore: ft.away == null ? null : ft.away,
+          strStatus: FD_STATUS[m.status] || 'NS', strProgress: m.minute || ''};
+}
+/** true when football-data answered for this club (then TheSportsDB is not asked) */
+async function fdLoad(id){
+  if(!CONFIG.fdKey) return false;
+  const en = TEAM_EN[id];
+  if(!en) return false;
+  const fid = (await fdIndex())[teamKey(en)];
+  if(!fid) return false;   // not in the free competitions (a Saudi club): TheSportsDB
+  const day = n => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+  const up = (await fdGet(`teams/${fid}/matches?status=SCHEDULED,TIMED,IN_PLAY,PAUSED&limit=5`)).matches || [];
+  const evs = up.map(fdEvent);
+  NEXT_LIST[id] = evs;
+  const ev = evs[0];
+  if(ev){ if(MATCHES[id] && MATCHES[id].idEvent !== ev.idEvent) keepResult(id, MATCHES[id]); MATCHES[id] = ev; }
+  try{ RESULTS[id] = ((await fdGet(`teams/${fid}/matches?status=FINISHED&dateFrom=${day(-3)}&dateTo=${day(0)}`)).matches || []).map(fdEvent); }
+  catch(e){}
+  return true;
+}
+
 async function fetchLast(id){
   const r = await fetch(`https://www.thesportsdb.com/api/v1/json/${CONFIG.sportsKey}/eventslast.php?id=${id}`,{cache:'no-store'});
   if(!r.ok) throw 0;
@@ -980,6 +1056,7 @@ async function loadMatches(){
   // never throw away a good fixture or result on a failed refresh
   let answered = 0;
   await Promise.all(CONFIG.teamIds.map(async id=>{
+    try{ if(await fdLoad(id)){ answered++; return; } }catch(e){}   // football-data first, when it has the club
     try{
       const ev = await fetchNext(id); answered++;
       if(ev){ if(MATCHES[id] && MATCHES[id].idEvent !== ev.idEvent) keepResult(id, MATCHES[id]); MATCHES[id] = ev; }
@@ -1103,10 +1180,10 @@ function matchRows(){
   });
   const day = d => new Intl.DateTimeFormat(GREG, {timeZone:CONFIG.timezone, weekday:'long'}).format(d);
   const today = new Intl.DateTimeFormat('en-CA', {timeZone:CONFIG.timezone}).format(new Date());
-  // the next five, however far ahead (a team playing once a week showed one game with a week's window)
+  // the next five (and one in progress), however far ahead; the last result has its place at the bottom
   return evs.map(ev => ({ev, t: toDate(ev).getTime()}))
-    .filter(x => finishedRecently(x.ev, now)
-      || (now < x.t + 2.5*3600000 && !FINAL.includes((x.ev.strStatus || '').toUpperCase())))
+    .filter(x => !finishedRecently(x.ev, now)
+      && now < x.t + 2.5*3600000 && !FINAL.includes((x.ev.strStatus || '').toUpperCase()))
     .sort((a, b) => a.t - b.t)
     .slice(0, 5)
     .map(({ev, t}) => {

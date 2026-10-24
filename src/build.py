@@ -224,6 +224,8 @@ def main():
     clubs = json.loads((ROOT / "assets/shared/teams.json").read_text(encoding="utf-8"))
     by_id = {c["id"]: c["ar"] for c in clubs if c.get("id") and c.get("ar")}
     html = html.replace("__TEAMS_BY_ID__", js_json(by_id))
+    # and the English names: football-data.org's clubs are matched to the followed ones by name
+    html = html.replace("__TEAMS_EN__", js_json({c["id"]: c["en"] for c in clubs if c.get("id") and c.get("en")}))
     html = html.replace("__VERSES__", js_json(verses_for_screen()))
     html = html.replace("__HADITH__", js_json(hadith_for_screen()))   # checked by CI
 

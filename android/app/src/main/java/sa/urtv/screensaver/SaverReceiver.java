@@ -22,6 +22,7 @@ import java.util.List;
  *       [--es mosque https://mawaqit.net/de/SLUG | SLUG | none] [--es mosque_name 'مسجد الرحمن']
  *       [--es adhan true|false] [--es adhan_voice makki-1] [--es adhan_fajr off|fajr-trabulsi] [--es adhan_volume 10]
  *       [--es night true|false]   (dim the screensaver from 21:00 to 07:00; off by default)
+ *       [--es fdkey KEY | none]   (football-data.org: the next five games of the clubs it covers)
  *       [--es reminder 30]   (minutes before each adhan for the notice at the top right; 0 = off)
  *   am broadcast -n sa.urtv.screensaver/.SaverReceiver -a sa.urtv.screensaver.REMINDER_TEST   (shows it now)
  *   am broadcast -n sa.urtv.screensaver/.SaverReceiver -a sa.urtv.screensaver.ADHAN_TEST   (plays it now)
@@ -165,6 +166,8 @@ public class SaverReceiver extends BroadcastReceiver {
         if (adhanFajr != null && !adhanFajr.equals("off") && !Adhan.isVoice(adhanFajr))
             return "error: adhan_fajr is off or one of " + voices();
         if (adhanVolume != null && !adhanVolume.matches("\\d{1,3}") ) return "error: adhan_volume is a number, e.g. 10";
+        String fdkey = i.getStringExtra("fdkey");
+        if (fdkey != null && !fdkey.matches("none|[A-Za-z0-9]{8,64}")) return "error: fdkey is the key from football-data.org, or none";
         String night = i.getStringExtra("night");
         if (night != null && !night.matches("true|false")) return "error: night is true or false";
         String reminder = i.getStringExtra("reminder");
@@ -195,6 +198,7 @@ public class SaverReceiver extends BroadcastReceiver {
         if (adhanVolume != null) p.setAdhanVolume(Math.max(1, Integer.parseInt(adhanVolume)));
         if (reminder != null) p.setReminderMinutes(Integer.parseInt(reminder));
         if (night != null) p.setNightDim(Boolean.parseBoolean(night));
+        if (fdkey != null) p.setFdKey(fdkey.equals("none") ? "" : fdkey);
         Adhan.update(c, false);   // a new mosque, city or Fajr choice moves the next adhan
         return "saved\n" + describe(c, p);
     }
@@ -210,6 +214,7 @@ public class SaverReceiver extends BroadcastReceiver {
             + "\nphotos: " + p.photoMinutes()
             + "\nidle: " + idle(Prefs.idleMs(c))
             + "\nnight dimming: " + p.nightDim()
+            + "\nmatches from: " + (p.fdKey().isEmpty() ? "TheSportsDB" : "football-data.org (key set)")
             + "\nautoupdate: " + p.autoUpdate()
             + "\nadhan: " + p.adhanOn() + " | voice " + p.adhanVoice() + " | fajr " + (p.adhanFajr().isEmpty() ? "off" : p.adhanFajr())
             + " | volume " + p.adhanVolume() + " | next: " + p.nextAdhan()

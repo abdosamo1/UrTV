@@ -191,6 +191,9 @@ public class SettingsActivity extends Activity {
         header("المباريات");
         row("الفرق المتابعة (" + arabicNum(prefs.teams().size()) + "/" + arabicNum(Prefs.MAX_TEAMS) + ")", teamsLabel(),
             R.drawable.ic_trophy, new Runnable() { public void run() { manageTeams(); } });
+        row("مصدر المباريات", prefs.fdKey().isEmpty() ? "TheSportsDB · مباراة واحدة لكل فريق · أضف مفتاح football-data.org المجاني"
+                : "football-data.org · خمس مباريات قادمة لكل فريق أوروبي",
+            R.drawable.ic_trophy, new Runnable() { public void run() { askFdKey(); } });
 
         header("بجانب الساعة");
         row("المحتوى", Prefs.panelLabel(prefs.panel()), R.drawable.ic_eye, new Runnable() { public void run() { pickPanel(false); } });
@@ -388,6 +391,22 @@ public class SettingsActivity extends Activity {
                 render();
             });
         });
+    }
+
+    /** The free key from football-data.org (register with an e-mail there); empty = TheSportsDB only. */
+    private void askFdKey() {
+        final EditText in = new EditText(this);
+        in.setHint("المفتاح من football-data.org");
+        in.setText(prefs.fdKey());
+        in.setSingleLine(true);
+        in.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+        new AlertDialog.Builder(this, DIALOG_THEME).setTitle("مفتاح football-data.org")
+            .setMessage("مجاني: سجّل بإيميلك على football-data.org وانسخ المفتاح هنا. يبقى على هذا التلفزيون فقط.")
+            .setView(in)
+            .setPositiveButton("حفظ", (d, w) -> { prefs.setFdKey(in.getText().toString().trim()); render(); })
+            .setNeutralButton("حذف المفتاح", (d, w) -> { prefs.setFdKey(""); render(); })
+            .setNegativeButton("إلغاء", null).show();
+        in.requestFocus();
     }
 
     /** Followed teams: untick to remove, or add one (presets, league browsing, search). Up to 10. */

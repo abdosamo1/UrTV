@@ -228,6 +228,48 @@ for (const [hash, dimmed] of [['', false], ['night=0', false], ['night=1', true]
   await ctx.close();
 }
 
+// ---- football-data.org (#fdkey): Barcelona's next five games, home and away, curated Arabic names; key in a header
+{
+  const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  const calls = [], tsdb = [];
+  const day = n => new Date(Date.now() + n * 864e5).toISOString();
+  const m = (id, h, a, n, st, sc) => ({ id, utcDate: day(n), status: st, homeTeam: h, awayTeam: a,
+                                        score: { fullTime: sc ? { home: sc[0], away: sc[1] } : { home: null, away: null } } });
+  const BAR = { id: 81, name: 'FC Barcelona', shortName: 'Barça' }, RMA = { id: 86, name: 'Real Madrid CF', shortName: 'Real Madrid' };
+  const OPP = n => ({ id: 900 + n, name: 'Opponent ' + n, shortName: 'Opponent ' + n });
+  await ctx.route(/^https?:/, r => {
+    const u = new URL(r.request().url()), cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'X-Auth-Token' };
+    if (u.host === 'api.football-data.org') {
+      calls.push({ path: u.pathname + u.search, key: r.request().headers()['x-auth-token'] });
+      let body = { teams: [] };
+      if (u.pathname === '/v4/competitions/PD/teams') body = { teams: [BAR, RMA] };
+      if (u.pathname === '/v4/teams/81/matches' && u.searchParams.get('status').startsWith('SCHEDULED'))
+        body = { matches: [m(1, BAR, RMA, 2, 'TIMED'), m(2, OPP(1), BAR, 6, 'TIMED'), m(3, BAR, OPP(2), 9, 'TIMED'),
+                           m(4, OPP(3), BAR, 13, 'TIMED'), m(5, BAR, OPP(4), 20, 'SCHEDULED')] };
+      if (u.pathname === '/v4/teams/81/matches' && u.searchParams.get('status') === 'FINISHED')
+        body = { matches: [m(0, BAR, OPP(9), -0.3, 'FINISHED', [3, 1])] };
+      return r.fulfill({ headers: cors, contentType: 'application/json', body: JSON.stringify(body) });
+    }
+    if (u.host === 'www.thesportsdb.com') tsdb.push(u.pathname);
+    return r.abort();
+  });
+  const p = await ctx.newPage();
+  const errors = [];
+  p.on('pageerror', e => errors.push(e.message));
+  await p.goto(page('tv.html') + '#teams=133739&panel=matches&fdkey=abc123');
+  await p.evaluate(() => { FD_PAUSE = 0; });
+  await p.waitForFunction(() => (NEXT_LIST['133739'] || []).length === 5, null, { timeout: 8000 }).catch(() => errors.push('no fd games'));
+  await p.evaluate(() => renderPanel(false));
+  const r = await p.evaluate(() => ({ rows: [...document.querySelectorAll('.week li')].map(x => x.textContent),
+                                      hd: document.getElementById('week-hd').textContent }));
+  check('football-data: the next five games, Arabic names', !errors.length && r.rows.length === 5
+        && r.rows[0].includes('برشلونة') && r.rows[0].includes('ريال مدريد') && !r.rows.some(x => x.includes('٣ - ١')) && r.hd === 'مباريات فرقك القادمة', JSON.stringify({ r, errors }));
+  check('football-data: the key goes in the X-Auth-Token header, TheSportsDB not asked for that club',
+        calls.length && calls.every(c => c.key === 'abc123') && !calls.some(c => c.path.includes('abc123'))
+        && !tsdb.some(x => /eventsnext|eventslast/.test(x)), JSON.stringify({ calls: calls.slice(0, 3), tsdb }));
+  await ctx.close();
+}
+
 // ---- the TV-shows card was removed: an old #panel=shows gets the cards in turn, and nothing calls TVMaze
 {
   const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });

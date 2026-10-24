@@ -14,6 +14,7 @@
 #   optimize/saver.sh adhan-fajr off               Fajr: off (the default) or one of the voices
 #   optimize/saver.sh adhan-volume 10              the TV volume it plays at (then the volume goes back)
 #   optimize/saver.sh adhan-test | adhan-stop      play the adhan now / stop it
+#   optimize/saver.sh football KEY                 the next five games from football-data.org (a free key; none = off)
 #   optimize/saver.sh night false                  dim the screensaver 21:00-07:00 (true|false; off by default)
 #   optimize/saver.sh reminder 30                  notice at the top right N minutes before each adhan (0 = off)
 #   optimize/saver.sh reminder-test                show that notice now
@@ -66,6 +67,7 @@ case "${1:-}" in
   adhan-fajr)   send SET "--es adhan_fajr $(quote "${2:?usage: optimize/saver.sh adhan-fajr off|fajr-trabulsi}")" ;;
   adhan-volume) send SET "--es adhan_volume $(quote "${2:?usage: optimize/saver.sh adhan-volume 10}")" ;;
   adhan-test)   send ADHAN_TEST ;;
+  football)     send SET "--es fdkey $(quote "${2:?usage: optimize/saver.sh football KEY|none}")" ;;
   night)        send SET "--es night $(quote "${2:?usage: optimize/saver.sh night true|false}")" ;;
   reminder)     send SET "--es reminder $(quote "${2:?usage: optimize/saver.sh reminder 30}")" ;;
   reminder-test) send REMINDER_TEST ;;

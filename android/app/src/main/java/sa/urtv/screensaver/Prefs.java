@@ -196,6 +196,10 @@ final class Prefs {
     String photoMinutes() { return sp.getString("photoMinutes", "30"); }
     void setPhotoMinutes(String v) { sp.edit().putString("photoMinutes", v).apply(); }
 
+    /** a free football-data.org key ("" = none): the next five games of the clubs it covers. Only on this TV. */
+    String fdKey() { return sp.getString("fdKey", ""); }
+    void setFdKey(String v) { sp.edit().putString("fdKey", v == null ? "" : v.replaceAll("[^A-Za-z0-9]", "")).apply(); }
+
     /** darken the screensaver from 21:00 to 07:00; off unless the owner turns it on */
     boolean nightDim() { return sp.getBoolean("nightDim", false); }
     void setNightDim(boolean v) { sp.edit().putBoolean("nightDim", v).apply(); }
@@ -229,7 +233,8 @@ final class Prefs {
             + "&panel=" + panel()
             + "&week=" + ("none".equals(panel()) ? "0" : "1")   // for a page older than #panel
             + "&photos=" + photoMinutes()
-            + "&night=" + (nightDim() ? "1" : "0");
+            + "&night=" + (nightDim() ? "1" : "0")
+            + (fdKey().isEmpty() ? "" : "&fdkey=" + fdKey());
     }
 
     /** The card on the launcher's home screen: one of PANELS; the four in turn («auto») unless picked otherwise. */

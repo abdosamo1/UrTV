@@ -364,6 +364,9 @@ const CONFIG = {
             : [_Q.has('team1') ? _Q.get('team1') : '136013', _Q.has('team2') ? _Q.get('team2') : '136137'])
     .map(x=>(x||'').trim()).filter(x=>/^\d+$/.test(x)).slice(0, 10),
   sportsKey: '123',
+  // #fdkey=: a free football-data.org key (kept on the TV only): the next five games of each followed club it
+  // covers (European leagues, Champions League), home and away; the other clubs stay on TheSportsDB
+  fdKey: (_Q.get('fdkey') || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 64),
   // the card beside the clock: auto (the four in turn, every 30 s) | verse | prayers | forecast | matches | none
   // (#week=0 from older builds = none; the TV-shows card was removed, so an old #panel=shows gets auto)
   panel: (p => ['auto','prayers','forecast','matches','verse','none'].includes(p) ? p : 'auto')
@@ -785,6 +788,7 @@ const teamKey = s => String(s).replace(/ı/g,'i').replace(/ß/g,'ss').normalize(
   .toLowerCase().replace(/\b(fc|sc|cf|afc|club|saudi club)\b/g,'')
   .replace(/[^a-z0-9]+/g,' ').trim().replace(/^al /,'al');
 const TEAM_BY_ID = {"137855": "أبها", "137721": "الأهلي", "152917": "الدرعية", "136017": "الاتفاق", "136021": "الفيصلي", "136011": "الفتح", "136014": "الفيحاء", "136200": "الحزم", "136013": "الهلال", "136018": "الاتحاد", "139080": "الخليج", "149112": "الخلود", "150638": "النجمة", "136022": "النصر", "147444": "الأخدود", "136015": "القادسية", "147445": "الرياض", "136020": "الشباب", "136012": "التعاون", "137852": "ضمك", "150637": "نيوم", "137854": "العدالة", "152918": "الأنوار", "150639": "العربي", "136019": "الباطن", "150640": "البكيرية", "150091": "الجبلين", "150644": "الجندل", "156331": "الجيل", "150645": "الجبيل", "149111": "العروبة", "136016": "الرائد", "156329": "الصقر", "143173": "الطائي", "152473": "العلا", "136199": "الوحدة", "150643": "الزلفي", "156330": "هجر", "150641": "جدة", "133604": "آرسنال", "133601": "أستون فيلا", "134301": "بورنموث", "134355": "برينتفورد", "133619": "برايتون", "133623": "بيرنلي", "133610": "تشيلسي", "133625": "كوفنتري سيتي", "133632": "كريستال بالاس", "133615": "إيفرتون", "133600": "فولهام", "133617": "هال سيتي", "133622": "إيبسويتش تاون", "133635": "ليدز يونايتد", "133602": "ليفربول", "133613": "مانشستر سيتي", "133612": "مانشستر يونايتد", "134777": "نيوكاسل", "133720": "نوتنغهام فورست", "133603": "سندرلاند", "133616": "توتنهام", "133636": "وست هام", "133599": "وولفرهامبتون", "133727": "أتلتيك بلباو", "133729": "أتلتيكو مدريد", "133739": "برشلونة", "133937": "سيلتا فيغو", "134221": "ديبورتيفو ألافيس", "133816": "ديبورتيفو لاكورونيا", "134384": "إلتشي", "133734": "إسبانيول", "133731": "خيتافي", "134700": "جيرونا", "133732": "ليفانتي اف سي", "133733": "مايوركا", "133736": "ملقا", "133730": "أوساسونا", "133726": "راسينغ سانتاندير", "133728": "رايو فايكانو", "133722": "ريال بيتيس", "133738": "ريال مدريد", "135455": "ريال أوفييدو", "133724": "ريال سوسيداد", "133735": "إشبيلية", "133725": "فالنسيا", "133740": "فياريال", "133667": "ميلان", "134782": "أتالانتا", "134781": "بولونيا", "134783": "كلياري", "134243": "كومو", "134224": "كريمونيزي", "133674": "فيورنتينا", "133818": "فروزينوني", "133675": "جنوى", "134784": "إيلاس فيرونا", "133681": "إنتر ميلان", "133676": "يوفنتوس", "133668": "لاتسيو", "133678": "ليتشي", "134270": "مونزا", "133670": "نابولي", "135728": "بارما", "133859": "بيزا", "133682": "روما", "133701": "ساسولو", "133687": "تورينو", "133679": "أودينيزي", "134234": "فينيتسيا", "133666": "باير ليفركوزن", "133664": "بايرن ميونخ", "133650": "دورتموند", "134779": "بوروسيا مونشنغلادباخ", "133814": "آينتراخت فرانكفورت", "138411": "إلفرسبيرغ", "133652": "آوغسبورغ", "134696": "هايدنهايم", "133654": "كولن", "133653": "فرايبورغ", "133651": "هامبورغ", "133657": "هوفنهايم", "133665": "ماينتس", "134551": "بادربورن", "134695": "لايبزيغ", "133661": "شالكه", "133813": "سانت باولي", "133660": "شتوتغارت", "134690": "يونيون برلين", "133662": "فيردر بريمن", "133655": "فولفسبورغ", "134709": "أنجيه", "134788": "أوكسير", "133704": "بريست", "133862": "لوهافر", "133848": "لومان", "133822": "لانس", "133711": "ليل", "133715": "لوريان", "133713": "ليون", "133707": "مارسيليا", "133883": "متز", "133823": "موناكو", "133861": "نانت", "133712": "نيس", "135465": "باريس إف سي", "133714": "باريس سان جيرمان", "133719": "رين", "133882": "ستراسبورغ", "133703": "تولوز", "134789": "تروا", "147479": "آفس", "138856": "أكادميكو دي بازو", "143704": "ألفيركا", "134387": "أروكا دا سيلفا", "134108": "بنفيكا", "134098": "سبورتينغ براغا", "138864": "كاسا بيا", "134106": "إستوريل", "140008": "إستريلا دا أمادورا", "134114": "بورتو", "136854": "فاماليكاو", "134113": "جل فيسنتي", "134023": "ماريتيمو", "134112": "موريرينسي", "134109": "ناسيونال ماديرا", "134107": "ريو أفي", "136192": "سانتا كلارا", "135708": "سبورتينغ لشبونة", "135502": "تونديلا", "134115": "فيتوريا غيماريش", "133769": "أدو دين هاغ", "133767": "إي زد ألكمار", "133772": "أياكس", "134303": "كامبور", "133757": "إكسلسيور", "133867": "فولندام", "133758": "فينورد", "134264": "فورتونا سيتارد", "134304": "غو أهد إيغلز", "133762": "خرونينغن", "133759": "هيرنفين", "133766": "هيراكليس ألميلو", "133773": "ناك بريدا", "133760": "إن إي سي نيميخن", "133936": "بي إي سي زفوله", "133768": "آيندهوفن", "133866": "سبارتا روتردام", "138004": "تلستار", "133774": "تفينتي أنشخيدة", "133764": "أوترخت", "133827": "فيليم الثاني", "135676": "ألانيا سبور", "138959": "آمد", "133799": "أنطاليا سبور", "133794": "بشكتاش", "134272": "أرضروم سبور", "138977": "أيوب سبور", "138983": "فاتح قرهجمرك", "133807": "فنربخشة", "133804": "غلطة سراي", "138092": "غازي عنتاب", "133798": "غنتشلربيرليغي", "135891": "غوزتبه", "133834": "قاسم باشا", "133802": "قيصرية سبور", "133870": "كوجالي سبور", "133835": "قونيا سبور", "133885": "ريزه سبور", "133797": "سامسون سبور", "133796": "طرابزون سبور", "138951": "تشوروم", "134589": "إسطنبول بشاق شهر", "156496": "أبو قير للأسمدة", "138995": "الأهلي المصري", "139839": "الاتحاد السكندري", "139844": "المصري", "139837": "المقاولون العرب", "156495": "بترول أسيوط", "140795": "سيراميكا كيلوباترا", "139841": "إنبي", "139845": "الجونة", "156494": "القناة", "140794": "غزل المحلة", "139846": "حرس الحدود", "139843": "الإسماعيلي", "153475": "كهرباء الإسماعيلية", "144160": "مودرن سبورت", "140796": "البنك الأهلي المصري", "149410": "بتروجت", "144159": "فاركو", "139838": "بيراميدز", "139840": "سموحة", "139848": "طلائع الجيش", "139850": "وادي دجلة", "139852": "زد", "138997": "الزمالك", "137838": "عجمان", "137832": "العين", "146537": "البطائح", "137834": "الظفرة", "137830": "الجزيرة", "137831": "النصر الإماراتي", "137836": "الوحدة الإماراتي", "137835": "الوصل", "137839": "بني ياس", "146536": "دبا الفجيرة", "137841": "حتا", "137837": "كلباء", "137842": "خورفكان", "137828": "شباب الأهلي", "137829": "الشارقة", "156157": "يونايتد", "138049": "الأهلي القطري", "135946": "العربي القطري", "137679": "الدحيل", "138029": "الغرافة", "138050": "الريان", "137648": "السد", "138035": "السيلية", "138030": "الشحانية", "141174": "الشمال", "137994": "الوكرة", "155255": "لوسيل", "137995": "نادي قطر", "138052": "أم صلال", "135851": "أتلانتا يونايتد", "140079": "أوستن", "134150": "كلوب دو فوت مونتريال", "140078": "تشارلوت", "134154": "شيكاغو فاير", "134794": "كولورادو رابيدز", "134152": "كولومبوس كرو", "134145": "دي.سي. يونايتد", "136688": "سينسيناتي", "134146": "دالاس", "134144": "هيوستن دينامو", "137699": "إنتر ميامي", "134153": "لوس أنجلوس جالاكسي", "136050": "لوس أنجلوس", "135852": "منيسوتا يونايتد", "137700": "ناشفيل أس سي", "134159": "نيو إنجلاند ريفولوشن", "134630": "نيويورك سيتي", "134156": "نيويورك ريد بولز", "135292": "أورلاندو سيتي", "134142": "فيلادلفيا يونيون", "134155": "بورتلاند تيمبرز", "134158": "ريال سالت ليك", "150261": "سان دييغو", "134157": "سان خوسيه إيرثكويكس", "134149": "سياتل ساوندرز", "134143": "سبورتينغ كانساس سيتي", "147062": "سانت لويس أس سي", "134148": "تورنتو", "134147": "فانكوفر وايتكابس", "134516": "الجزائر", "134509": "الأرجنتين", "134500": "أستراليا", "140149": "البحرين", "134515": "بلجيكا", "134496": "البرازيل", "134498": "الكاميرون", "134579": "الصين", "134501": "كولومبيا", "133912": "كرواتيا", "136138": "مصر", "133914": "إنجلترا", "133913": "فرنسا", "133907": "ألمانيا", "134511": "إيران", "140148": "العراق", "133910": "إيطاليا", "134503": "اليابان", "140145": "الأردن", "140144": "الكويت", "140166": "لبنان", "136489": "ليبيا", "134497": "المكسيك", "136139": "المغرب", "133905": "هولندا", "134512": "نيجيريا", "140155": "عمان", "140154": "فلسطين", "133908": "البرتغال", "136472": "قطر", "136137": "السعودية", "136143": "السنغال", "134517": "كوريا الجنوبية", "133909": "إسبانيا", "136495": "السودان", "140032": "سوريا", "136142": "تونس", "135985": "تركيا", "134514": "الولايات المتحدة", "140163": "الإمارات", "134504": "الأوروغواي", "140151": "أوزبكستان", "140153": "اليمن"};   // assets/shared/teams.json: TheSportsDB id -> Arabic
+const TEAM_EN = {"137855": "Abha", "137721": "Al-Ahli", "152917": "Al-Diriyah", "136017": "Al-Ettifaq", "136021": "Al-Faisaly", "136011": "Al-Fateh", "136014": "Al-Fayha", "136200": "Al-Hazem", "136013": "Al-Hilal", "136018": "Al-Ittihad", "139080": "Al-Khaleej", "149112": "Al-Kholood", "150638": "Al-Najma Unaizah", "136022": "Al-Nassr", "147444": "Al-Okhdood", "136015": "Al-Qadsiah", "147445": "Al-Riyadh", "136020": "Al-Shabab", "136012": "Al-Taawoun", "137852": "Damac", "150637": "Neom", "137854": "Al-Adalah", "152918": "Al-Anwar", "150639": "Al-Arabi Al-Saudi", "136019": "Al-Batin", "150640": "Al-Bukiryah", "150091": "Al-Jabalain", "150644": "Al-Jandal", "156331": "Al-Jeel", "150645": "Al-Jubail", "149111": "Al-Orobah", "136016": "Al-Raed", "156329": "Al-Saqer", "143173": "Al-Tai", "152473": "Al-Ula", "136199": "Al-Wehda", "150643": "Al-Zulfi", "156330": "Hajer", "150641": "Jeddah Club", "133604": "Arsenal", "133601": "Aston Villa", "134301": "Bournemouth", "134355": "Brentford", "133619": "Brighton and Hove Albion", "133623": "Burnley", "133610": "Chelsea", "133625": "Coventry City", "133632": "Crystal Palace", "133615": "Everton", "133600": "Fulham", "133617": "Hull City", "133622": "Ipswich Town", "133635": "Leeds United", "133602": "Liverpool", "133613": "Manchester City", "133612": "Manchester United", "134777": "Newcastle United", "133720": "Nottingham Forest", "133603": "Sunderland", "133616": "Tottenham Hotspur", "133636": "West Ham United", "133599": "Wolverhampton Wanderers", "133727": "Athletic Bilbao", "133729": "Atlético Madrid", "133739": "Barcelona", "133937": "Celta Vigo", "134221": "Deportivo Alavés", "133816": "Deportivo de A Coruña", "134384": "Elche", "133734": "Espanyol", "133731": "Getafe", "134700": "Girona", "133732": "Levante", "133733": "Mallorca", "133736": "Málaga", "133730": "Osasuna", "133726": "Racing de Santander", "133728": "Rayo Vallecano", "133722": "Real Betis", "133738": "Real Madrid", "135455": "Real Oviedo", "133724": "Real Sociedad", "133735": "Sevilla", "133725": "Valencia", "133740": "Villarreal", "133667": "AC Milan", "134782": "Atalanta", "134781": "Bologna", "134783": "Cagliari", "134243": "Como", "134224": "Cremonese", "133674": "Fiorentina", "133818": "Frosinone", "133675": "Genoa", "134784": "Hellas Verona", "133681": "Inter Milan", "133676": "Juventus", "133668": "Lazio", "133678": "Lecce", "134270": "Monza", "133670": "Napoli", "135728": "Parma", "133859": "Pisa", "133682": "Roma", "133701": "Sassuolo", "133687": "Torino", "133679": "Udinese", "134234": "Venezia", "133666": "Bayer Leverkusen", "133664": "Bayern Munich", "133650": "Borussia Dortmund", "134779": "Borussia Mönchengladbach", "133814": "Eintracht Frankfurt", "138411": "Elversberg", "133652": "FC Augsburg", "134696": "FC Heidenheim", "133654": "FC Köln", "133653": "Freiburg", "133651": "Hamburg", "133657": "Hoffenheim", "133665": "Mainz", "134551": "Paderborn", "134695": "RB Leipzig", "133661": "Schalke 04", "133813": "St Pauli", "133660": "Stuttgart", "134690": "Union Berlin", "133662": "Werder Bremen", "133655": "Wolfsburg", "134709": "Angers", "134788": "Auxerre", "133704": "Brest", "133862": "Le Havre", "133848": "Le Mans", "133822": "Lens", "133711": "Lille", "133715": "Lorient", "133713": "Lyon", "133707": "Marseille", "133883": "Metz", "133823": "Monaco", "133861": "Nantes", "133712": "Nice", "135465": "Paris FC", "133714": "Paris SG", "133719": "Rennes", "133882": "Strasbourg", "133703": "Toulouse", "134789": "Troyes", "147479": "AVS", "138856": "Académico de Viseu", "143704": "Alverca", "134387": "Arouca", "134108": "Benfica", "134098": "Braga", "138864": "Casa Pia", "134106": "Estoril Praia", "140008": "Estrela Amadora", "134114": "FC Porto", "136854": "Famalicao", "134113": "Gil Vicente", "134023": "Marítimo", "134112": "Moreirense", "134109": "Nacional de Madeira", "134107": "Rio Ave", "136192": "Santa Clara", "135708": "Sporting CP", "135502": "Tondela", "134115": "Vitória de Guimarães", "133769": "ADO Den Haag", "133767": "AZ Alkmaar", "133772": "Ajax", "134303": "Cambuur", "133757": "Excelsior", "133867": "FC Volendam", "133758": "Feyenoord", "134264": "Fortuna Sittard", "134304": "Go Ahead Eagles", "133762": "Groningen", "133759": "Heerenveen", "133766": "Heracles Almelo", "133773": "NAC Breda", "133760": "NEC Nijmegen", "133936": "PEC Zwolle", "133768": "PSV Eindhoven", "133866": "Sparta Rotterdam", "138004": "Telstar", "133774": "Twente", "133764": "Utrecht", "133827": "Willem II", "135676": "Alanyaspor", "138959": "Amed", "133799": "Antalyaspor", "133794": "Beşiktaş", "134272": "Erzurumspor", "138977": "Eyüpspor", "138983": "Fatih Karagümrük", "133807": "Fenerbahçe", "133804": "Galatasaray", "138092": "Gaziantep", "133798": "Gençlerbirliği", "135891": "Göztepe", "133834": "Kasımpaşa", "133802": "Kayserispor", "133870": "Kocaelispor", "133835": "Konyaspor", "133885": "Rizespor", "133797": "Samsunspor", "133796": "Trabzonspor", "138951": "Çorum", "134589": "İstanbul Başakşehir", "156496": "Abou Qir Fertilizers", "138995": "Al Ahly", "139839": "Al Ittihad Alexandria", "139844": "Al Masry", "139837": "Al-Mokawloon al-Arab", "156495": "Asyut Petroleum", "140795": "Ceramica Cleopatra", "139841": "ENPPI", "139845": "El Gouna", "156494": "El Qanah", "140794": "Ghazl El Mahalla", "139846": "Haras El Hodoud", "139843": "Ismaily", "153475": "Kahrabaa Ismailia", "144160": "Modern Sport", "140796": "National Bank of Egypt", "149410": "Petrojet", "144159": "Pharco", "139838": "Pyramids", "139840": "Smouha", "139848": "Tala'ea El Gaish", "139850": "Wadi Degla", "139852": "ZED", "138997": "Zamalek", "137838": "Ajman", "137832": "Al Ain", "146537": "Al Bataeh", "137834": "Al Dhafra", "137830": "Al Jazira", "137831": "Al Nasr", "137836": "Al Wahda", "137835": "Al Wasl", "137839": "Baniyas", "146536": "Dibba Al-Fujairah", "137841": "Hatta", "137837": "Ittihad Kalba", "137842": "Khorfakkan", "137828": "Shabab Al-Ahli Dubai", "137829": "Sharjah", "156157": "United FC Dubai", "138049": "Al-Ahli Doha", "135946": "Al-Arabi", "137679": "Al-Duhail", "138029": "Al-Gharafa", "138050": "Al-Rayyan", "137648": "Al-Sadd", "138035": "Al-Sailiya", "138030": "Al-Shahaniya", "141174": "Al-Shamal", "137994": "Al-Wakrah", "155255": "Lusail", "137995": "Qatar SC", "138052": "Umm-Salal", "135851": "Atlanta United", "140079": "Austin FC", "134150": "CF Montréal", "140078": "Charlotte FC", "134154": "Chicago Fire", "134794": "Colorado Rapids", "134152": "Columbus Crew", "134145": "DC United", "136688": "FC Cincinnati", "134146": "FC Dallas", "134144": "Houston Dynamo", "137699": "Inter Miami", "134153": "LA Galaxy", "136050": "Los Angeles FC", "135852": "Minnesota United", "137700": "Nashville SC", "134159": "New England Revolution", "134630": "New York City FC", "134156": "New York Red Bulls", "135292": "Orlando City", "134142": "Philadelphia Union", "134155": "Portland Timbers", "134158": "Real Salt Lake", "150261": "San Diego FC", "134157": "San Jose Earthquakes", "134149": "Seattle Sounders FC", "134143": "Sporting Kansas City", "147062": "St. Louis City SC", "134148": "Toronto FC", "134147": "Vancouver Whitecaps", "134516": "Algeria", "134509": "Argentina", "134500": "Australia", "140149": "Bahrain", "134515": "Belgium", "134496": "Brazil", "134498": "Cameroon", "134579": "China", "134501": "Colombia", "133912": "Croatia", "136138": "Egypt", "133914": "England", "133913": "France", "133907": "Germany", "134511": "Iran", "140148": "Iraq", "133910": "Italy", "134503": "Japan", "140145": "Jordan", "140144": "Kuwait", "140166": "Lebanon", "136489": "Libya", "134497": "Mexico", "136139": "Morocco", "133905": "Netherlands", "134512": "Nigeria", "140155": "Oman", "140154": "Palestine", "133908": "Portugal", "136472": "Qatar", "136137": "Saudi Arabia", "136143": "Senegal", "134517": "South Korea", "133909": "Spain", "136495": "Sudan", "140032": "Syria", "136142": "Tunisia", "135985": "Turkey", "134514": "USA", "140163": "United Arab Emirates", "134504": "Uruguay", "140151": "Uzbekistan", "140153": "Yemen"};         // and -> English, to find the club on football-data.org
 const TEAM_KEYS = {};
 // first entry wins on a clash: the Saudi "Al-Faisaly" before the Jordanian "Al Faisaly"
 for(const [en, arName] of Object.entries(TEAM_AR)) if(!(teamKey(en) in TEAM_KEYS)) TEAM_KEYS[teamKey(en)] = arName;
@@ -950,6 +954,11 @@ async function loadLive(){
     if(!ev || !ev.idEvent) return;
     const k = toDate(ev).getTime();
     if(now < k - 5*60000 || now > k + 2.5*3600000) return;
+    if(ev.fdId){   // a football-data game: its own live score
+      try{ const j = await fdGet(`matches/${ev.fdId}`); MATCHES[id] = Object.assign({}, ev, fdEvent(j.match || j)); keepResult(id, MATCHES[id]); }
+      catch(e){}
+      return;
+    }
     try{
       const r = await fetchT(`https://www.thesportsdb.com/api/v1/json/${CONFIG.sportsKey}/lookupevent.php?id=${ev.idEvent}`, 10000);
       const j = await r.json();
@@ -974,6 +983,73 @@ function renderMatches(turn){
   if(turn && pages > 1){ row.classList.remove('flip'); void row.offsetWidth; row.classList.add('flip'); }
 }
 
+// ---------- football-data.org (#fdkey): the next five games, home and away, for the clubs it covers ----------
+const FD = 'https://api.football-data.org/v4/';
+const FD_COMPS = ['PD', 'PL', 'SA', 'BL1', 'FL1', 'DED', 'PPL', 'CL'];   // the free plan's club competitions
+const FD_KEY = 'fdIndex1';
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let FD_PAUSE = 6500;   // between the team-list calls: the free plan allows 10 a minute
+async function fdGet(path){
+  const c = new AbortController(), t = setTimeout(() => c.abort(), 15000);
+  try{
+    const r = await fetch(FD + path, {headers: {'X-Auth-Token': CONFIG.fdKey}, cache: 'no-store', signal: c.signal});
+    if(!r.ok) throw r.status;
+    return await r.json();
+  }finally{ clearTimeout(t); }
+}
+// club name -> football-data id, from the competitions' team lists: built once a month, slowly (10 calls a minute)
+let FD_INDEX = (() => { try{ return JSON.parse(localStorage.getItem(FD_KEY) || 'null'); }catch(e){ return null; } })();
+let FD_BUILDING = null;
+function fdIndex(){
+  if(FD_INDEX && Date.now() - FD_INDEX.at < 30 * 86400000) return Promise.resolve(FD_INDEX.map);
+  if(FD_BUILDING) return FD_BUILDING;
+  FD_BUILDING = (async () => {
+    const map = {};
+    for(let i = 0; i < FD_COMPS.length; i++){
+      if(i) await sleep(FD_PAUSE);
+      try{
+        for(const t of (await fdGet(`competitions/${FD_COMPS[i]}/teams`)).teams || [])
+          for(const n of [t.name, t.shortName]) if(n && !(teamKey(n) in map)) map[teamKey(n)] = t.id;
+      }catch(e){ if(e === 401 || e === 403) break; }   // a wrong key: no use asking the rest
+    }
+    if(Object.keys(map).length){ FD_INDEX = {at: Date.now(), map}; try{ localStorage.setItem(FD_KEY, JSON.stringify(FD_INDEX)); }catch(e){} }
+    FD_BUILDING = null;
+    return map;
+  })();
+  return FD_BUILDING;
+}
+// a football-data club name -> the TheSportsDB id we know it by (for its curated Arabic name)
+const TEAM_ID_BY_KEY = {};
+for(const [id, en] of Object.entries(TEAM_EN)) if(!(teamKey(en) in TEAM_ID_BY_KEY)) TEAM_ID_BY_KEY[teamKey(en)] = id;
+const fdTeamId = t => TEAM_ID_BY_KEY[teamKey(t.name || '')] || TEAM_ID_BY_KEY[teamKey(t.shortName || '')] || null;
+const FD_STATUS = {FINISHED: 'FT', AWARDED: 'FT', PAUSED: 'HT', IN_PLAY: '1H', LIVE: '1H'};
+/** a football-data match in TheSportsDB's shape, so the rest of the page needs no change */
+function fdEvent(m){
+  const ft = (m.score && m.score.fullTime) || {};
+  return {idEvent: 'fd' + m.id, fdId: m.id, strTimestamp: m.utcDate,
+          strHomeTeam: m.homeTeam.shortName || m.homeTeam.name, idHomeTeam: fdTeamId(m.homeTeam),
+          strAwayTeam: m.awayTeam.shortName || m.awayTeam.name, idAwayTeam: fdTeamId(m.awayTeam),
+          intHomeScore: ft.home == null ? null : ft.home, intAwayScore: ft.away == null ? null : ft.away,
+          strStatus: FD_STATUS[m.status] || 'NS', strProgress: m.minute || ''};
+}
+/** true when football-data answered for this club (then TheSportsDB is not asked) */
+async function fdLoad(id){
+  if(!CONFIG.fdKey) return false;
+  const en = TEAM_EN[id];
+  if(!en) return false;
+  const fid = (await fdIndex())[teamKey(en)];
+  if(!fid) return false;   // not in the free competitions (a Saudi club): TheSportsDB
+  const day = n => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+  const up = (await fdGet(`teams/${fid}/matches?status=SCHEDULED,TIMED,IN_PLAY,PAUSED&limit=5`)).matches || [];
+  const evs = up.map(fdEvent);
+  NEXT_LIST[id] = evs;
+  const ev = evs[0];
+  if(ev){ if(MATCHES[id] && MATCHES[id].idEvent !== ev.idEvent) keepResult(id, MATCHES[id]); MATCHES[id] = ev; }
+  try{ RESULTS[id] = ((await fdGet(`teams/${fid}/matches?status=FINISHED&dateFrom=${day(-3)}&dateTo=${day(0)}`)).matches || []).map(fdEvent); }
+  catch(e){}
+  return true;
+}
+
 async function fetchLast(id){
   const r = await fetch(`https://www.thesportsdb.com/api/v1/json/${CONFIG.sportsKey}/eventslast.php?id=${id}`,{cache:'no-store'});
   if(!r.ok) throw 0;
@@ -984,6 +1060,7 @@ async function loadMatches(){
   // never throw away a good fixture or result on a failed refresh
   let answered = 0;
   await Promise.all(CONFIG.teamIds.map(async id=>{
+    try{ if(await fdLoad(id)){ answered++; return; } }catch(e){}   // football-data first, when it has the club
     try{
       const ev = await fetchNext(id); answered++;
       if(ev){ if(MATCHES[id] && MATCHES[id].idEvent !== ev.idEvent) keepResult(id, MATCHES[id]); MATCHES[id] = ev; }
@@ -1107,10 +1184,10 @@ function matchRows(){
   });
   const day = d => new Intl.DateTimeFormat(GREG, {timeZone:CONFIG.timezone, weekday:'long'}).format(d);
   const today = new Intl.DateTimeFormat('en-CA', {timeZone:CONFIG.timezone}).format(new Date());
-  // the next five, however far ahead (a team playing once a week showed one game with a week's window)
+  // the next five (and one in progress), however far ahead; the last result has its place at the bottom
   return evs.map(ev => ({ev, t: toDate(ev).getTime()}))
-    .filter(x => finishedRecently(x.ev, now)
-      || (now < x.t + 2.5*3600000 && !FINAL.includes((x.ev.strStatus || '').toUpperCase())))
+    .filter(x => !finishedRecently(x.ev, now)
+      && now < x.t + 2.5*3600000 && !FINAL.includes((x.ev.strStatus || '').toUpperCase()))
     .sort((a, b) => a.t - b.t)
     .slice(0, 5)
     .map(({ev, t}) => {
