@@ -25,6 +25,7 @@
 #   optimize/saver.sh idle 10                      the TV starts the screensaver after N idle minutes: 1 2 5 10 15 30
 #                                                  (the TV's own timer; left alone unless you run this)
 #   optimize/saver.sh update                       download the latest screen now
+#   optimize/saver.sh app-update                   both apps from the latest release, now (they also do it alone, every 6 h)
 # Only ADB can change these (sa.urtv.screensaver/.SaverReceiver needs the shell's DUMP).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -44,6 +45,7 @@ case "${1:-}" in
   show)   send GET ;;
   cities) send CITIES ;;
   update) send UPDATE ;;
+  app-update) send APP_UPDATE ;;
   city)
     [ $# -eq 2 ] || [ $# -eq 4 ] || { echo "usage: optimize/saver.sh city NAME [LAT LON]"; exit 1; }
     extra="--es city $(quote "$2")"

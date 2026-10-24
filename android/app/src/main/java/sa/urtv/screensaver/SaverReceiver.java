@@ -56,6 +56,16 @@ public class SaverReceiver extends BroadcastReceiver {
                 setResultData(b.toString().trim());
                 return;
             }
+            case "sa.urtv.screensaver.APP_UPDATE": {   // the apps from the latest release, now (no agent needed later)
+                final PendingResult pending = goAsync();
+                final Context app = c.getApplicationContext();
+                new Thread(() -> {
+                    UpdateJob.askHome(app);
+                    pending.setResultData("app update: " + SelfUpdate.check(app, "urtv-screensaver.apk", true, false));
+                    pending.finish();
+                }).start();
+                return;
+            }
             case "sa.urtv.screensaver.UPDATE": {
                 final PendingResult pending = goAsync();   // a download: off the main thread
                 final Context app = c.getApplicationContext();

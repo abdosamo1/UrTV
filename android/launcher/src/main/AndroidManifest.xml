@@ -9,6 +9,11 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- the optional home-screen card reads the screensaver's settings (signature permission, same key) -->
     <uses-permission android:name="sa.urtv.screensaver.READ_CONFIG" />
+    <!-- updates itself from the repository's releases (SelfUpdate): silent on Android 12+, «Install» once before;
+         its 6-hour check survives restarts -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
@@ -68,6 +73,19 @@
             android:label="ترتيب المفضلة"
             android:screenOrientation="landscape"
             android:theme="@android:style/Theme.Material.NoActionBar" />
+
+        <!-- self-update: the installer's answer, and «look now» from the screensaver (it only makes it check) -->
+        <receiver
+            android:name=".UpdateReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="sa.urtv.home.UPDATE" />
+            </intent-filter>
+        </receiver>
+        <service
+            android:name=".UpdateReceiver$Job"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <!-- a website added as an app (optional, optimize/dock.sh webapp add): full screen, splash first -->
         <activity

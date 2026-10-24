@@ -19,6 +19,9 @@
     <!-- the notice before the adhan: a small card at the top right over any app (Reminder); a notification without it -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- updates itself from the repository's releases (SelfUpdate): silent on Android 12+, «Install» once before -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
 
     <!-- the launcher (same signing key) reads the settings for its home-screen card -->
     <permission
@@ -91,6 +94,10 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name=".UpdateReceiver"
+            android:exported="false" />
+
         <!-- the adhan: the alarm, the player, and the force-lock admin that puts a TV it woke back to sleep -->
         <receiver
             android:name=".AdhanReceiver"
@@ -124,6 +131,7 @@
                 <action android:name="sa.urtv.screensaver.SET" />
                 <action android:name="sa.urtv.screensaver.CITIES" />
                 <action android:name="sa.urtv.screensaver.UPDATE" />
+                <action android:name="sa.urtv.screensaver.APP_UPDATE" />
                 <action android:name="sa.urtv.screensaver.ADHAN_TEST" />
                 <action android:name="sa.urtv.screensaver.ADHAN_STOP" />
                 <action android:name="sa.urtv.screensaver.REMINDER_TEST" />

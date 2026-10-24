@@ -13,6 +13,9 @@ import android.webkit.WebViewClient;
 final class ScreenView {
     private ScreenView() {}
 
+    /** the dream, the preview or the settings are in front: SelfUpdate waits (installing restarts the app) */
+    static volatile int onScreen = 0;
+
     @SuppressLint("SetJavaScriptEnabled")
     @SuppressWarnings("deprecation")
     static WebView create(final Context c) {

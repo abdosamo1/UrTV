@@ -141,11 +141,16 @@ public class MainActivity extends Activity {
         else
             registerReceiver(dockChanged, new IntentFilter(Dock.CHANGED));
         watchWifiName();
+        UpdateReceiver.Job.schedule(this);   // updates itself from the releases (SelfUpdate)
     }
+
+    /** in front: a found update waits (installing restarts the home screen) */
+    static volatile boolean inFront;
 
     @Override
     protected void onResume() {
         super.onResume();
+        inFront = true;
         IntentFilter tf = new IntentFilter(Intent.ACTION_TIME_TICK);
         tf.addAction(Intent.ACTION_TIME_CHANGED);
         tf.addAction(Intent.ACTION_TIMEZONE_CHANGED);
@@ -168,6 +173,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
+        inFront = false;
         handler.removeCallbacks(rotateWallpaper);
         unregisterReceiver(tick);
         if (inputsPopup != null) inputsPopup.dismiss();

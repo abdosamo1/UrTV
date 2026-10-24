@@ -32,6 +32,10 @@ public class UpdateJob extends JobService {
                 Updater.check(getApplicationContext(), false);
                 Adhan.refresh(getApplicationContext(), false);   // the mosque may change its times
                 Adhan.schedule(getApplicationContext());
+                if (new Prefs(getApplicationContext()).autoUpdate()) {   // the apps themselves: no laptop needed
+                    askHome(getApplicationContext());
+                    SelfUpdate.check(getApplicationContext(), "urtv-screensaver.apk", false, ScreenView.onScreen > 0);
+                }
                 jobFinished(p, false);
             }
         }).start();
@@ -40,4 +44,12 @@ public class UpdateJob extends JobService {
 
     @Override
     public boolean onStopJob(JobParameters p) { return true; }
+
+    /** The home screen app updates itself (its own SelfUpdate); this tells it to look now. Same signing key only. */
+    static void askHome(Context c) {
+        try {
+            c.sendBroadcast(new android.content.Intent("sa.urtv.home.UPDATE")
+                .setComponent(new ComponentName("sa.urtv.home", "sa.urtv.home.UpdateReceiver")));
+        } catch (Exception ignored) { }
+    }
 }

@@ -3,6 +3,7 @@ package sa.urtv.screensaver;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Typeface;
 import android.net.Uri;
@@ -68,12 +69,14 @@ public class SettingsActivity extends Activity {
     @Override
     protected void onPause() {   // a new mosque or city moves the adhan times
         super.onPause();
+        ScreenView.onScreen = Math.max(0, ScreenView.onScreen - 1);
         Adhan.update(this, false);
     }
 
     @Override
     protected void onResume() {   // back in front (from the TV's settings, or opened again over itself): show what is set now
         super.onResume();
+        ScreenView.onScreen++;
         render();
     }
 
@@ -148,9 +151,12 @@ public class SettingsActivity extends Activity {
             new Runnable() { public void run() { pickIdle(); } });
 
         header("التطبيق");
-        row("التحديث التلقائي للصفحة", prefs.autoUpdate() ? "يعمل · كل ٦ ساعات" : "متوقف", R.drawable.ic_sync, new Runnable() { public void run() {
+        row("التحديث التلقائي", prefs.autoUpdate() ? "يعمل · الشاشة والتطبيقان، كل ٦ ساعات، بدون لابتوب" : "متوقف", R.drawable.ic_sync, new Runnable() { public void run() {
             prefs.setAutoUpdate(!prefs.autoUpdate()); render(); } });
-        row("تحديث الشاشة الآن", Updater.versionNote(this) + " " + "ينزّل أحدث نسخة من الشاشة. تحديث التطبيق نفسه يكون عبر مساعد الذكاء الاصطناعي، لأنه يضبط الشاشة الرئيسية وشاشة التوقف، وإعداداتك كلها تبقى.", R.drawable.ic_sync, new Runnable() { public void run() { updateNow(); } });
+        String upd = SelfUpdate.status(this);
+        row("حدّث الآن", "الإصدار ٣٫" + SelfUpdate.arabic(SelfUpdate.mine(this)) + (upd.isEmpty() ? "" : " · " + upd)
+                + ". ينزّل أحدث نسخة من الشاشة والتطبيقين من الإنترنت ويثبّتها، وإعداداتك كلها تبقى.",
+            R.drawable.ic_sync, new Runnable() { public void run() { updateNow(); } });
     }
 
     // ---------- pickers ----------
@@ -511,11 +517,15 @@ public class SettingsActivity extends Activity {
         return arabicNum(n) + (n <= 10 ? " دقائق" : " دقيقة");
     }
 
+    /** The page, then the home screen app (it updates itself when asked), then this app: it restarts last. */
     private void updateNow() {
         toast("جارٍ التحقق…");
+        final Context app = getApplicationContext();
         new Thread(() -> {
-            final String msg = Updater.check(getApplicationContext(), true);
-            runOnUiThread(() -> { toast(msg); if (!isFinishing()) render(); });
+            final String page = Updater.check(app, true);
+            UpdateJob.askHome(app);
+            final String mine = SelfUpdate.check(app, "urtv-screensaver.apk", true, false);
+            runOnUiThread(() -> { toast(page + " · " + mine); if (!isFinishing()) render(); });
         }).start();
     }
 

@@ -88,12 +88,14 @@ if [ "$what" = saver ] || [ "$what" = all ]; then
     "appops set sa.urtv.screensaver SCHEDULE_EXACT_ALARM allow" \
     "appops set sa.urtv.screensaver TURN_SCREEN_ON allow" \
     "appops set sa.urtv.screensaver SYSTEM_ALERT_WINDOW allow" \
+    "appops set sa.urtv.screensaver REQUEST_INSTALL_PACKAGES allow" \
     "pm grant sa.urtv.screensaver android.permission.POST_NOTIFICATIONS" \
     "cmd deviceidle whitelist +sa.urtv.screensaver" \
     "dpm set-active-admin --user 0 sa.urtv.screensaver/.AdminReceiver" \
     "am start -n sa.urtv.screensaver/.SettingsActivity" \
     | "$PY" -I optimize/tv.py --batch
-  # the adhan: exact alarms, turning the screen on in standby, the notice over other apps (top right), no battery
+  # updating itself from the releases (no laptop needed after this); the adhan: exact alarms, turning the screen on
+  # in standby, the notice over other apps (top right), no battery
   # limits, and the force-lock admin that
   # puts the TV back to sleep after an adhan that woke it (lines a TV doesn't know just print an error, harmless)
   echo "Screensaver installed and selected (with the adhan). Its settings screen is open on the TV."
@@ -111,6 +113,8 @@ if [ "$what" = launcher ] || [ "$what" = all ]; then
   # 1. The new home must be installed and working BEFORE anything is disabled.
   push_install urtv-home.apk sa.urtv.home
   "$PY" -I optimize/tv.py "pm grant sa.urtv.home android.permission.ACCESS_FINE_LOCATION" || true
+  # it updates itself from the releases from now on (no laptop): allowed to install (only itself, checked in the app)
+  "$PY" -I optimize/tv.py "appops set sa.urtv.home REQUEST_INSTALL_PACKAGES allow" || true
 
   # Steps 2-4 as one function, so an ADB drop in the middle (TCL G08: Wi-Fi fell during the batch) can be retried.
   # "verify" as $1: only step 4 (the switch is armed already and the batch may have run).

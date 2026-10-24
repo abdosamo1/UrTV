@@ -13,6 +13,7 @@ public class ScreenDream extends DreamService {
         setInteractive(false);
         setFullscreen(true);
         setScreenBright(true);
+        ScreenView.onScreen++;
         web = ScreenView.create(this);
         setContentView(web);
     }
@@ -20,6 +21,7 @@ public class ScreenDream extends DreamService {
     @Override
     public void onDetachedFromWindow() {
         if (web != null) { web.destroy(); web = null; }
+        ScreenView.onScreen = Math.max(0, ScreenView.onScreen - 1);
         super.onDetachedFromWindow();
     }
 }

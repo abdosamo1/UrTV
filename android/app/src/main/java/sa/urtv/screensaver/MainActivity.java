@@ -27,6 +27,9 @@ public class MainActivity extends Activity {
         return true;
     }
 
+    @Override protected void onResume() { super.onResume(); ScreenView.onScreen++; }
+    @Override protected void onPause() { ScreenView.onScreen = Math.max(0, ScreenView.onScreen - 1); super.onPause(); }
+
     @Override
     protected void onDestroy() {
         if (web != null) web.destroy();
