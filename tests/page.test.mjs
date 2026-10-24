@@ -312,6 +312,35 @@ for (const [hash, dimmed] of [['', false], ['night=0', false], ['night=1', true]
   await ctx.close();
 }
 
+// ---- football-data refuses a refresh (over the minute's limit, «token invalid»): its games stay, no TheSportsDB
+{
+  const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  const day = n => new Date(Date.now() + n * 864e5).toISOString();
+  const BAR = { id: 81, name: 'FC Barcelona', shortName: 'Barça' }, O = n => ({ id: 900 + n, name: 'Opp ' + n, shortName: 'Opp ' + n });
+  const m = (id, n) => ({ id, utcDate: day(n), status: 'TIMED', homeTeam: BAR, awayTeam: O(id), score: { fullTime: { home: null, away: null } } });
+  let refuse = false; const tsdb = [];
+  await ctx.route(/^https?:/, r => {
+    const u = new URL(r.request().url()), cors = { 'Access-Control-Allow-Origin': '*' };
+    if (u.host === 'www.thesportsdb.com') { tsdb.push(u.pathname); return r.abort(); }
+    if (u.host !== 'api.football-data.org') return r.abort();
+    if (refuse) return r.fulfill({ status: 400, headers: cors, contentType: 'application/json', body: '{"error":"Your API token is invalid."}' });
+    if (u.pathname === '/v4/competitions/PD/teams') return r.fulfill({ headers: cors, contentType: 'application/json', body: JSON.stringify({ teams: [BAR] }) });
+    if (u.pathname === '/v4/teams/81/matches') return r.fulfill({ headers: cors, contentType: 'application/json', body: JSON.stringify({ matches: [1,2,3,4,5,6].map(i => m(i, i * 3)) }) });
+    return r.fulfill({ headers: cors, contentType: 'application/json', body: '{"teams":[]}' });
+  });
+  const p = await ctx.newPage();
+  await p.goto(page('tv.html') + '#teams=133739&panel=matches&fdkey=abc123');
+  await p.evaluate(() => { FD_PAUSE = 0; });
+  await p.waitForFunction(() => (NEXT_LIST['133739'] || []).length === 5, null, { timeout: 8000 }).catch(() => {});
+  refuse = true; tsdb.length = 0;
+  await p.evaluate(() => loadMatches());
+  await p.waitForTimeout(800);
+  const ids = await p.evaluate(() => (NEXT_LIST['133739'] || []).map(e => e.idEvent).join(','));
+  check('football-data refuses a refresh: its five games stay, TheSportsDB not asked', ids === 'fd1,fd2,fd3,fd4,fd5'
+        && !tsdb.some(x => /eventsnext|eventslast/.test(x)), JSON.stringify({ ids, tsdb }));
+  await ctx.close();
+}
+
 // ---- in the app (#fdnative=1) the page sends no key at all: the app adds it (FdProxy), so no CORS preflight
 {
   const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });

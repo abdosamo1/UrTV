@@ -23,9 +23,47 @@ final class FdProxy {
 
     static final String API = "https://api.football-data.org/v4/";
 
+    // The free plan allows 10 requests a minute, and answered more with 400 «Your API token is invalid» (seen in the
+    // TV's log: the same request 200, then 400, in one minute). So: one request at a time, 6.5 s apart, and every
+    // good answer kept (the screensaver, its preview and the home screen's card ask for the same things).
+    private static final long GAP_MS = 6500;
+    private static long lastCall;
+
+    /** how long an answer stays good: team lists a week, a live game a minute, the rest 20 minutes */
+    private static long ttl(String path) {
+        if (path.startsWith("competitions/")) return 7L * 86400_000L;
+        if (path.startsWith("matches/")) return 60_000L;
+        return 20 * 60_000L;
+    }
+
+    private static java.io.File cacheFile(Context c, String path) {
+        java.io.File dir = new java.io.File(c.getCacheDir(), "football-data");
+        dir.mkdirs();
+        return new java.io.File(dir, Integer.toHexString(path.hashCode()) + ".json");
+    }
+
+    private static WebResourceResponse json(int code, byte[] body) {
+        return new WebResourceResponse("application/json", "utf-8", code < 100 ? 502 : code,
+            code == 200 ? "OK" : "Error", Collections.singletonMap("Access-Control-Allow-Origin", "*"),
+            new ByteArrayInputStream(body));
+    }
+
+    private static byte[] read(java.io.File f) {
+        try { return readAll(new java.io.FileInputStream(f)); } catch (Exception e) { return null; }
+    }
+
     /** null when the address is not football-data's (the WebView then loads it as usual) */
-    static WebResourceResponse serve(Context c, String url, String key) {
+    static synchronized WebResourceResponse serve(Context c, String url, String key) {
         if (url == null || !url.startsWith(API) || key == null || key.isEmpty()) return null;
+        String path = url.substring(API.length());
+        java.io.File cached = cacheFile(c, path);
+        if (cached.isFile() && System.currentTimeMillis() - cached.lastModified() < ttl(path)) {
+            byte[] b = read(cached);
+            if (b != null) return json(200, b);   // asked a moment ago (another screen): no new request
+        }
+        long wait = lastCall + GAP_MS - System.currentTimeMillis();
+        if (wait > 0) { try { Thread.sleep(wait); } catch (InterruptedException ignored) { } }
+        lastCall = System.currentTimeMillis();
         int code = 0;
         byte[] body;
         HttpURLConnection con = null;
@@ -40,14 +78,20 @@ final class FdProxy {
             body = in == null ? new byte[0] : readAll(in);
         } catch (Exception e) {
             note(c, -1, url, "");
-            return null;   // no connection: the page's fetch fails and it keeps what it shows
+            byte[] old = cached.isFile() ? read(cached) : null;
+            return old != null ? json(200, old) : null;   // offline: the last good answer, else the page keeps its own
         } finally {
             if (con != null) con.disconnect();
         }
         note(c, code, url, code >= 400 ? reason(body) : "");
-        return new WebResourceResponse("application/json", "utf-8", code < 100 ? 502 : code,
-            code == 200 ? "OK" : "Error", Collections.singletonMap("Access-Control-Allow-Origin", "*"),
-            new ByteArrayInputStream(body));
+        if (code == 200) {
+            try (java.io.FileOutputStream o = new java.io.FileOutputStream(cached)) { o.write(body); }
+            catch (Exception ignored) { }
+            return json(200, body);
+        }
+        // refused (over the minute's limit, or a filter it does not like): the last good answer if there is one
+        byte[] old = cached.isFile() ? read(cached) : null;
+        return old != null ? json(200, old) : json(code, body);
     }
 
     private static SharedPreferences sp(Context c) { return c.getSharedPreferences("fdproxy", Context.MODE_PRIVATE); }

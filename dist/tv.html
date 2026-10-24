@@ -1001,9 +1001,9 @@ const FD = 'https://api.football-data.org/v4/';
 const FD_COMPS = ['PD', 'PL', 'SA', 'BL1', 'FL1', 'DED', 'PPL', 'CL'];   // the free plan's club competitions
 const FD_KEY = 'fdIndex1';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-let FD_PAUSE = 6500;   // between the team-list calls: the free plan allows 10 a minute
+let FD_PAUSE = CONFIG.fdNative ? 0 : 6500;   // in the app its proxy spaces requests already (10 a minute allowed)
 async function fdGet(path){
-  const c = new AbortController(), t = setTimeout(() => c.abort(), 15000);
+  const c = new AbortController(), t = setTimeout(() => c.abort(), 90000);   // the app queues them 6.5 s apart
   try{
     // in the app (#fdnative=1) a plain request: the app adds the key (FdProxy). In a browser, the key header.
     const opts = {cache: 'no-store', signal: c.signal};
@@ -1052,6 +1052,13 @@ function fdEvent(m){
 /** true when football-data answered for this club (then TheSportsDB is not asked) */
 async function fdLoad(id){
   if(!CONFIG.fdKey) return false;
+  try{ return await fdLoadNow(id); }
+  catch(e){   // a refused or failed refresh: keep football-data's games if this club has them already
+    if((NEXT_LIST[id] || []).some(ev => String(ev.idEvent).startsWith('fd'))) return true;
+    throw e;
+  }
+}
+async function fdLoadNow(id){
   const en = TEAM_EN[id];
   if(!en) return false;
   const fid = (await fdIndex())[teamKey(en)];
