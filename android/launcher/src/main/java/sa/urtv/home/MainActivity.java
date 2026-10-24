@@ -752,7 +752,8 @@ public class MainActivity extends Activity {
     private void updateClock() {
         Calendar now = Calendar.getInstance();
         int h = now.get(Calendar.HOUR_OF_DAY);
-        greeting.setText(h < 4 ? "تصبح على خير" : h < 12 ? "صباح الخير" : "مساء الخير");
+        // by the hour, not by ص/م: the afternoon is not yet evening
+        greeting.setText(h < 4 ? "تصبح على خير" : h < 12 ? "صباح الخير" : h < 17 ? "يومك سعيد" : "مساء الخير");
         int hh = h % 12 == 0 ? 12 : h % 12;   // always 12-hour
         clock.setText(arabicDigits(String.format(Locale.ROOT, "%02d:%02d", hh, now.get(Calendar.MINUTE))));   // ٠٢:٥١
         ampm.setText(h < 12 ? "ص" : "م");
