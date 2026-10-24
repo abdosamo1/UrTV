@@ -249,8 +249,10 @@ for (const [hash, dimmed] of [['', false], ['night=0', false], ['night=1', true]
       let body = { teams: [] };
       if (u.pathname === '/v4/competitions/PD/teams') body = { teams: [BAR, RMA] };
       if (u.pathname === '/v4/teams/81/matches' && u.searchParams.get('status').startsWith('SCHEDULED'))
-        body = { matches: [m(1, BAR, RMA, 2, 'TIMED'), m(2, OPP(1), BAR, 6, 'TIMED'), m(3, BAR, OPP(2), 9, 'TIMED'),
-                           m(4, OPP(3), BAR, 13, 'TIMED'), m(5, BAR, OPP(4), 20, 'SCHEDULED')] };
+        // the whole rest of the season, newest first (as the site may give it): the page takes the nearest five
+        body = { matches: [m(8, OPP(7), BAR, 200, 'SCHEDULED'), m(7, BAR, OPP(6), 190, 'SCHEDULED'), m(6, OPP(5), BAR, 180, 'SCHEDULED'),
+                           m(5, BAR, OPP(4), 20, 'SCHEDULED'), m(4, OPP(3), BAR, 13, 'TIMED'), m(3, BAR, OPP(2), 9, 'TIMED'),
+                           m(2, OPP(1), BAR, 6, 'TIMED'), m(1, BAR, RMA, 2, 'TIMED')] };
       if (u.pathname === '/v4/teams/81/matches' && u.searchParams.get('status') === 'FINISHED' && !u.searchParams.has('dateFrom'))
         body = { matches: [m(0, BAR, OPP(9), -0.3, 'FINISHED', [3, 1])] };
       return r.fulfill({ headers: cors, contentType: 'application/json', body: JSON.stringify(body) });
@@ -271,6 +273,9 @@ for (const [hash, dimmed] of [['', false], ['night=0', false], ['night=1', true]
         && /أكتوبر|نوفمبر|ديسمبر|يناير/.test(r.rows[2]) && r.rows[4].includes('الوقت لم يُحدد') && !r.rows[3].includes('الوقت لم يُحدد'), JSON.stringify(r.rows));
   check('football-data: the next five games, Arabic names', !errors.length && r.rows.length === 5
         && r.rows[0].includes('برشلونة') && r.rows[0].includes('ريال مدريد') && !r.rows.some(x => x.includes('٣ - ١')) && r.hd === 'مباريات فرقك القادمة', JSON.stringify({ r, errors }));
+  const ids = await p.evaluate(() => (NEXT_LIST['133739'] || []).map(e => e.idEvent).join(','));
+  check('football-data: the nearest five of the season, not the last five', ids === 'fd1,fd2,fd3,fd4,fd5', ids);
+  check('football-data: no limit asked (the site counted it from the season\'s end)', !calls.some(c => c.path.includes('limit=5')), JSON.stringify(calls.map(c => c.path)));
   check('football-data: the key goes in the X-Auth-Token header, TheSportsDB not asked for that club',
         calls.length && calls.every(c => c.key === 'abc123') && !calls.some(c => c.path.includes('abc123'))
         && !tsdb.some(x => /eventsnext|eventslast/.test(x)), JSON.stringify({ calls: calls.slice(0, 3), tsdb }));

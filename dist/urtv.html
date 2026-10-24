@@ -1058,7 +1058,11 @@ async function fdLoad(id){
   if(!fid) return false;   // not in the free competitions (a Saudi club): TheSportsDB
   const COMING = ['SCHEDULED', 'TIMED', 'IN_PLAY', 'PAUSED'];
   let up, done = null;
-  try{ up = (await fdGet(`teams/${fid}/matches?status=${COMING.join(',')}&limit=5`)).matches || []; }
+  // all the coming games (no limit: with limit=5 the site gave the season's LAST five, in May), the nearest five here
+  try{
+    up = ((await fdGet(`teams/${fid}/matches?status=${COMING.join(',')}`)).matches || [])
+      .sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate)).slice(0, 5);
+  }
   catch(e){
     if(e !== 400) throw e;
     // the filtered request refused: the season's games with no filter at all, sorted out here
