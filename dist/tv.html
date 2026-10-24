@@ -31,7 +31,8 @@
   html.widget .dimmer,html.widget #credit,html.widget .top,html.widget .clockwrap,html.widget .bottom{display:none}
   html.widget .stage{height:auto;padding:0;display:block;transition:none}
   html.widget .mid{display:block}
-  html.widget .week{width:100%}
+  html.widget .week{width:100%;background:transparent;border:none;box-shadow:none;border-radius:0}
+  html.widget .week::before,html.widget .week::after{display:none}   /* on the home screen the app draws the glass */
   html,body{
     height:100%;overflow:hidden;background:#040E09;color:var(--sand);
     font-family:'Thmanyah',system-ui,sans-serif;
@@ -86,10 +87,27 @@
 
   .week{
     width:min(760px,48vw);justify-self:end;
-    background:rgba(4,14,9,.60);   /* no backdrop blur: over a moving photo it is redone every frame */
-    border:1px solid rgba(220,184,111,.16);
-    border-radius:12px;
-    padding:1.7vh 1.4vw;
+    position:relative;isolation:isolate;overflow:hidden;
+    /* glass, as on iOS: the frosted photo (::before), a light tint brighter at the top, a rim that catches the
+       light on the top edge and again at the bottom, and a soft shadow */
+    background:linear-gradient(165deg,rgba(255,255,255,.16),rgba(255,255,255,.05) 42%,rgba(255,255,255,.03) 70%,rgba(255,255,255,.09));
+    border:1px solid rgba(255,255,255,.20);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.42),inset 0 -1px 0 rgba(255,255,255,.12),
+               inset 1px 0 0 rgba(255,255,255,.10),0 18px 48px rgba(0,0,0,.38);
+    border-radius:24px;
+    padding:1.9vh 1.6vw;
+  }
+  /* the photo behind the card, blurred: drawn once (no backdrop-filter, which a TV redoes every frame over the
+     moving photo); glassSync() lines it up with the photo on screen */
+  .week::before{
+    content:'';position:absolute;inset:-40px;z-index:-1;pointer-events:none;
+    background-image:var(--photo,none);background-size:var(--bgw,100vw) var(--bgh,100vh);
+    background-position:var(--bgx,0) var(--bgy,0);background-repeat:no-repeat;
+    filter:blur(26px) saturate(1.45) brightness(.58);
+  }
+  .week::after{   /* the gloss on the upper part */
+    content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;border-radius:inherit;
+    background:linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,0) 38%);
   }
   .week .hd{
     display:flex;align-items:center;gap:.7em;margin-bottom:1vh;
@@ -333,10 +351,10 @@ const CONFIG = {
             : [_Q.has('team1') ? _Q.get('team1') : '136013', _Q.has('team2') ? _Q.get('team2') : '136137'])
     .map(x=>(x||'').trim()).filter(x=>/^\d+$/.test(x)).slice(0, 10),
   sportsKey: '123',
-  // the card beside the clock: prayers | forecast | matches | verse | none (#week=0 from older builds = none;
-  // the TV-shows card was removed, so an old #panel=shows gets the verse card)
-  panel: (p => ['prayers','forecast','matches','verse','none'].includes(p) ? p : 'verse')
-         (_Q.get('panel') || (_Q.get('week') === '0' ? 'none' : 'verse')),
+  // the card beside the clock: auto (the four in turn, every 30 s) | verse | prayers | forecast | matches | none
+  // (#week=0 from older builds = none; the TV-shows card was removed, so an old #panel=shows gets auto)
+  panel: (p => ['auto','prayers','forecast','matches','verse','none'].includes(p) ? p : 'auto')
+         (_Q.get('panel') || (_Q.get('week') === '0' ? 'none' : 'auto')),
   matchesPerPage: 2,
   matchPageMs: 15000,
   // minutes from adhan to iqama (Ministry of Islamic Affairs defaults); Friday Dhuhr has none
@@ -346,6 +364,8 @@ const CONFIG = {
   photoMinutes: (m => [5,10,15,30,60].includes(m) ? m : 30)(_num('photos', 30)),
   // #widget=1: only the card, on a transparent page (the launcher's home screen shows it)
   widget: _Q.get('widget') === '1',
+  // #night=1: darken the screen gradually from 21:00 to 07:00 (a setting in the app, off by default)
+  nightDim: _Q.get('night') === '1',
 };
 // Aladhan's method for the fallback (no mosque, or Mawaqit unreachable): Umm al-Qura in Saudi Arabia, else MWL
 const setMethod = () => { CONFIG.prayerMethod = CONFIG.timezone === 'Asia/Riyadh' ? 4 : 3; };
@@ -588,7 +608,7 @@ async function loadPrayers(){
       buildPrayers(t);
       tickPrayer();
       tickRamadan();
-      if(CONFIG.panel === 'prayers') renderPanel(false);
+      if(PANEL === 'prayers') renderPanel(false);
       return;
     }
   }
@@ -607,7 +627,7 @@ async function loadPrayers(){
   }
   tickPrayer();
   tickRamadan();   // Ramadan mode needs the prayer times
-  if(CONFIG.panel === 'prayers') renderPanel(false);
+  if(PANEL === 'prayers') renderPanel(false);
 }
 
 const UNIT = {
@@ -960,7 +980,7 @@ async function loadMatches(){
   if(!answered && CONFIG.teamIds.length) return;    // offline: keep what is shown (the saved panels)
   MATCHES_LOADED = true;
   renderMatches();
-  if(CONFIG.panel === 'matches') renderPanel(false);
+  if(PANEL === 'matches') renderPanel(false);
 }
 
 async function fetchT(url, ms){
@@ -978,9 +998,31 @@ try{ FORECAST = JSON.parse(localStorage.getItem('forecast:' + location.hash) || 
 let LIST_PAGE = 0;
 const PANEL_TITLE = {prayers:'مواقيت اليوم', forecast:'الأيام القادمة', matches:'مباريات فرقك'};
 
+// «auto»: the four cards in turn, every 30 s; one with nothing to show right now (no forecast offline, no games
+// this week) is skipped. PANEL is the card on screen.
+const CARDS = ['verse', 'prayers', 'forecast', 'matches'];
+const ROTATE_MS = 30 * 1000;
+let PANEL = CONFIG.panel === 'auto' ? CARDS[0] : CONFIG.panel;
+const wants = k => CONFIG.panel === 'auto' ? CARDS.includes(k) : CONFIG.panel === k;   // data this setting needs
+function hasCard(k){
+  if(k === 'prayers') return PRAYERS.length > 0;
+  if(k === 'forecast') return FORECAST.length > 0;
+  if(k === 'matches') return matchRows().length > 0;
+  return true;
+}
+function rotateCard(){
+  if(CONFIG.panel !== 'auto') return;
+  for(let i = 1; i <= CARDS.length; i++){
+    const k = CARDS[(CARDS.indexOf(PANEL) + i) % CARDS.length];
+    if(!hasCard(k)) continue;
+    if(k !== PANEL){ PANEL = k; LIST_PAGE = 0; renderPanel(true); }
+    return;
+  }
+}
+
 function renderPanel(animate){
   const ul = document.getElementById('week-list'), hd = document.getElementById('week-hd');
-  const P = CONFIG.panel;
+  const P = PANEL;
   let rows = [];
   if(P === 'prayers') rows = prayerRows();
   else if(P === 'forecast') rows = forecastRows();
@@ -999,6 +1041,7 @@ function renderPanel(animate){
   ul.innerHTML = rows.join('');
   ul.classList.remove('flip');
   if(animate){ void ul.offsetWidth; ul.classList.add('flip'); }
+  glassSync();   // another card, another height: the card moved
 }
 
 function prayerRows(){
@@ -1095,7 +1138,7 @@ async function loadWeather(){
     FORECAST = (dl.time || []).map((t, i) => ({date:t, code:dl.weather_code?.[i],
       hi:dl.temperature_2m_max?.[i], lo:dl.temperature_2m_min?.[i]})).filter(x => x.hi != null && x.lo != null);
     try{ localStorage.setItem('forecast:' + location.hash, JSON.stringify(FORECAST)); }catch(e){}
-    if(CONFIG.panel === 'forecast') renderPanel(false);
+    if(PANEL === 'forecast') renderPanel(false);
   }catch(e){ return; }   // keep the last reading; with none only the city shows
 
   // dust overrides the condition word: PM10 in µg/m³
@@ -1114,6 +1157,7 @@ async function loadWeather(){
 
 // night dimming: transparent by day, dark after 21:00 and before 07:00
 function applyNight(){
+  if(!CONFIG.nightDim){ const el = document.getElementById('dimmer'); if(el) el.style.opacity = '0'; return; }
   const p = riyadhParts();
   const h = p.h + p.mi/60;
   const MAX = 0.46;
@@ -1169,11 +1213,25 @@ function showBackground(url, b){
   const next = "url('" + url + "')";
   if(ph.style.backgroundImage === next) return;   // same photo: no reload, no new movement
   ph.style.backgroundImage = next;
+  document.documentElement.style.setProperty('--photo', next);   // the card's frosted glass shows this photo
+  glassSync();
   ph.style.setProperty('--dim', (1 - (b.d || 0.95)).toFixed(2));
   ph.classList.remove('settle'); void ph.offsetWidth; ph.classList.add('settle');
   const cr = document.getElementById('credit');
   if(cr) cr.textContent = b.c ? 'الصورة: ' + b.c : '';
 }
+
+/** Line the card's frosted photo up with the photo on screen (the photo fills the screen, like cover). */
+function glassSync(){
+  const w = document.querySelector('.week');
+  if(!w || CONFIG.widget) return;
+  const r = w.getBoundingClientRect(), s = w.style;
+  s.setProperty('--bgw', innerWidth + 'px');
+  s.setProperty('--bgh', innerHeight + 'px');
+  s.setProperty('--bgx', (40 - r.left) + 'px');   // ::before reaches 40px past the card on each side
+  s.setProperty('--bgy', (40 - r.top) + 'px');
+}
+addEventListener('resize', glassSync);
 
 // Every 4 days a new random set of 5 hosted photos (same draw as the launcher: Park-Miller generator seeded
 // by the 4-day period), rotating every CONFIG.photoMinutes (30 unless the owner changed it). Only the photo on screen is downloaded.
@@ -1268,7 +1326,8 @@ function boot(){
   applyNight(); pixelShift();
 
   setInterval(tickClock, 1000);
-  setInterval(()=>{ tickDates(); tickPrayer(); tickRamadan(); if(CONFIG.panel === 'prayers') renderPanel(false); }, 15000);
+  setInterval(()=>{ tickDates(); tickPrayer(); tickRamadan(); if(PANEL === 'prayers') renderPanel(false); }, 15000);
+  setInterval(rotateCard, ROTATE_MS);
   setInterval(() => renderMatches(false), 60000);
   setInterval(() => renderMatches(true), CONFIG.matchPageMs);
   setInterval(loadLive, 2*60000);
@@ -1276,7 +1335,7 @@ function boot(){
   setInterval(loadMatches, 30*60*1000);
   setInterval(loadWeather, 30*60*1000);
   setInterval(()=>{
-    if(CONFIG.panel === 'matches'){ LIST_PAGE++; renderPanel(matchRows().length > WEEK_ROWS); }
+    if(PANEL === 'matches'){ LIST_PAGE++; renderPanel(matchRows().length > WEEK_ROWS); }
   }, 25*1000);
   setInterval(applyNight, 60*1000);
   setInterval(pixelShift, 4*60*1000);
@@ -1287,25 +1346,25 @@ function boot(){
   }, 60*1000);
 }
 
-// The launcher's card: the chosen panel only, refreshed like on the screensaver, nothing else loaded.
+// The launcher's card: the chosen panel only (or the four in turn), refreshed like on the screensaver.
 function bootWidget(){
   document.documentElement.classList.add('widget');
   restoreSnap();
   setTimeout(saveSnap, 15*1000);
   setInterval(saveSnap, 60*1000);
   addEventListener('pagehide', saveSnap);
-  const P = CONFIG.panel;
-  if(CONFIG.autoLocation && (P === 'prayers' || P === 'forecast'))
-    locate(false).then(changed => { if(changed){ if(P === 'prayers') loadPrayers(); else loadWeather(); } });
+  if(CONFIG.autoLocation && (wants('prayers') || wants('forecast')))
+    locate(false).then(changed => { if(changed){ if(wants('prayers')) loadPrayers(); if(wants('forecast')) loadWeather(); } });
   renderPanel(false);
-  if(P === 'prayers'){ loadPrayers(); setInterval(loadPrayers, 6*3600*1000); setInterval(() => renderPanel(false), 15000); }
-  if(P === 'forecast'){ loadWeather(); setInterval(loadWeather, 30*60*1000); }
-  if(P === 'matches'){ loadMatches(); setInterval(loadMatches, 30*60*1000); setInterval(loadLive, 2*60000); }
+  if(wants('prayers')){ loadPrayers(); setInterval(loadPrayers, 6*3600*1000); setInterval(() => { if(PANEL === 'prayers') renderPanel(false); }, 15000); }
+  if(wants('forecast')){ loadWeather(); setInterval(loadWeather, 30*60*1000); }
+  if(wants('matches')){ loadMatches(); setInterval(loadMatches, 30*60*1000); setInterval(loadLive, 2*60000); }
+  setInterval(rotateCard, ROTATE_MS);
   setInterval(() => {
-    if(P === 'matches'){ LIST_PAGE++; renderPanel(matchRows().length > WEEK_ROWS); }
+    if(PANEL === 'matches'){ LIST_PAGE++; renderPanel(matchRows().length > WEEK_ROWS); }
   }, 25*1000);
   let lastDay = riyadhDayNumber();
-  setInterval(() => { if(riyadhDayNumber() !== lastDay){ lastDay = riyadhDayNumber(); if(P === 'prayers') loadPrayers(); renderPanel(false); } }, 60*1000);
+  setInterval(() => { if(riyadhDayNumber() !== lastDay){ lastDay = riyadhDayNumber(); if(wants('prayers')) loadPrayers(); renderPanel(false); } }, 60*1000);
   reveal();
 }
 

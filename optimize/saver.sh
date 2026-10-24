@@ -14,11 +14,12 @@
 #   optimize/saver.sh adhan-fajr off               Fajr: off (the default) or one of the voices
 #   optimize/saver.sh adhan-volume 10              the TV volume it plays at (then the volume goes back)
 #   optimize/saver.sh adhan-test | adhan-stop      play the adhan now / stop it
+#   optimize/saver.sh night false                  dim the screensaver 21:00-07:00 (true|false; off by default)
 #   optimize/saver.sh reminder 30                  notice at the top right N minutes before each adhan (0 = off)
 #   optimize/saver.sh reminder-test                show that notice now
 #   optimize/saver.sh find-team الهلال             a club's id (Arabic or English name): id:Name | league
 #   optimize/saver.sh teams 136013:Al-Hilal 150643:Al-Zulfi    followed teams in order (up to 10)
-#   optimize/saver.sh card prayers                 beside the clock: prayers forecast matches verse none
+#   optimize/saver.sh card prayers                 beside the clock: auto (the four in turn, 30 s) verse prayers forecast matches none
 #   optimize/saver.sh home-card none               on the home screen (launcher): same choices, none = off
 #   optimize/saver.sh photos 15                    change the photo every N minutes: 5 10 15 30 60 (default 30)
 #   optimize/saver.sh idle 10                      the TV starts the screensaver after N idle minutes: 1 2 5 10 15 30
@@ -63,6 +64,7 @@ case "${1:-}" in
   adhan-fajr)   send SET "--es adhan_fajr $(quote "${2:?usage: optimize/saver.sh adhan-fajr off|fajr-trabulsi}")" ;;
   adhan-volume) send SET "--es adhan_volume $(quote "${2:?usage: optimize/saver.sh adhan-volume 10}")" ;;
   adhan-test)   send ADHAN_TEST ;;
+  night)        send SET "--es night $(quote "${2:?usage: optimize/saver.sh night true|false}")" ;;
   reminder)     send SET "--es reminder $(quote "${2:?usage: optimize/saver.sh reminder 30}")" ;;
   reminder-test) send REMINDER_TEST ;;
   adhan-stop)   send ADHAN_STOP ;;

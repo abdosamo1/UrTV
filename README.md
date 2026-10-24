@@ -152,7 +152,7 @@ release; a push to `next` publishes `apk-next` instead (a test build). `tests/ru
 urtv.html#city=جدة&lat=21.5433&lon=39.1728&tz=Asia/Riyadh&teams=136013,136137&panel=prayers
 ```
 
-`teams`: up to 10 TheSportsDB ids in priority order. `panel`: the card beside the clock: `prayers`,
+`teams`: up to 10 TheSportsDB ids in priority order. `panel`: the card beside the clock: `auto` (the four in turn every 30 s, the default), `prayers`,
 `forecast`, `matches`, `verse` or `none`. `mosque`: a Mawaqit slug; `loc=auto`: the place from the connection.
 
 **Data** (free, no keys): Aladhan (prayer times, Umm al-Qura), Open-Meteo (weather), Mawaqit (the mosque's timetable),

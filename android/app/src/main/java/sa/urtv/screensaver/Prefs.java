@@ -166,12 +166,13 @@ final class Prefs {
 
     // The card beside the clock: value sent to the page (#panel=), Arabic label
     static final String[][] PANELS = {
-        {"prayers", "مواقيت الصلاة اليوم"}, {"forecast", "طقس الأيام القادمة"},
-        {"matches", "مباريات فرقك القادمة"}, {"verse", "آية أو حديث اليوم"}, {"none", "لا شيء"},
+        {"auto", "تبديل تلقائي كل ٣٠ ثانية"}, {"verse", "آية أو حديث اليوم"}, {"prayers", "مواقيت الصلاة اليوم"}, {"forecast", "طقس الأيام القادمة"},
+        {"matches", "مباريات فرقك القادمة"}, {"none", "لا شيء"},
     };
 
     /** Older builds had an on/off switch for the card; off becomes "none", otherwise the verse card. */
-    String panel() { return known(sp.getString("panel", sp.getBoolean("showWeek", true) ? "verse" : "none"), "verse"); }
+    /** «auto» (the four cards in turn) unless the owner picked one; older builds' off switch = none */
+    String panel() { return known(sp.getString("panel", sp.getBoolean("showWeek", true) ? "auto" : "none"), "auto"); }
 
     /** a card that is no longer offered (the TV-shows card was removed) falls back to `instead` */
     private static String known(String v, String instead) {
@@ -194,6 +195,10 @@ final class Prefs {
 
     String photoMinutes() { return sp.getString("photoMinutes", "30"); }
     void setPhotoMinutes(String v) { sp.edit().putString("photoMinutes", v).apply(); }
+
+    /** darken the screensaver from 21:00 to 07:00; off unless the owner turns it on */
+    boolean nightDim() { return sp.getBoolean("nightDim", false); }
+    void setNightDim(boolean v) { sp.edit().putBoolean("nightDim", v).apply(); }
 
     boolean autoUpdate() { return sp.getBoolean("autoUpdate", true); }
     void setAutoUpdate(boolean v) { sp.edit().putBoolean("autoUpdate", v).apply(); }
@@ -223,11 +228,12 @@ final class Prefs {
             + "&teams=" + join(teamIds(), ",")
             + "&panel=" + panel()
             + "&week=" + ("none".equals(panel()) ? "0" : "1")   // for a page older than #panel
-            + "&photos=" + photoMinutes();
+            + "&photos=" + photoMinutes()
+            + "&night=" + (nightDim() ? "1" : "0");
     }
 
-    /** The card on the launcher's home screen: one of PANELS, off ("none") until the user picks one. */
-    String homePanel() { return known(sp.getString("homePanel", "none"), "none"); }
+    /** The card on the launcher's home screen: one of PANELS; the four in turn («auto») unless picked otherwise. */
+    String homePanel() { return known(sp.getString("homePanel", "auto"), "auto"); }
     void setHomePanel(String v) { sp.edit().putString("homePanel", v).apply(); }
 
     List<String> teamIds() {

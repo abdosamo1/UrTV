@@ -142,6 +142,8 @@ public class SettingsActivity extends Activity {
         header("التوقيت");
         row("تبديل الصورة كل", minutesLabel(Integer.parseInt(prefs.photoMinutes())), R.drawable.ic_sync,
             new Runnable() { public void run() { pickPhotoMinutes(); } });
+        row("تعتيم ليلي", prefs.nightDim() ? "يعمل · تخفّ الإضاءة تدريجياً من ٩ م حتى ٧ ص" : "متوقف · الإضاءة كاملة دائماً",
+            R.drawable.ic_eye, new Runnable() { public void run() { prefs.setNightDim(!prefs.nightDim()); render(); } });
         row("بدء شاشة التوقف بعد", idleLabel(), R.drawable.ic_screensaver,
             new Runnable() { public void run() { pickIdle(); } });
 

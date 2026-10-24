@@ -140,8 +140,8 @@ for (const [hash, want] of [['', 30], ['photos=5', 5], ['photos=60', 60], ['phot
 }
 
 // ---- old settings links and «لا شيء»
-for (const [hash, panel, shown] of [['', 'verse', true], ['week=0', 'none', false], ['week=1', 'verse', true],
-                                     ['panel=none', 'none', false], ['panel=bogus', 'verse', true]]) {
+for (const [hash, panel, shown] of [['', 'auto', true], ['week=0', 'none', false], ['week=1', 'auto', true],
+                                     ['panel=none', 'none', false], ['panel=bogus', 'auto', true], ['panel=verse', 'verse', true]]) {
   const { p, ctx, errors } = await open('tv.html', hash);
   const r = await p.evaluate(() => [CONFIG.panel, getComputedStyle(document.querySelector('.week')).display !== 'none']);
   check(`link #${hash || '(empty)'} → ${panel}, card ${shown ? 'shown' : 'hidden'}`,
@@ -161,7 +161,52 @@ for (const panel of ['prayers', 'verse']) {
   await ctx.close();
 }
 
-// ---- the TV-shows card was removed: an old #panel=shows gets the verse card, and nothing calls TVMaze
+// ---- «auto»: the four cards in turn every 30 s; a card with nothing to show is skipped
+{
+  const { p, ctx, errors } = await open('tv.html', 'teams=136013&panel=auto');
+  const seq = await p.evaluate(() => {
+    FORECAST = [0, 1, 2].map(i => ({ date: new Date(Date.now() + i * 864e5).toISOString().slice(0, 10), code: 2, hi: 30, lo: 20 }));
+    NEXT_LIST = {};   // no games this week: the matches card is skipped
+    const out = [document.getElementById('week-hd').textContent];
+    for (let i = 0; i < 4; i++) { rotateCard(); out.push(document.getElementById('week-hd').textContent); }
+    return out;
+  });
+  const verse = t => ['آية اليوم', 'حديث اليوم'].includes(t);
+  check('auto: verse → prayers → forecast → (no games: skipped) → verse', !errors.length && verse(seq[0])
+        && seq[1] === 'مواقيت اليوم' && seq[2] === 'الأيام القادمة' && verse(seq[3]) && seq[4] === 'مواقيت اليوم', JSON.stringify(seq));
+  const every = await p.evaluate(() => ROTATE_MS);
+  check('auto: every 30 seconds', every === 30000, every);
+  await ctx.close();
+}
+{
+  const { p, ctx } = await open('tv.html', 'panel=prayers');
+  const r = await p.evaluate(() => { const a = document.getElementById('week-hd').textContent; rotateCard(); return [a, document.getElementById('week-hd').textContent]; });
+  check('a single chosen card does not rotate', r[0] === 'مواقيت اليوم' && r[1] === 'مواقيت اليوم', JSON.stringify(r));
+  await ctx.close();
+}
+
+// ---- night dimming: off unless #night=1 (it darkened the screen at night by itself before)
+for (const [hash, dimmed] of [['', false], ['night=0', false], ['night=1', true]]) {
+  const { p, ctx } = await open('tv.html', hash);
+  const o = await p.evaluate(() => { window.riyadhParts = () => ({ y: 2026, mo: 10, d: 24, h: 2, mi: 0, s: 0 }); applyNight();
+                                     return +document.getElementById('dimmer').style.opacity; });
+  check(`night dimming at 2 am, #${hash || '(none)'}: ${dimmed ? 'dark' : 'full brightness'}`, dimmed ? o > 0.3 : o === 0, o);
+  await ctx.close();
+}
+
+// ---- the card is glass: the photo behind it, blurred, lined up with the photo on screen
+{
+  const { p, ctx } = await open('tv.html', 'panel=verse');
+  const r = await p.evaluate(() => {
+    const w = document.querySelector('.week'), b = getComputedStyle(w, '::before'), rect = w.getBoundingClientRect();
+    return { photo: b.backgroundImage.startsWith('url('), blur: b.filter.includes('blur'), radius: getComputedStyle(w).borderRadius,
+             x: parseFloat(w.style.getPropertyValue('--bgx')), left: rect.left };
+  });
+  check('card: glass over the blurred photo, lined up', r.photo && r.blur && r.radius === '24px' && Math.abs(r.x - (40 - r.left)) < 1, JSON.stringify(r));
+  await ctx.close();
+}
+
+// ---- the TV-shows card was removed: an old #panel=shows gets the cards in turn, and nothing calls TVMaze
 {
   const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
   const seen = [];
@@ -170,7 +215,7 @@ for (const panel of ['prayers', 'verse']) {
   await p.goto(page('tv.html') + '#panel=shows&genres=Drama&shows=1&minrating=7');
   await p.waitForTimeout(1200);
   const r = await p.evaluate(() => ({ panel: CONFIG.panel, hd: document.getElementById('week-hd').textContent }));
-  check('old #panel=shows: the verse card instead, no TVMaze', r.panel === 'verse' && ['آية اليوم', 'حديث اليوم'].includes(r.hd)
+  check('old #panel=shows: the cards in turn instead (verse first), no TVMaze', r.panel === 'auto' && ['آية اليوم', 'حديث اليوم'].includes(r.hd)
         && !seen.some(h => /tvmaze/.test(h)), JSON.stringify(r) + ' ' + seen.join(','));
   await ctx.close();
 }

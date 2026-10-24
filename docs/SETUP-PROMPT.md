@@ -47,21 +47,21 @@ the whole task, and to say «تم».
 > وتتابع مباريات أي أندية؟ اكتب أسماءها، أو «لا شي».
 >
 > والباقي بخليه على الافتراضي، وتقدر تطلب تغيير أي شي منه الحين أو بعدين:
-> • جنب الساعة: «آية وحديث اليوم» (أو: مواقيت الصلاة، الطقس، المباريات، لا شي)
+> • جنب الساعة: تبديل تلقائي كل ٣٠ ثانية بين الآية والحديث، مواقيت الصلاة، الطقس، والمباريات (أو واحدة منها بس، أو لا شي)
 > • المفضلة: أول ٦ تطبيقات من واجهتك الحالية، بنفس الترتيب
 > • بركّب TV Bro (متصفح للتلفزيون) و SmartTube (يوتيوب بدون إعلانات)، مجانيين من GitHub
-> • ما فيه بطاقة في الواجهة الرئيسية، ووقت شاشة التوقف يبقى مثل ما هو، وما أعطّل إضافات TCL الاختيارية
+> • نفس البطاقة كمان بالواجهة الرئيسية، بدون تعتيم ليلي، ووقت شاشة التوقف يبقى مثل ما هو، وما أعطّل إضافات TCL الاختيارية
 > • الأذان عند كل صلاة بصوت الحرم المكي على مستوى صوت ١٠ (ثم يرجع الصوت كما كان)، وبدون أذان للفجر
 
 After my answer to message 3, start steps 0 and 1 at once, in the same turn: don't end your turn to wait for me
 again. The only other thing I do is press Allow on the TV, and step 1 tells me when, without stopping.
 
 Those defaults, unless I change them:
-- the card beside the clock: verse and hadith;
+- the card beside the clock: auto (verse/hadith, prayers, forecast, matches in turn every 30 s);
 - the favourites row: the first 6 apps of my current home screen (you note them in step 1), in that order; an icon
   you couldn't name is left out;
 - TV Bro and SmartTube installed (`optimize/run.sh` does it; if I don't want them: `SKIP_EXTRAS=1 optimize/run.sh`);
-- no card on the home screen; the TV's own screensaver delay is kept;
+- the same card on the home screen (`home-card auto`), no night dimming; the TV's own screensaver delay is kept;
 - nothing from `optimize/lists/tcl-optional.txt` is disabled (`optimize/lists/mine.txt` stays empty);
 - the adhan: on, voice `makki-1`, volume 10, no Fajr adhan (if I want one: `saver.sh adhan-fajr fajr-trabulsi`; other voices: `saver.sh adhan-voice …`; I can change all of it in the app's settings too).
 
@@ -257,8 +257,8 @@ optimize/saver.sh autoloc true                    # city, weather, time zone fro
 optimize/saver.sh mosque <the link I sent>        # or: mosque none; the screen then shows that mosque's adhan, iqama and Jumu'a
 optimize/saver.sh find-team <club as I wrote it>  # Arabic is fine (الهلال): one call per club, Saudi clubs first;
                                                   # then: optimize/saver.sh teams <id:Name> <id:Name> ...  (my order)
-optimize/saver.sh card <one of: verse, prayers, forecast, matches, none>   # beside the clock (verse unless I said otherwise)
-optimize/saver.sh home-card none                  # home screen: no card
+optimize/saver.sh card <one of: auto, verse, prayers, forecast, matches, none>   # beside the clock (auto unless I said otherwise)
+optimize/saver.sh home-card auto                  # home screen: the same cards in turn
 optimize/dock.sh apps                             # match my 6 apps to packages, then: optimize/dock.sh set <pkg> ... (in that order)
 optimize/dock.sh hidden                           # apps the home screen leaves out, and why
 optimize/saver.sh photos <5, 10, 15, 30 or 60>   # ONLY if I asked how often the photo changes (default 30 minutes: leave it)

@@ -18,8 +18,8 @@ import java.util.Collections;
 
 /**
  * The optional card on the home screen: the screensaver's page in card-only mode (#widget=1), showing
- * the panel picked in the screensaver's settings («بطاقة على الشاشة الرئيسية»). Off by default; while
- * off no WebView is created. Settings come from the screensaver app's ConfigProvider (same signing key).
+ * the panel picked in the screensaver's settings («بطاقة على الشاشة الرئيسية»): the four cards in turn unless
+ * picked otherwise, in a glass frame; set to «لا شيء», no WebView is created. Settings come from the screensaver app's ConfigProvider (same signing key).
  */
 final class HomeCard {
     private static final Uri CONFIG = Uri.parse("content://sa.urtv.screensaver.config");
@@ -29,6 +29,7 @@ final class HomeCard {
     private final ViewGroup parent;
     private final FrameLayout.LayoutParams params;
     private WebView web;
+    private FrameLayout frame;   // the glass the card sits in (Glass: the frosted wallpaper, a tint, gloss and rim)
     private String url;
 
     HomeCard(Activity activity, ViewGroup parent, FrameLayout.LayoutParams params) {
@@ -53,7 +54,8 @@ final class HomeCard {
 
     void destroy() {
         if (web == null) return;
-        parent.removeView(web);
+        parent.removeView(frame);
+        frame = null;
         web.destroy();
         web = null;
         url = null;
@@ -108,7 +110,15 @@ final class HomeCard {
         s.setAllowFileAccessFromFileURLs(true);
         s.setAllowUniversalAccessFromFileURLs(true);
         s.setCacheMode(WebSettings.LOAD_NO_CACHE);
-        parent.addView(web, params);
+        float d = activity.getResources().getDisplayMetrics().density;
+        frame = new FrameLayout(activity);
+        frame.setBackground(new Glass(frame, 24 * d, 1.2f * d, 0x2EFFFFFF, true));
+        frame.setClipToOutline(true);
+        frame.setElevation(8 * d);
+        int pad = Math.round(14 * d);
+        frame.setPadding(pad, Math.round(10 * d), pad, Math.round(10 * d));
+        frame.addView(web, new FrameLayout.LayoutParams(-1, -1));
+        parent.addView(frame, params);
         url = u;
         web.loadUrl(u);
     }
