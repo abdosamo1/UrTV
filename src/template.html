@@ -1005,7 +1005,7 @@ const WEEK_ROWS = 5;   // rows on the card beside the clock (a longer list pages
 let FORECAST = [];
 try{ FORECAST = JSON.parse(localStorage.getItem('forecast:' + location.hash) || '[]') || []; }catch(e){}
 let LIST_PAGE = 0;
-const PANEL_TITLE = {prayers:'مواقيت الصلاة', forecast:'الأيام القادمة', matches:'مباريات فرقك'};
+const PANEL_TITLE = {prayers:'مواقيت الصلاة', forecast:'الأيام القادمة', matches:'مباريات فرقك القادمة'};
 
 // «auto»: the four cards in turn, every 30 s; one with nothing to show right now (no forecast offline, no games
 // this week) is skipped. PANEL is the card on screen.
@@ -1103,11 +1103,12 @@ function matchRows(){
   });
   const day = d => new Intl.DateTimeFormat(GREG, {timeZone:CONFIG.timezone, weekday:'long'}).format(d);
   const today = new Intl.DateTimeFormat('en-CA', {timeZone:CONFIG.timezone}).format(new Date());
+  // the next five, however far ahead (a team playing once a week showed one game with a week's window)
   return evs.map(ev => ({ev, t: toDate(ev).getTime()}))
     .filter(x => finishedRecently(x.ev, now)
-      || (now < x.t + 2.5*3600000 && !FINAL.includes((x.ev.strStatus || '').toUpperCase())
-          && x.t - now <= CONFIG.weekWindowDays * 86400000))
+      || (now < x.t + 2.5*3600000 && !FINAL.includes((x.ev.strStatus || '').toUpperCase())))
     .sort((a, b) => a.t - b.t)
+    .slice(0, 5)
     .map(({ev, t}) => {
       const d = new Date(t), scored = ev.intHomeScore != null && ev.intAwayScore != null;
       const mid = scored && now >= t ? ` <span class="sc">${ar(+ev.intHomeScore)} - ${ar(+ev.intAwayScore)}</span> ` : ' × ';

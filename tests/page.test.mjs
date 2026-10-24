@@ -76,7 +76,7 @@ const SAMPLE = {
     NEXT_LIST = { '136013': [ev('a', 'Al-Hilal', 'Al-Nassr', 3), ev('b', 'Al-Ahli', 'Al-Hilal', 80)] };
   },
 };
-const EXPECT = { prayers: [6, 'مواقيت الصلاة'], forecast: [5, 'الأيام القادمة'], matches: [2, 'مباريات فرقك'],
+const EXPECT = { prayers: [6, 'مواقيت الصلاة'], forecast: [5, 'الأيام القادمة'], matches: [2, 'مباريات فرقك القادمة'],
                  verse: [2, null] };
 for (const [panel, [rows, title]] of Object.entries(EXPECT)) {
   const { p, ctx, errors } = await open('tv.html', 'teams=136013&panel=' + panel);

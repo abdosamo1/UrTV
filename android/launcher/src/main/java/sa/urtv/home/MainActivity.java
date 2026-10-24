@@ -95,6 +95,12 @@ public class MainActivity extends Activity {
     private final Runnable rotateWallpaper = this::nextWallpaper;
     static final long WALLPAPER_INTERVAL_MS = 10 * 60 * 1000;
     private TextView greeting, clock, ampm, date, title, wifiPill, appsLabel;
+    private ImageView avatar;
+    private long avatarStamp = -1;
+    // today's Fajr, Dhuhr, Maghrib (minutes) from the screensaver's mosque timetable, read once in a while
+    private int[] prayers;
+    private long prayersAt;
+    private int prayersDay = -1;
     private int glowColor = 0xFF3A3A3A;
     private ValueAnimator glowAnim;
     private int lastFocusedId = View.NO_ID;
@@ -111,7 +117,7 @@ public class MainActivity extends Activity {
     };
     // favourites changed in «ترتيب المفضلة» or from ADB while the home screen is up
     private final BroadcastReceiver dockChanged = new BroadcastReceiver() {
-        @Override public void onReceive(Context c, Intent i) { dockApps = loadDock(); buildApps(); }
+        @Override public void onReceive(Context c, Intent i) { dockApps = loadDock(); buildApps(); showOwner(); updateClock(); }
     };
 
     // ---------------------------------------------------------------- lifecycle
@@ -156,6 +162,7 @@ public class MainActivity extends Activity {
         tf.addAction(Intent.ACTION_TIMEZONE_CHANGED);
         tf.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
         registerReceiver(tick, tf);
+        showOwner();
         updateClock();
         updateWifi();
         homeCard.refresh();
@@ -317,7 +324,27 @@ public class MainActivity extends Activity {
         for (TextView t : new TextView[]{greeting, clock, ampm, date}) t.setShadowLayer(dp(3), 0, dp(1), 0x80000000);
         left.setGravity(Gravity.RIGHT);
         for (TextView t : new TextView[]{greeting, date}) t.setGravity(Gravity.RIGHT);
-        header.addView(left, new FrameLayout.LayoutParams(-2, -2, Gravity.RIGHT | Gravity.TOP));
+        LinearLayout corner = new LinearLayout(this);   // [greeting, clock, date] then the owner's photo, top right
+        corner.setOrientation(LinearLayout.HORIZONTAL);
+        corner.setGravity(Gravity.TOP);
+        corner.addView(left, new LinearLayout.LayoutParams(-2, -2));
+        avatar = new ImageView(this);
+        avatar.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        avatar.setClipToOutline(true);
+        avatar.setOutlineProvider(new ViewOutlineProvider() {
+            @Override public void getOutline(View v, Outline o) { o.setOval(0, 0, v.getWidth(), v.getHeight()); }
+        });
+        GradientDrawable ring = new GradientDrawable();
+        ring.setShape(GradientDrawable.OVAL);
+        ring.setStroke(dp(2), GOLD);
+        avatar.setForeground(ring);
+        avatar.setElevation(dp(6));
+        avatar.setVisibility(View.GONE);
+        LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(dp(68), dp(68));
+        ap.leftMargin = dp(16);
+        ap.topMargin = dp(4);
+        corner.addView(avatar, ap);
+        header.addView(corner, new FrameLayout.LayoutParams(-2, -2, Gravity.RIGHT | Gravity.TOP));
 
         LinearLayout right = new LinearLayout(this);
         right.setGravity(Gravity.CENTER_VERTICAL);
@@ -753,7 +780,7 @@ public class MainActivity extends Activity {
         Calendar now = Calendar.getInstance();
         int h = now.get(Calendar.HOUR_OF_DAY);
         // by the hour, not by ص/م: the afternoon is not yet evening
-        greeting.setText(h < 4 ? "تصبح على خير" : h < 12 ? "صباح الخير" : h < 17 ? "يومك سعيد" : "مساء الخير");
+        greeting.setText(greetingFor(h * 60 + now.get(Calendar.MINUTE), now.get(Calendar.DAY_OF_YEAR)));
         int hh = h % 12 == 0 ? 12 : h % 12;   // always 12-hour
         clock.setText(arabicDigits(String.format(Locale.ROOT, "%02d:%02d", hh, now.get(Calendar.MINUTE))));   // ٠٢:٥١
         ampm.setText(h < 12 ? "ص" : "م");
@@ -765,6 +792,43 @@ public class MainActivity extends Activity {
         } catch (Exception ignored) { }
         String greg = new SimpleDateFormat("d MMMM", new Locale("ar")).format(now.getTime());
         date.setText(arabicDigits(hijri.isEmpty() ? greg : hijri + "  ·  " + greg));
+    }
+
+    /** صباح الخير from Fajr, طاب يومك from Dhuhr, مساء الخير from Maghrib until Fajr (the mosque's times, from the
+     *  screensaver app; 04:00 / 12:00 / 17:00 until it has them); then «، يا محمد» if the owner gave a name. */
+    private String greetingFor(int minute, int day) {
+        if (prayers == null || day != prayersDay || SystemClock.elapsedRealtime() - prayersAt > 30 * 60_000L) {
+            prayersAt = SystemClock.elapsedRealtime();
+            prayersDay = day;
+            prayers = readPrayers();
+        }
+        int fajr = 4 * 60, dhuhr = 12 * 60, maghrib = 17 * 60;
+        if (prayers != null) { fajr = prayers[0]; dhuhr = prayers[1]; maghrib = prayers[2]; }
+        String g = minute >= fajr && minute < dhuhr ? "صباح الخير" : minute >= dhuhr && minute < maghrib ? "طاب يومك" : "مساء الخير";
+        String n = Profile.name(this);
+        return n.isEmpty() ? g : g + "، يا " + n;
+    }
+
+    private int[] readPrayers() {
+        try (android.database.Cursor c = getContentResolver().query(
+                android.net.Uri.parse("content://sa.urtv.screensaver.config"), null, null, null, null)) {
+            if (c == null || !c.moveToFirst() || c.getColumnIndex("maghrib") < 0) return null;
+            int f = c.getInt(c.getColumnIndex("fajr")), d = c.getInt(c.getColumnIndex("dhuhr")), m = c.getInt(c.getColumnIndex("maghrib"));
+            return f >= 0 && d > f && m > d ? new int[] {f, d, m} : null;
+        } catch (RuntimeException e) {
+            return null;   // screensaver app missing or older
+        }
+    }
+
+    /** The owner's round photo, top right (reloaded when the file changes); hidden without one. */
+    private void showOwner() {
+        java.io.File f = Profile.photo(this);
+        long stamp = f.isFile() ? f.lastModified() : 0;
+        if (stamp == avatarStamp) return;
+        avatarStamp = stamp;
+        Bitmap b = stamp == 0 ? null : BitmapFactory.decodeFile(f.getPath());
+        avatar.setImageBitmap(b);
+        avatar.setVisibility(b == null ? View.GONE : View.VISIBLE);
     }
 
     private static String arabicDigits(String s) {

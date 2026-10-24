@@ -23,6 +23,9 @@ import java.util.Map;
  *   am broadcast -n sa.urtv.home/.DockReceiver -a sa.urtv.home.WEBAPP_REMOVE --es id web:…
  *   am broadcast -n sa.urtv.home/.DockReceiver -a sa.urtv.home.WEBAPPS
  * A website added as an app goes first in the favourites row, and SET_DOCK keeps it there.
+ *   am broadcast -n sa.urtv.home/.DockReceiver -a sa.urtv.home.PROFILE --es name 'محمد'   (the greeting's name)
+ *   am broadcast -n sa.urtv.home/.DockReceiver -a sa.urtv.home.PROFILE_CLEAR            (no name, no photo)
+ * The photo: content write --uri content://sa.urtv.home.profile/photo < file (Profile).
  *
  * The answer is in the "data" of am's output. optimize/dock.sh wraps them all. People use «ترتيب المفضلة»
  * (DockActivity) instead.
@@ -82,6 +85,17 @@ public class DockReceiver extends BroadcastReceiver {
                 setResultData(WebApps.remove(c, id.trim()) ? "removed " + id : "error: no such web app " + id);
                 return;
             }
+            case "sa.urtv.home.PROFILE": {
+                String n = i.getStringExtra("name");
+                if (n == null) { setResultData("error: add --es name 'الاسم'"); return; }
+                Profile.setName(c, n.replace(",", " ").trim());
+                setResultData("name: " + Profile.name(c) + " | photo: " + (Profile.photo(c).isFile() ? "yes" : "no"));
+                return;
+            }
+            case "sa.urtv.home.PROFILE_CLEAR":
+                Profile.clear(c);
+                setResultData("profile cleared");
+                return;
             case "sa.urtv.home.WEBAPPS": {
                 StringBuilder b = new StringBuilder();
                 for (WebApps.Site s : WebApps.all(c)) b.append(WebApps.PREFIX).append(s.id).append(" | ").append(s.name).append(" | ").append(s.url).append('\n');

@@ -74,6 +74,13 @@
             android:screenOrientation="landscape"
             android:theme="@android:style/Theme.Material.NoActionBar" />
 
+        <!-- the owner's photo, written by the shell only (optimize/dock.sh profile): DUMP, which apps can't hold -->
+        <provider
+            android:name=".Profile"
+            android:authorities="sa.urtv.home.profile"
+            android:exported="true"
+            android:writePermission="android.permission.DUMP" />
+
         <!-- self-update: the installer's answer, and «look now» from the screensaver (it only makes it check) -->
         <receiver
             android:name=".UpdateReceiver"
@@ -111,6 +118,8 @@
                 <action android:name="sa.urtv.home.WEBAPP_ADD" />
                 <action android:name="sa.urtv.home.WEBAPP_REMOVE" />
                 <action android:name="sa.urtv.home.WEBAPPS" />
+                <action android:name="sa.urtv.home.PROFILE" />
+                <action android:name="sa.urtv.home.PROFILE_CLEAR" />
             </intent-filter>
         </receiver>
     </application>

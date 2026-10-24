@@ -10,6 +10,8 @@
 #   optimize/dock.sh webapp add URL [NAME] a website as an app (optional): its manifest's name, icon and colours,
 #                                          full screen with a splash; first in the favourites (set keeps it there)
 #   optimize/dock.sh webapp remove web:ID  take it off again;  optimize/dock.sh webapp list
+#   optimize/dock.sh profile NAME [PHOTO]  the owner (optional): «صباح الخير، يا NAME», and the photo (jpg/png on
+#                                          this computer) round at the top right;  optimize/dock.sh profile clear
 # The home screen redraws at once. Only ADB can do this (sa.urtv.home/.DockReceiver needs the shell's DUMP).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -50,5 +52,16 @@ case "${1:-}:$#" in
       list) send WEBAPPS ;;
       *) echo "usage: optimize/dock.sh webapp add URL [NAME] | remove web:ID | list"; exit 1 ;;
     esac ;;
-  *) sed -n '2,13p' "$0"; exit 1 ;;
+  profile:*)
+    if [ "${2:-}" = clear ]; then send PROFILE_CLEAR; exit 0; fi
+    [ -n "${2:-}" ] || { echo "usage: optimize/dock.sh profile NAME [PHOTO] | clear"; exit 1; }
+    case "$2" in *"'"*) echo "no apostrophes in the name please"; exit 1 ;; esac
+    if [ -n "${3:-}" ]; then
+      [ -f "$3" ] || { echo "!! no such photo: $3"; exit 1; }
+      # the shell hands the file to the home screen app (only the shell may write its photo)
+      "$PY" -I optimize/tv.py --push-b64 "$3" /data/local/tmp/urtv-photo
+      "$PY" -I optimize/tv.py "content write --uri content://sa.urtv.home.profile/photo < /data/local/tmp/urtv-photo; rm -f /data/local/tmp/urtv-photo"
+    fi
+    send PROFILE "--es name '$2'" ;;
+  *) sed -n '2,15p' "$0"; exit 1 ;;
 esac

@@ -92,6 +92,18 @@ final class Adhan {
         };
     }
 
+    /** Today's {fajr, dhuhr, maghrib} in minutes after midnight, from the stored timetable; null if not known.
+     *  The launcher greets by them (ConfigProvider): صباح الخير from Fajr, طاب يومك from Dhuhr, مساء الخير from Maghrib. */
+    static int[] today(Context c) {
+        java.util.Calendar n = java.util.Calendar.getInstance();
+        String[] t = days(read(c)).day(n.get(java.util.Calendar.YEAR), n.get(java.util.Calendar.MONTH) + 1,
+            n.get(java.util.Calendar.DAY_OF_MONTH));
+        if (t == null) return null;
+        int[] f = AdhanTimes.hm(t[0]), d = AdhanTimes.hm(t[2]), m = AdhanTimes.hm(t[4]);
+        if (f == null || d == null || m == null) return null;
+        return new int[] {f[0] * 60 + f[1], d[0] * 60 + d[1], m[0] * 60 + m[1]};
+    }
+
     /** Blocking (network): fetch the timetable when the source changed or it is old. */
     static synchronized void refresh(Context c, boolean force) {
         Prefs p = new Prefs(c);
