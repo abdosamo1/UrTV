@@ -360,6 +360,45 @@ for (const [hash, dimmed] of [['', false], ['night=0', false], ['night=1', true]
   await ctx.close();
 }
 
+// ---- only the home screen asks football-data: it shares its games, the screensaver shows them with no request
+{
+  const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  const day = n => new Date(Date.now() + n * 864e5).toISOString();
+  const ev = i => ({ idEvent: 'fd' + i, fdId: i, strTimestamp: day(i), strHomeTeam: 'Barça', idHomeTeam: '133739',
+                     strAwayTeam: 'Opp ' + i, idAwayTeam: null, intHomeScore: null, intAwayScore: null, strStatus: 'NS', strProgress: '', timeTbc: false });
+  const fd = [];
+  await ctx.route(/^https?:/, r => { if (new URL(r.request().url()).host === 'api.football-data.org') fd.push(r.request().url()); return r.abort(); });
+  // the screensaver: the home screen's list through window.UrTVShared
+  await ctx.addInitScript(json => { window.UrTVShared = { get: () => json }; },
+    JSON.stringify({ at: Date.now(), teams: { '133739': { next: [1,2,3,4,5].map(ev), match: ev(1), results: [] } } }));
+  const p = await ctx.newPage();
+  await p.goto(page('tv.html') + '#teams=133739&panel=matches&fdkey=abc123&fdnative=1');
+  await p.waitForFunction(() => (NEXT_LIST['133739'] || []).length === 5, null, { timeout: 8000 }).catch(() => {});
+  await p.waitForTimeout(500);
+  const ids = await p.evaluate(() => (NEXT_LIST['133739'] || []).map(e => e.idEvent).join(','));
+  check('the screensaver: the home screen\'s five games, no football-data request of its own', ids === 'fd1,fd2,fd3,fd4,fd5' && fd.length === 0, JSON.stringify({ ids, fd }));
+  await ctx.close();
+
+  // the home screen: asks, then shares
+  const ctx2 = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  const BAR = { id: 81, name: 'FC Barcelona', shortName: 'Barça' };
+  await ctx2.route(/^https?:/, r => {
+    const u = new URL(r.request().url()), cors = { 'Access-Control-Allow-Origin': '*' };
+    if (u.host !== 'api.football-data.org') return r.abort();
+    if (u.pathname === '/v4/competitions/PD/teams') return r.fulfill({ headers: cors, contentType: 'application/json', body: JSON.stringify({ teams: [BAR] }) });
+    if (u.pathname === '/v4/teams/81/matches') return r.fulfill({ headers: cors, contentType: 'application/json', body: JSON.stringify({ matches: [1,2,3,4,5,6].map(i =>
+      ({ id: i, utcDate: day(i), status: 'TIMED', homeTeam: BAR, awayTeam: { id: 900 + i, name: 'Opp ' + i }, score: { fullTime: { home: null, away: null } } })) }) });
+    return r.fulfill({ headers: cors, contentType: 'application/json', body: '{"teams":[]}' });
+  });
+  await ctx2.addInitScript(() => { window.__shared = []; window.UrTVShare = { share: j => window.__shared.push(j) }; });
+  const p2 = await ctx2.newPage();
+  await p2.goto(page('tv.html') + '#teams=133739&panel=matches&fdkey=abc123&fdnative=1');
+  await p2.waitForFunction(() => window.__shared.length > 0, null, { timeout: 8000 }).catch(() => {});
+  const got = await p2.evaluate(() => { const j = JSON.parse(window.__shared.at(-1) || '{}'); return ((j.teams || {})['133739'] || {}).next || []; });
+  check('the home screen shares its five football-data games', got.length === 5 && got[0].idEvent === 'fd1', JSON.stringify(got.map(e => e.idEvent)));
+  await ctx2.close();
+}
+
 // ---- in the app (#fdnative=1) the page sends no key at all: the app adds it (FdProxy), so no CORS preflight
 {
   const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });

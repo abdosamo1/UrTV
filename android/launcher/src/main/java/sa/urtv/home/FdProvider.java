@@ -13,6 +13,8 @@ import android.os.Bundle;
  * settings what they need. One line of requests for both apps: the free plan allows 10 a minute.
  *   call("fd", path, {key})  → {code, body} or {offline}
  *   call("fdlog")            → {log, status}
+ *   call("shared")           → {json}: the card's games (HomeCard's page shares them), so the screensaver
+ *                              shows the same list without asking the site at all
  */
 public class FdProvider extends ContentProvider {
     @Override public boolean onCreate() { return true; }
@@ -22,6 +24,10 @@ public class FdProvider extends ContentProvider {
         if (getContext().checkCallingPermission("sa.urtv.screensaver.READ_CONFIG") != PackageManager.PERMISSION_GRANTED)
             return null;
         Bundle b = new Bundle();
+        if ("shared".equals(method)) {   // the home screen's games, as its card last shared them
+            b.putString("json", shared(getContext()));
+            return b;
+        }
         if ("fdlog".equals(method)) {
             b.putString("log", FdProxy.log(getContext()));
             b.putString("status", FdProxy.status(getContext()));
@@ -35,6 +41,27 @@ public class FdProvider extends ContentProvider {
         b.putInt("code", (Integer) r[0]);
         b.putByteArray("body", (byte[]) r[1]);
         return b;
+    }
+
+    private static java.io.File file(android.content.Context c) { return new java.io.File(c.getFilesDir(), "fd-shared.json"); }
+
+    /** HomeCard's page (window.UrTVShare.share): its football-data games, for the screensaver */
+    static synchronized void save(android.content.Context c, String json) {
+        if (json == null || json.length() > 512 * 1024) return;
+        try (java.io.FileOutputStream o = new java.io.FileOutputStream(file(c))) { o.write(json.getBytes("UTF-8")); }
+        catch (Exception ignored) { }
+    }
+
+    static synchronized String shared(android.content.Context c) {
+        try (java.io.FileInputStream in = new java.io.FileInputStream(file(c))) {
+            java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[16384];
+            int n;
+            while ((n = in.read(buf)) > 0) b.write(buf, 0, n);
+            return b.toString("UTF-8");
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     @Override public Cursor query(Uri u, String[] p, String s, String[] a, String o) { return null; }

@@ -157,6 +157,11 @@ final class HomeCard {
                 return super.shouldInterceptRequest(v, r);
             }
         });
+        // the card's football-data games, for the screensaver app (FdProvider "shared"): only this screen asks the site
+        web.addJavascriptInterface(new Object() {
+            @android.webkit.JavascriptInterface
+            public void share(String json) { FdProvider.save(activity, json); }
+        }, "UrTVShare");
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);

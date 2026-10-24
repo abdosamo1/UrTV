@@ -35,6 +35,18 @@ final class ScreenView {
                 return res != null ? res : super.shouldInterceptRequest(v, r);
             }
         });
+        // football-data: the home screen's list (it alone asks the site); "NOHOME" with an older home screen
+        w.addJavascriptInterface(new Object() {
+            @android.webkit.JavascriptInterface
+            public String get() {
+                try {
+                    android.os.Bundle b = c.getContentResolver().call(FdProxy.HOME, "shared", null, null);
+                    return b == null || !b.containsKey("json") ? "NOHOME" : b.getString("json", "");
+                } catch (Exception e) {
+                    return "NOHOME";
+                }
+            }
+        }, "UrTVShared");
         WebSettings s = w.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);

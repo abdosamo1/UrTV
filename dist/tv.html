@@ -967,8 +967,9 @@ async function loadLive(){
     if(!ev || !ev.idEvent) return;
     const k = toDate(ev).getTime();
     if(now < k - 5*60000 || now > k + 2.5*3600000) return;
-    if(ev.fdId){   // a football-data game: its own live score
-      try{ const j = await fdGet(`matches/${ev.fdId}`); MATCHES[id] = Object.assign({}, ev, fdEvent(j.match || j)); keepResult(id, MATCHES[id]); }
+    if(ev.fdId){   // a football-data game: its own live score (the screensaver: the home screen's, as shared)
+      if(fdFromShared(id) !== undefined) return;
+      try{ const j = await fdGet(`matches/${ev.fdId}`); MATCHES[id] = Object.assign({}, ev, fdEvent(j.match || j)); keepResult(id, MATCHES[id]); fdShare(); }
       catch(e){}
       return;
     }
@@ -1054,9 +1055,46 @@ function fdEvent(m){
           strStatus: FD_STATUS[m.status] || 'NS', strProgress: m.minute || '',
           timeTbc: m.status === 'SCHEDULED'};
 }
+// Only the home screen asks football-data. It hands its games to the screensaver app (window.UrTVShare →
+// the launcher keeps them), and the screensaver takes them (window.UrTVShared) instead of asking the site:
+// one source of requests for the free plan's 10 a minute. 'NOHOME': no home screen that shares (an older one).
+function fdShared(){
+  if(!window.UrTVShared) return undefined;   // not the screensaver app
+  let s; try{ s = window.UrTVShared.get(); }catch(e){ return undefined; }
+  if(s === 'NOHOME') return undefined;
+  let j = null; try{ j = JSON.parse(s || 'null'); }catch(e){}
+  // nothing shared for 6 hours (the home screen's card off, or never opened): ask through the app's one queue
+  if(!j || !j.at || Date.now() - j.at > 6 * 3600000) return undefined;
+  return j;
+}
+function fdShare(){
+  if(!window.UrTVShare) return;
+  const teams = {};
+  for(const id of CONFIG.teamIds)
+    if((NEXT_LIST[id] || []).some(ev => String(ev.idEvent).startsWith('fd')))
+      teams[id] = {next: NEXT_LIST[id], match: MATCHES[id] || null, results: RESULTS[id] || []};
+  try{ window.UrTVShare.share(JSON.stringify({at: Date.now(), teams})); }catch(e){}
+}
+/** from the home screen's list: true if it has this club (else undefined: not shared here) */
+function fdFromShared(id){
+  const sh = fdShared();
+  if(sh === undefined) return undefined;
+  const t = sh && sh.teams && sh.teams[id];
+  if(!t){   // the home screen has not shared it (yet, or not a football-data club)
+    return (NEXT_LIST[id] || []).some(ev => String(ev.idEvent).startsWith('fd')) ? true : false;
+  }
+  const old = MATCHES[id];
+  NEXT_LIST[id] = t.next || [];
+  const ev = t.match || NEXT_LIST[id][0];
+  if(ev){ if(old && old.idEvent !== ev.idEvent) keepResult(id, old); MATCHES[id] = ev; }
+  if(t.results && t.results.length) RESULTS[id] = t.results;
+  return true;
+}
 /** true when football-data answered for this club (then TheSportsDB is not asked) */
 async function fdLoad(id){
   if(!CONFIG.fdKey) return false;
+  const sh = fdFromShared(id);
+  if(sh !== undefined) return sh;   // the screensaver app: the home screen's games, no request of its own
   try{ return await fdLoadNow(id); }
   catch(e){   // a refused or failed refresh: keep football-data's games if this club has them already
     if((NEXT_LIST[id] || []).some(ev => String(ev.idEvent).startsWith('fd'))) return true;
@@ -1116,6 +1154,7 @@ async function loadMatches(){
     try{ const l = await fetchLast(id); answered++; if(l.length) RESULTS[id] = l; }catch(e){}
   }));
   if(!answered && CONFIG.teamIds.length) return;    // offline: keep what is shown (the saved panels)
+  fdShare();
   MATCHES_LOADED = true;
   renderMatches();
   if(PANEL === 'matches') renderPanel(false);
