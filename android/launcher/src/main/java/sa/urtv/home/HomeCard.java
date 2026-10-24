@@ -33,23 +33,35 @@ final class HomeCard {
     private String url;
     private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
     private int lastHeight = -1;
+    private android.animation.ValueAnimator resize;
 
     /** The frame takes the card's own height (the four cards differ, and they take turns): asked every 1.5 s. */
     private final Runnable fit = new Runnable() {
         @Override public void run() {
             if (web == null || frame == null) return;
-            web.evaluateJavascript("(function(){var w=document.querySelector('.week');"
-                + "return w?Math.ceil(w.getBoundingClientRect().height):0;})()", v -> {
+            float d = activity.getResources().getDisplayMetrics().density;
+            // the room left, less the frame's own padding (22 dp), in the page's CSS px (= dp)
+            int roomPx = room == null ? 0 : room.px();   // 0 before the screen is laid out: no limit yet
+            int maxCss = roomPx <= 0 ? 0 : Math.max(80, Math.round(roomPx / d) - 22);
+            web.evaluateJavascript("typeof fitCard==='function'?fitCard(" + maxCss + "):0", v -> {
                     try {
                         int css = Integer.parseInt(v.replace("\"", "").trim());
                         if (css <= 0 || frame == null) return;
-                        float d = activity.getResources().getDisplayMetrics().density;
-                        int px = Math.round(Math.min(css + 22, 560) * d);   // + the frame's padding
-                        if (px != lastHeight) {
+                        int px = Math.round((css + 22) * d);   // + the frame's padding
+                        if (px != lastHeight) {   // the glass grows or shrinks smoothly to the new card
+                            int from = lastHeight < 0 ? px : frame.getLayoutParams().height;
                             lastHeight = px;
-                            ViewGroup.LayoutParams lp = frame.getLayoutParams();
-                            lp.height = px;
-                            frame.setLayoutParams(lp);
+                            if (resize != null) resize.cancel();
+                            resize = android.animation.ValueAnimator.ofInt(from, px);
+                            resize.setDuration(from == px ? 0 : 420);
+                            resize.setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f));
+                            resize.addUpdateListener(a -> {
+                                if (frame == null) return;
+                                ViewGroup.LayoutParams lp = frame.getLayoutParams();
+                                lp.height = (int) a.getAnimatedValue();
+                                frame.setLayoutParams(lp);
+                            });
+                            resize.start();
                         }
                     } catch (Exception ignored) { }
                 });
@@ -57,11 +69,17 @@ final class HomeCard {
         }
     };
 
+    /** the most height the card may take, in px (the space down to the app name over the favourites) */
+    interface Room { int px(); }
+    private Room room;
+
     HomeCard(Activity activity, ViewGroup parent, FrameLayout.LayoutParams params) {
         this.activity = activity;
         this.parent = parent;
         this.params = params;
     }
+
+    void setRoom(Room r) { room = r; }
 
     /** onResume: follow the current settings; a changed choice gets a fresh page. */
     void refresh() {
@@ -83,6 +101,7 @@ final class HomeCard {
     void destroy() {
         handler.removeCallbacks(fit);
         lastHeight = -1;
+        if (resize != null) { resize.cancel(); resize = null; }
         if (web == null) return;
         parent.removeView(frame);
         frame = null;

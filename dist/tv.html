@@ -136,6 +136,9 @@
   .week ul.flip li:nth-child(4){animation-delay:.18s}
   .week ul.flip li:nth-child(5){animation-delay:.24s}
   @keyframes weekIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  /* the card changing content (the cards in turn): the old one fades and lifts away, the new one comes in */
+  .week .hd,.week ul{transition:opacity .38s ease,transform .38s ease,filter .38s ease}
+  .week.swap .hd,.week.swap ul{opacity:0;transform:translateY(-10px) scale(.985);filter:blur(3px)}
   .week li.past{color:#8F8670}
   .week li.next{color:#FFE9B8}
   .week li.next .dt{color:#E0BA74}
@@ -148,6 +151,14 @@
   .week li.pr.past .dt{color:#C8BEA6}
   .week li.pr.next .cd{flex:1 1 auto;text-align:center;font-size:.78em;color:#F1CF8A;font-variant-numeric:tabular-nums}
   .week li.pr.next .dt{flex:0 0 auto;color:#FFE9B8}
+  /* the weather card: as big as the prayer rows; the condition and its icon centred */
+  .week li.fc{font-size:clamp(20px,1.6vw,31px);font-weight:500;padding:.95vh 0;align-items:center}
+  .week li.fc span:first-child{flex:0 0 4.6em}
+  .week li.fc .wx{flex:1 1 auto;display:flex;justify-content:center;align-items:center;gap:.4em;font-size:.86em;color:#E9DFC8}
+  .week li.fc .wx i{display:block;width:1.5em;height:1.5em;flex:0 0 auto}
+  .week li.fc .wx svg{width:100%;height:100%;display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+  .week li.fc .dt{flex:0 0 auto;font-size:.9em;color:#E9DFC8}
+  html.widget .week li.fc{padding:6px 0}
   .week li.quote{white-space:normal;display:block;font-size:clamp(17px,1.5vw,29px);line-height:1.75;
     border-bottom:none;padding:.4vh 0 0;color:#FFF7E6}
   /* Thmanyah draws ﴿﴾ as small angle marks: they come from the NotoMarks subset */
@@ -1086,7 +1097,7 @@ const WEEK_ROWS = 5;   // rows on the card beside the clock (a longer list pages
 let FORECAST = [];
 try{ FORECAST = JSON.parse(localStorage.getItem('forecast:' + location.hash) || '[]') || []; }catch(e){}
 let LIST_PAGE = 0;
-const PANEL_TITLE = {prayers:'مواقيت الصلاة', forecast:'الأيام القادمة', matches:'مباريات فرقك القادمة'};
+const PANEL_TITLE = {prayers:'مواقيت الصلاة', forecast:'الطقس', matches:'مباريات فرقك القادمة'};
 
 // «auto»: the four cards in turn, every 30 s; one with nothing to show right now (no forecast offline, no games
 // this week) is skipped. PANEL is the card on screen.
@@ -1105,7 +1116,16 @@ function rotateCard(){
   for(let i = 1; i <= CARDS.length; i++){
     const k = CARDS[(CARDS.indexOf(PANEL) + i) % CARDS.length];
     if(!hasCard(k)) continue;
-    if(k !== PANEL){ PANEL = k; LIST_PAGE = 0; renderPanel(true); }
+    if(k !== PANEL){
+      PANEL = k; LIST_PAGE = 0;                       // chosen now (data refreshes go to the new card)…
+      const w = document.querySelector('.week');
+      w.classList.add('swap');                        // …the old one fades out…
+      clearTimeout(rotateCard.t);
+      rotateCard.t = setTimeout(() => {
+        renderPanel(true);                            // …then the new one comes in, row by row
+        requestAnimationFrame(() => w.classList.remove('swap'));
+      }, 380);
+    }
     return;
   }
 }
@@ -1165,11 +1185,55 @@ function tickCountdown(){
   el.textContent = countdownText(at);
 }
 
+// Weather icons (drawn for this screen; soft and colourful). 24x24, each SVG carries its own gradients.
+const WX_DEFS = '<defs>'
+  + '<radialGradient id="wxg-sun" cx="40%" cy="38%" r="65%"><stop offset="0" stop-color="#FFE45C"/><stop offset="1" stop-color="#FFB020"/></radialGradient>'
+  + '<linearGradient id="wxg-cloud" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#D5DCE6"/></linearGradient>'
+  + '<linearGradient id="wxg-dark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C9D1DC"/><stop offset="1" stop-color="#8E99A8"/></linearGradient>'
+  + '<linearGradient id="wxg-drop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7FD8FF"/><stop offset="1" stop-color="#2F9BFF"/></linearGradient>'
+  + '<linearGradient id="wxg-bolt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE45C"/><stop offset="1" stop-color="#FF9F0A"/></linearGradient>'
+  + '</defs>';
+const wxCloud = (dx, dy, s, fill) =>
+  `<path fill="url(#wxg-${fill})" transform="translate(${dx} ${dy}) scale(${s})" d="M7 19h10.5a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7.6 9.6 3.75 3.75 0 0 0 7 19z"/>`;
+const wxSun = (cx, cy, r) => {
+  let rays = '';
+  for(let i = 0; i < 8; i++){
+    const a = i * Math.PI / 4, c = Math.cos(a), s = Math.sin(a);
+    rays += `<line x1="${(cx + c * (r + 1.8)).toFixed(2)}" y1="${(cy + s * (r + 1.8)).toFixed(2)}" x2="${(cx + c * (r + 3.6)).toFixed(2)}" y2="${(cy + s * (r + 3.6)).toFixed(2)}"/>`;
+  }
+  return `<g stroke="#FFC233" stroke-width="1.6" stroke-linecap="round">${rays}</g><circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#wxg-sun)"/>`;
+};
+const wxDrops = (xs, y, len) => xs.map(x => `<path d="M${x} ${y} q-1.1 ${len * .55} 0 ${len} q1.1 -${len * .45} 0 -${len}z" fill="url(#wxg-drop)"/>`).join('');
+const wxFlakes = pts => '<g stroke="#E6F4FF" stroke-width="1.1" stroke-linecap="round">' + pts.map(([x, y]) =>
+  `<line x1="${x}" y1="${y - 1.5}" x2="${x}" y2="${y + 1.5}"/><line x1="${x - 1.3}" y1="${y - .75}" x2="${x + 1.3}" y2="${y + .75}"/><line x1="${x + 1.3}" y1="${y - .75}" x2="${x - 1.3}" y2="${y + .75}"/>`).join('') + '</g>';
+const wxSvg = body => `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${WX_DEFS}${body}</svg>`;
+const WX_ICON_SVG = {
+  clear:       wxSvg(wxSun(12, 12, 5)),
+  mostlyClear: wxSvg(wxSun(10, 10, 4.6) + wxCloud(4.5, 4.5, .62, 'cloud')),
+  partly:      wxSvg(wxSun(9, 8.5, 4) + wxCloud(1.5, 1.5, .9, 'cloud')),
+  cloudy:      wxSvg(wxCloud(3.5, -3.2, .72, 'dark') + wxCloud(0, 0, 1, 'cloud')),
+  fog:         wxSvg(wxCloud(0, -3, 1, 'cloud') + '<g stroke="#B9C3CF" stroke-width="1.6" stroke-linecap="round"><line x1="5" y1="18.5" x2="19" y2="18.5"/><line x1="7" y1="21.5" x2="17" y2="21.5"/></g>'),
+  drizzle:     wxSvg(wxCloud(0, -4, 1, 'cloud') + wxDrops([8.5, 12.5, 16.5], 17, 3.2) + wxDrops([10.5, 14.5], 20.6, 2.6)),
+  rain:        wxSvg(wxCloud(0, -4, 1, 'cloud') + wxDrops([8, 12, 16], 17, 4)),
+  heavyRain:   wxSvg(wxCloud(0, -4, 1, 'dark') + wxDrops([7, 10.5, 14, 17.5], 16.5, 5)),
+  snow:        wxSvg(wxCloud(0, -4, 1, 'cloud') + wxFlakes([[7.5, 18.2], [12, 20.6], [16.5, 18.2]])),
+  thunder:     wxSvg(wxCloud(0, -4, 1, 'dark') + '<path d="M12.6 14.2 9.4 19h2.6l-1 4 4.2-5.6h-2.7l1.4-3.2z" fill="url(#wxg-bolt)"/>'),
+};
+/** WMO weather code (Open-Meteo) -> icon */
+function wxIcon(code){
+  const k = code === 0 ? 'clear' : code === 1 ? 'mostlyClear' : code === 2 ? 'partly' : code === 3 ? 'cloudy'
+    : [45, 48].includes(code) ? 'fog' : [51, 53, 55, 56, 57].includes(code) ? 'drizzle'
+    : [65, 67, 82].includes(code) ? 'heavyRain' : [61, 63, 66, 80, 81].includes(code) ? 'rain'
+    : [71, 73, 75, 77, 85, 86].includes(code) ? 'snow' : [95, 96, 99].includes(code) ? 'thunder' : null;
+  return k ? WX_ICON_SVG[k] : '';
+}
+
 function forecastRows(){
   return FORECAST.slice(0, 5).map((d, i) => {
     const day = i === 0 ? 'اليوم' : i === 1 ? 'غداً'
       : new Intl.DateTimeFormat(GREG, {timeZone:'UTC', weekday:'long'}).format(new Date(d.date + 'T12:00:00Z'));
-    return `<li><span>${day}</span><span class="ep">${WX_CODES[d.code] || ''}</span>`
+    // the condition and its icon after it, together in the middle of the row
+    return `<li class="fc"><span>${day}</span><span class="wx">${WX_CODES[d.code] || ''}<i>${wxIcon(d.code)}</i></span>`
          + `<span class="dt">${ar(Math.round(d.hi))}° / ${ar(Math.round(d.lo))}°</span></li>`;
   });
 }
@@ -1453,6 +1517,18 @@ function boot(){
     const d = new Intl.DateTimeFormat('en-CA',{timeZone:CONFIG.timezone}).format(new Date());
     if(d !== lastDay){ lastDay = d; loadPhotoIndex().then(() => applyBackground(true)); tickDates(); tickRamadan(); loadPrayers(); loadMatches(); loadWeather(); renderPanel(false); }
   }, 60*1000);
+}
+
+/** The home screen's card asks for this: the card at most `max` px tall (zoomed down if it is longer, so it never
+ *  covers the app name under it); returns the height it now takes. */
+function fitCard(max){
+  const w = document.querySelector('.week'), root = document.documentElement;
+  if(!w) return 0;
+  root.style.zoom = 1;
+  const natural = w.getBoundingClientRect().height;
+  const z = max > 0 && natural > max ? max / natural : 1;
+  root.style.zoom = z;
+  return Math.ceil(natural * z);
 }
 
 // The launcher's card: the chosen panel only (or the four in turn), refreshed like on the screensaver.

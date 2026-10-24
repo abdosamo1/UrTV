@@ -43,7 +43,6 @@ public class SettingsActivity extends Activity {
     private int lastIndex = -1;
     private boolean rendering;
     private View railFill;
-    private TextView railCount;
 
     /** Arabic locale for this screen, so every dialog title, list and button is laid out right-to-left. */
     @Override
@@ -93,8 +92,7 @@ public class SettingsActivity extends Activity {
         render();
     }
 
-    /** The rail on the left: a track that fills (gold) as you go down the settings, full on the last row,
-     *  with «١٢ من ٢٤» under it. */
+    /** The rail on the left, the screen's whole height: it fills (gold) as you go down, full on the last row. */
     private View rail() {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
@@ -114,16 +112,8 @@ public class SettingsActivity extends Activity {
         railFill.setPivotY(0);
         railFill.setScaleY(0);
         track.addView(railFill, new android.widget.FrameLayout.LayoutParams(-1, -1));
-        int h = Math.round(getResources().getDisplayMetrics().heightPixels * 0.62f);
+        int h = getResources().getDisplayMetrics().heightPixels - dp(48);   // the whole height, a margin top and bottom
         box.addView(track, new LinearLayout.LayoutParams(dp(6), h));
-        railCount = new TextView(this);
-        railCount.setTextColor(0xFFC6BBA4);
-        railCount.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-        railCount.setTypeface(font("Thmanyah-Medium"));
-        railCount.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-2, -2);
-        cp.topMargin = dp(10);
-        box.addView(railCount, cp);
         return box;
     }
 
@@ -131,7 +121,6 @@ public class SettingsActivity extends Activity {
         if (railFill == null || rows.isEmpty() || index < 0) return;
         float f = (index + 1) / (float) rows.size();
         railFill.animate().scaleY(f).setDuration(220).start();
-        railCount.setText(arabicNum(index + 1) + "\nمن " + arabicNum(rows.size()));
     }
 
     /** Redraws the settings and stays where you were: the same row focused, the list scrolled as it was. */
@@ -155,7 +144,7 @@ public class SettingsActivity extends Activity {
         sub.setPadding(0, 0, 0, dp(18));
         list.addView(sub);
 
-        row("معاينة الشاشة", "شاهد الشاشة الآن", R.drawable.ic_play, new Runnable() { public void run() {
+        row("معاينة الشاشة", null, R.drawable.ic_play, new Runnable() { public void run() {
             startActivity(new Intent(SettingsActivity.this, MainActivity.class)); } });
 
         header("الموقع");
@@ -163,36 +152,33 @@ public class SettingsActivity extends Activity {
             new Runnable() { public void run() { pickCity(); } });
 
         header("مواقيت الصلاة");
-        row("الجامع", prefs.mosque()[0].isEmpty() ? "بدون جامع · حساب فلكي" : prefs.mosque()[1] + " · من مواقيت",
+        row("الجامع", prefs.mosque()[0].isEmpty() ? "حساب فلكي" : prefs.mosque()[1],
             R.drawable.ic_place, new Runnable() { public void run() { pickMosque(); } });
 
         header("الأذان");
-        row("الأذان عند دخول الوقت", prefs.adhanOn() ? "يعمل · فوق أي تطبيق، ويوقف الفيديو ثم يكمله" : "متوقف",
+        row("الأذان عند دخول الوقت", prefs.adhanOn() ? "يعمل" : "متوقف",
             R.drawable.ic_screensaver, new Runnable() { public void run() {
                 prefs.setAdhanOn(!prefs.adhanOn()); Adhan.update(SettingsActivity.this, false); render(); } });
         // the notice before each adhan has its own switch: it works with the adhan off too
         int rm = prefs.reminderMinutes();
-        row("تنبيه قبل الأذان", rm <= 0 ? "متوقف" : "قبل " + AdhanTimes.arabic(String.valueOf(rm)) + " دقيقة · أعلى يمين الشاشة"
-                + (Reminder.canDraw(this) ? "" : " (كإشعار: إذن الظهور فوق التطبيقات غير مفعّل)"),
+        row("تنبيه قبل الأذان", rm <= 0 ? "متوقف" : "قبل " + AdhanTimes.arabic(String.valueOf(rm)) + " دقيقة",
             R.drawable.ic_eye, new Runnable() { public void run() { pickReminder(); } });
         if (prefs.adhanOn()) {
             String next = prefs.nextAdhan();
-            row("صوت الأذان", Adhan.label(prefs.adhanVoice()) + " · للظهر والعصر والمغرب والعشاء",
+            row("صوت الأذان", Adhan.label(prefs.adhanVoice()),
                 R.drawable.ic_star, new Runnable() { public void run() { pickAdhanVoice(false); } });
-            row("أذان الفجر", prefs.adhanFajr().isEmpty() ? "بدون أذان للفجر" : Adhan.label(prefs.adhanFajr()),
+            row("أذان الفجر", prefs.adhanFajr().isEmpty() ? "متوقف" : Adhan.label(prefs.adhanFajr()),
                 R.drawable.ic_star, new Runnable() { public void run() { pickAdhanVoice(true); } });
-            row("مستوى صوت الأذان", AdhanTimes.arabic(String.valueOf(prefs.adhanVolume()))
-                    + " · ثم يرجع الصوت كما كان", R.drawable.ic_sync,
+            row("مستوى صوت الأذان", AdhanTimes.arabic(String.valueOf(prefs.adhanVolume())), R.drawable.ic_sync,
                 new Runnable() { public void run() { pickAdhanVolume(); } });
-            row("جرّب الأذان الآن", next.isEmpty() ? "يشغّل الصوت المختار بمستواه" : "الأذان القادم: " + next,
+            row("جرّب الأذان الآن", next.isEmpty() ? null : "القادم: " + next,
                 R.drawable.ic_play, new Runnable() { public void run() { testAdhan(); } });
         }
 
         header("المباريات");
         row("الفرق المتابعة (" + arabicNum(prefs.teams().size()) + "/" + arabicNum(Prefs.MAX_TEAMS) + ")", teamsLabel(),
             R.drawable.ic_trophy, new Runnable() { public void run() { manageTeams(); } });
-        row("مصدر المباريات", prefs.fdKey().isEmpty() ? "TheSportsDB · مباراة واحدة لكل فريق · أضف مفتاح football-data.org المجاني"
-                : "football-data.org · خمس مباريات قادمة لكل فريق أوروبي",
+        row("مصدر المباريات", prefs.fdKey().isEmpty() ? "TheSportsDB" : "football-data.org",
             R.drawable.ic_trophy, new Runnable() { public void run() { askFdKey(); } });
 
         header("بجانب الساعة");
@@ -201,23 +187,22 @@ public class SettingsActivity extends Activity {
         header("الشاشة الرئيسية (تلفزيونك)");
         row("بطاقة على الشاشة الرئيسية", Prefs.panelLabel(prefs.homePanel()), R.drawable.ic_eye,
             new Runnable() { public void run() { pickPanel(true); } });
-        row("ترتيب التطبيقات المفضلة", "قائمة ترتّب فيها المفضلة بالأسهم", R.drawable.ic_star,
+        row("ترتيب التطبيقات المفضلة", null, R.drawable.ic_star,
             new Runnable() { public void run() { openDockSettings(); } });
 
         header("التوقيت");
         row("تبديل الصورة كل", minutesLabel(Integer.parseInt(prefs.photoMinutes())), R.drawable.ic_sync,
             new Runnable() { public void run() { pickPhotoMinutes(); } });
-        row("تعتيم ليلي", prefs.nightDim() ? "يعمل · تخفّ الإضاءة تدريجياً من ٩ م حتى ٧ ص" : "متوقف · الإضاءة كاملة دائماً",
+        row("تعتيم ليلي", prefs.nightDim() ? "يعمل · ٩ م حتى ٧ ص" : "متوقف",
             R.drawable.ic_eye, new Runnable() { public void run() { prefs.setNightDim(!prefs.nightDim()); render(); } });
         row("بدء شاشة التوقف بعد", idleLabel(), R.drawable.ic_screensaver,
             new Runnable() { public void run() { pickIdle(); } });
 
         header("التطبيق");
-        row("التحديث التلقائي", prefs.autoUpdate() ? "يعمل · الشاشة والتطبيقان، كل ٦ ساعات، بدون لابتوب" : "متوقف", R.drawable.ic_sync, new Runnable() { public void run() {
+        row("التحديث التلقائي", prefs.autoUpdate() ? "يعمل" : "متوقف", R.drawable.ic_sync, new Runnable() { public void run() {
             prefs.setAutoUpdate(!prefs.autoUpdate()); render(); } });
         String upd = SelfUpdate.status(this);
-        row("حدّث الآن", "الإصدار ٣٫" + SelfUpdate.arabic(SelfUpdate.mine(this)) + (upd.isEmpty() ? "" : " · " + upd)
-                + ". ينزّل أحدث نسخة من الشاشة والتطبيقين من الإنترنت ويثبّتها، وإعداداتك كلها تبقى.",
+        row("حدّث الآن", "الإصدار ٣٫" + SelfUpdate.arabic(SelfUpdate.mine(this)) + (upd.isEmpty() ? "" : " · " + upd),
             R.drawable.ic_sync, new Runnable() { public void run() { updateNow(); } });
 
         // after the layout pass: the scroll as it was, then the same row (by its name; else the same place)

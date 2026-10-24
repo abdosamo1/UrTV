@@ -76,7 +76,7 @@ const SAMPLE = {
     NEXT_LIST = { '136013': [ev('a', 'Al-Hilal', 'Al-Nassr', 3), ev('b', 'Al-Ahli', 'Al-Hilal', 80)] };
   },
 };
-const EXPECT = { prayers: [6, 'مواقيت الصلاة'], forecast: [5, 'الأيام القادمة'], matches: [2, 'مباريات فرقك القادمة'],
+const EXPECT = { prayers: [6, 'مواقيت الصلاة'], forecast: [5, 'الطقس'], matches: [2, 'مباريات فرقك القادمة'],
                  verse: [2, null] };
 for (const [panel, [rows, title]] of Object.entries(EXPECT)) {
   const { p, ctx, errors } = await open('tv.html', 'teams=136013&panel=' + panel);
@@ -164,23 +164,28 @@ for (const panel of ['prayers', 'verse']) {
 // ---- «auto»: the four cards in turn every 30 s; a card with nothing to show is skipped
 {
   const { p, ctx, errors } = await open('tv.html', 'teams=136013&panel=auto');
-  const seq = await p.evaluate(() => {
+  const seq = await p.evaluate(async () => {
     FORECAST = [0, 1, 2].map(i => ({ date: new Date(Date.now() + i * 864e5).toISOString().slice(0, 10), code: 2, hi: 30, lo: 20 }));
     NEXT_LIST = {};   // no games this week: the matches card is skipped
     const out = [document.getElementById('week-hd').textContent];
-    for (let i = 0; i < 4; i++) { rotateCard(); out.push(document.getElementById('week-hd').textContent); }
+    for (let i = 0; i < 4; i++) {   // each change fades out, then in (380 ms)
+      rotateCard();
+      await new Promise(r => setTimeout(r, 450));
+      out.push(document.getElementById('week-hd').textContent);
+    }
     return out;
   });
   const verse = t => ['آية اليوم', 'حديث اليوم'].includes(t);
   check('auto: verse → prayers → forecast → (no games: skipped) → verse', !errors.length && verse(seq[0])
-        && seq[1] === 'مواقيت الصلاة' && seq[2] === 'الأيام القادمة' && verse(seq[3]) && seq[4] === 'مواقيت الصلاة', JSON.stringify(seq));
+        && seq[1] === 'مواقيت الصلاة' && seq[2] === 'الطقس' && verse(seq[3]) && seq[4] === 'مواقيت الصلاة', JSON.stringify(seq));
   const every = await p.evaluate(() => ROTATE_MS);
   check('auto: every 30 seconds', every === 30000, every);
   await ctx.close();
 }
 {
   const { p, ctx } = await open('tv.html', 'panel=prayers');
-  const r = await p.evaluate(() => { const a = document.getElementById('week-hd').textContent; rotateCard(); return [a, document.getElementById('week-hd').textContent]; });
+  const r = await p.evaluate(async () => { const a = document.getElementById('week-hd').textContent; rotateCard();
+    await new Promise(r => setTimeout(r, 450)); return [a, document.getElementById('week-hd').textContent]; });
   check('a single chosen card does not rotate', r[0] === 'مواقيت الصلاة' && r[1] === 'مواقيت الصلاة', JSON.stringify(r));
   await ctx.close();
 }

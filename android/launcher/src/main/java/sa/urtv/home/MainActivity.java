@@ -96,6 +96,7 @@ public class MainActivity extends Activity {
     static final long WALLPAPER_INTERVAL_MS = 10 * 60 * 1000;
     private TextView greeting, clock, ampm, date, title, wifiPill, appsLabel;
     private ImageView avatar;
+    private View bottomBlock;
     private long avatarStamp = -1;
     // today's Fajr, Dhuhr, Maghrib (minutes) from the screensaver's mosque timetable, read once in a while
     private int[] prayers;
@@ -264,6 +265,9 @@ public class MainActivity extends Activity {
         homeCard = new HomeCard(this, hero, lp(dp(461), dp(250), Gravity.LEFT | Gravity.TOP, dp(48), dp(84), 0, 0));
 
         LinearLayout bottom = new LinearLayout(this);
+        bottomBlock = bottom;
+        // the card keeps its full size; only a card taller than the space down to the favourites row is fitted
+        homeCard.setRoom(() -> bottomBlock.getHeight() == 0 ? 0 : bottomBlock.getTop() + dockRow.getTop() - dp(84) - dp(14));
         bottom.setOrientation(LinearLayout.VERTICAL);
         bottom.setClipChildren(false);
         bottom.setClipToPadding(false);
@@ -272,8 +276,10 @@ public class MainActivity extends Activity {
         title = text(34, "sans-serif-light", Color.WHITE);
         title.setShadowLayer(dp(18), 0, 0, 0x66000000);
         title.setSingleLine(true);
-        bottom.addView(title, new LinearLayout.LayoutParams(-2, -2));
-        ((LinearLayout.LayoutParams) title.getLayoutParams()).setMargins(dp(8), 0, 0, dp(14));
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(-2, -2);
+        tlp.gravity = Gravity.RIGHT;   // on the right: the card is on the left
+        tlp.setMargins(0, 0, dp(8), dp(14));
+        bottom.addView(title, tlp);
 
         dockRow = new LinearLayout(this);
         dockRow.setOrientation(LinearLayout.HORIZONTAL);
