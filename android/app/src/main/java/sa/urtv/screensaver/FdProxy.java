@@ -39,12 +39,12 @@ final class FdProxy {
             InputStream in = code >= 400 ? con.getErrorStream() : con.getInputStream();
             body = in == null ? new byte[0] : readAll(in);
         } catch (Exception e) {
-            note(c, -1);
+            note(c, -1, url, "");
             return null;   // no connection: the page's fetch fails and it keeps what it shows
         } finally {
             if (con != null) con.disconnect();
         }
-        note(c, code);
+        note(c, code, url, code >= 400 ? reason(body) : "");
         return new WebResourceResponse("application/json", "utf-8", code < 100 ? 502 : code,
             code == 200 ? "OK" : "Error", Collections.singletonMap("Access-Control-Allow-Origin", "*"),
             new ByteArrayInputStream(body));
@@ -52,9 +52,28 @@ final class FdProxy {
 
     private static SharedPreferences sp(Context c) { return c.getSharedPreferences("fdproxy", Context.MODE_PRIVATE); }
 
-    private static void note(Context c, int code) {
-        sp(c).edit().putInt("code", code).putLong("at", System.currentTimeMillis()).apply();
+    private static void note(Context c, int code, String url, String why) {
+        // the log: newest first, eight lines «HH:mm code path · reason» (the key is never in the address)
+        String line = new java.text.SimpleDateFormat("HH:mm", java.util.Locale.ROOT).format(new java.util.Date())
+            + " " + code + " " + url.substring(API.length()) + (why.isEmpty() ? "" : " · " + why);
+        String[] old = sp(c).getString("log", "").split("\n");
+        StringBuilder log = new StringBuilder(line);
+        for (int i = 0; i < old.length && i < 7; i++) if (!old[i].isEmpty()) log.append('\n').append(old[i]);
+        sp(c).edit().putInt("code", code).putLong("at", System.currentTimeMillis()).putString("log", log.toString()).apply();
     }
+
+    /** the site's own words: {"error": "..."} or {"message": "..."} */
+    private static String reason(byte[] body) {
+        try {
+            org.json.JSONObject j = new org.json.JSONObject(new String(body, "UTF-8"));
+            String r = j.optString("error", j.optString("message", ""));
+            return r.length() > 140 ? r.substring(0, 140) + "…" : r;
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    static String log(Context c) { return sp(c).getString("log", ""); }
 
     /** «تعمل», «المفتاح مرفوض», …, or "" before the first request */
     static String status(Context c) {

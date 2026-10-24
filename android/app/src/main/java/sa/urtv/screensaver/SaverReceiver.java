@@ -215,7 +215,8 @@ public class SaverReceiver extends BroadcastReceiver {
             + "\nidle: " + idle(Prefs.idleMs(c))
             + "\nnight dimming: " + p.nightDim()
             + "\nmatches from: " + (p.fdKey().isEmpty() ? "TheSportsDB" : "football-data.org (key set) | last: "
-                + (FdProxy.status(c).isEmpty() ? "no request yet" : FdProxy.status(c)))
+                + (FdProxy.status(c).isEmpty() ? "no request yet" : FdProxy.status(c))
+                + (FdProxy.log(c).isEmpty() ? "" : "\n  " + FdProxy.log(c).replace("\n", "\n  ")))
             + "\nautoupdate: " + p.autoUpdate()
             + "\nadhan: " + p.adhanOn() + " | voice " + p.adhanVoice() + " | fajr " + (p.adhanFajr().isEmpty() ? "off" : p.adhanFajr())
             + " | volume " + p.adhanVolume() + " | next: " + p.nextAdhan()

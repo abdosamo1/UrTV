@@ -277,6 +277,36 @@ for (const [hash, dimmed] of [['', false], ['night=0', false], ['night=1', true]
   await ctx.close();
 }
 
+// ---- football-data refuses the filtered request (400): the season's list without filters, sorted out on the page
+{
+  const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  const day = n => new Date(Date.now() + n * 864e5).toISOString();
+  const BAR = { id: 81, name: 'FC Barcelona', shortName: 'Barça' }, O = n => ({ id: 900 + n, name: 'Opp ' + n, shortName: 'Opp ' + n });
+  const m = (id, h, a, n, st, sc) => ({ id, utcDate: day(n), status: st, homeTeam: h, awayTeam: a,
+                                        score: { fullTime: sc ? { home: sc[0], away: sc[1] } : { home: null, away: null } } });
+  await ctx.route(/^https?:/, r => {
+    const u = new URL(r.request().url()), cors = { 'Access-Control-Allow-Origin': '*' };
+    if (u.host !== 'api.football-data.org') return r.abort();
+    if (u.pathname === '/v4/competitions/PD/teams') return r.fulfill({ headers: cors, contentType: 'application/json', body: JSON.stringify({ teams: [BAR] }) });
+    if (u.pathname === '/v4/teams/81/matches' && u.searchParams.has('status'))
+      return r.fulfill({ status: 400, headers: cors, contentType: 'application/json', body: '{"error":"Invalid filter"}' });
+    if (u.pathname === '/v4/teams/81/matches')   // the whole season, in no order: past, future, a result yesterday
+      return r.fulfill({ headers: cors, contentType: 'application/json', body: JSON.stringify({ matches: [
+        m(9, BAR, O(9), 30, 'SCHEDULED'), m(1, O(1), BAR, -20, 'FINISHED', [0, 2]), m(2, BAR, O(2), 2, 'TIMED'),
+        m(3, BAR, O(3), -1, 'FINISHED', [4, 0]), m(4, O(4), BAR, 6, 'TIMED'), m(5, BAR, O(5), 9, 'TIMED'),
+        m(6, O(6), BAR, 13, 'SCHEDULED'), m(7, BAR, O(7), 20, 'SCHEDULED'), m(8, O(8), BAR, 27, 'SCHEDULED')] }) });
+    return r.fulfill({ headers: cors, contentType: 'application/json', body: '{"teams":[]}' });
+  });
+  const p = await ctx.newPage();
+  await p.goto(page('tv.html') + '#teams=133739&panel=matches&fdkey=abc123');
+  await p.evaluate(() => { FD_PAUSE = 0; });
+  await p.waitForFunction(() => (NEXT_LIST['133739'] || []).length === 5, null, { timeout: 8000 }).catch(() => {});
+  const r = await p.evaluate(() => ({ next: (NEXT_LIST['133739'] || []).map(e => e.idEvent), results: (RESULTS['133739'] || []).map(e => e.idEvent) }));
+  check('football-data refuses the filter (400): the five coming games from the season list, in order, and yesterday\'s result',
+        r.next.join(',') === 'fd2,fd4,fd5,fd6,fd7' && r.results.join(',') === 'fd3', JSON.stringify(r));
+  await ctx.close();
+}
+
 // ---- in the app (#fdnative=1) the page sends no key at all: the app adds it (FdProxy), so no CORS preflight
 {
   const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });

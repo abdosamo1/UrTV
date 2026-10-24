@@ -1057,12 +1057,24 @@ async function fdLoad(id){
   const fid = (await fdIndex())[teamKey(en)];
   if(!fid) return false;   // not in the free competitions (a Saudi club): TheSportsDB
   const day = n => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
-  const up = (await fdGet(`teams/${fid}/matches?status=SCHEDULED,TIMED,IN_PLAY,PAUSED&limit=5`)).matches || [];
+  const COMING = ['SCHEDULED', 'TIMED', 'IN_PLAY', 'PAUSED'];
+  let up, done = null;
+  try{ up = (await fdGet(`teams/${fid}/matches?status=${COMING.join(',')}&limit=5`)).matches || []; }
+  catch(e){
+    if(e !== 400) throw e;
+    // the filtered request refused: the season's games with no filter at all, sorted out here
+    const all = ((await fdGet(`teams/${fid}/matches?limit=200`)).matches || [])
+      .sort((a, b) => new Date(a.utcDate) - new Date(b.utcDate));
+    up = all.filter(m => COMING.includes(m.status)).slice(0, 5);
+    const since = Date.now() - 3 * 86400000;
+    done = all.filter(m => m.status === 'FINISHED' && new Date(m.utcDate).getTime() >= since);
+  }
   const evs = up.map(fdEvent);
   NEXT_LIST[id] = evs;
   const ev = evs[0];
   if(ev){ if(MATCHES[id] && MATCHES[id].idEvent !== ev.idEvent) keepResult(id, MATCHES[id]); MATCHES[id] = ev; }
-  try{ RESULTS[id] = ((await fdGet(`teams/${fid}/matches?status=FINISHED&dateFrom=${day(-3)}&dateTo=${day(0)}`)).matches || []).map(fdEvent); }
+  if(done) RESULTS[id] = done.map(fdEvent);
+  else try{ RESULTS[id] = ((await fdGet(`teams/${fid}/matches?status=FINISHED&dateFrom=${day(-3)}&dateTo=${day(0)}`)).matches || []).map(fdEvent); }
   catch(e){}
   return true;
 }

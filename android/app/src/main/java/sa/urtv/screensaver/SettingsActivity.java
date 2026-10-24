@@ -390,7 +390,14 @@ public class SettingsActivity extends Activity {
             .setMessage("مجاني: سجّل بإيميلك على football-data.org وانسخ المفتاح هنا. يبقى على هذا التلفزيون فقط.")
             .setView(in)
             .setPositiveButton("حفظ", (d, w) -> { prefs.setFdKey(in.getText().toString().trim()); render(); })
-            .setNeutralButton("حذف المفتاح", (d, w) -> { prefs.setFdKey(""); render(); })
+            .setNeutralButton(FdProxy.log(this).isEmpty() ? "حذف المفتاح" : "سجل الاتصال", (d, w) -> {
+                if (FdProxy.log(this).isEmpty()) { prefs.setFdKey(""); render(); return; }
+                new AlertDialog.Builder(this, DIALOG_THEME).setTitle("آخر طلبات football-data.org")
+                    .setMessage(FdProxy.log(this))   // newest first: time, answer, request · the site's reason
+                    .setPositiveButton("تم", null)
+                    .setNeutralButton("حذف المفتاح", (d2, w2) -> { prefs.setFdKey(""); render(); })
+                    .show();
+            })
             .setNegativeButton("إلغاء", null).show();
         in.requestFocus();
     }
