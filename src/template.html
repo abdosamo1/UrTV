@@ -33,6 +33,10 @@
   html.widget .mid{display:block}
   html.widget .week{width:100%;background:transparent;border:none;box-shadow:none;border-radius:0}
   html.widget .week::before,html.widget .week::after{display:none}   /* on the home screen the app draws the glass */
+  html.widget .week{padding:0}
+  html.widget .week .hd{margin-bottom:8px}
+  html.widget .week li,html.widget .week li.pr{padding:6px 0}
+  html.widget .week li.src{padding:4px 0 0}
   html,body{
     height:100%;overflow:hidden;background:#040E09;color:var(--sand);
     font-family:'Thmanyah',system-ui,sans-serif;
@@ -135,6 +139,15 @@
   .week li.past{color:#8F8670}
   .week li.next{color:#FFE9B8}
   .week li.next .dt{color:#E0BA74}
+  /* every word on the card outlined in black, so it reads on light glass and bright photos */
+  .week{text-shadow:-1px 0 0 #000,1px 0 0 #000,0 -1px 0 #000,0 1px 0 #000,0 2px 6px rgba(0,0,0,.55)}
+  /* the prayer card: bigger rows, times as ٠١:٠٣, the next prayer's countdown between its name and its time */
+  .week li.pr{font-size:clamp(20px,1.6vw,31px);font-weight:500;padding:.95vh 0}
+  .week li.pr .dt{flex:1 1 auto;font-size:.9em;color:#E9DFC8;font-variant-numeric:tabular-nums}
+  .week li.pr.past{color:#C8BEA6}
+  .week li.pr.past .dt{color:#C8BEA6}
+  .week li.pr.next .cd{flex:1 1 auto;text-align:center;font-size:.78em;color:#F1CF8A;font-variant-numeric:tabular-nums}
+  .week li.pr.next .dt{flex:0 0 auto;color:#FFE9B8}
   .week li.quote{white-space:normal;display:block;font-size:clamp(17px,1.5vw,29px);line-height:1.75;
     border-bottom:none;padding:.4vh 0 0;color:#FFF7E6}
   /* Thmanyah draws ﴿﴾ as small angle marks: they come from the NotoMarks subset */
@@ -466,9 +479,9 @@ function riyadhParts(d = new Date()){
   }).formatToParts(d).reduce((a,p)=>(a[p.type]=p.value,a),{});
   return { y:+f.year, mo:+f.month, d:+f.day, h:(+f.hour)%24, mi:+f.minute, s:+f.second };
 }
-function fmt12(h, mi){
+function fmt12(h, mi){   // «٠١:٠٣ م»: two-digit hours, so the times line up
   const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${ar(h12)}:${ar(pad(mi))} ${h < 12 ? 'ص' : 'م'}`;
+  return `${ar(pad(h12))}:${ar(pad(mi))} ${h < 12 ? 'ص' : 'م'}`;
 }
 
 function tickClock(){
@@ -992,7 +1005,7 @@ const WEEK_ROWS = 5;   // rows on the card beside the clock (a longer list pages
 let FORECAST = [];
 try{ FORECAST = JSON.parse(localStorage.getItem('forecast:' + location.hash) || '[]') || []; }catch(e){}
 let LIST_PAGE = 0;
-const PANEL_TITLE = {prayers:'مواقيت اليوم', forecast:'الأيام القادمة', matches:'مباريات فرقك'};
+const PANEL_TITLE = {prayers:'مواقيت الصلاة', forecast:'الأيام القادمة', matches:'مباريات فرقك'};
 
 // «auto»: the four cards in turn, every 30 s; one with nothing to show right now (no forecast offline, no games
 // this week) is skipped. PANEL is the card on screen.
@@ -1049,9 +1062,26 @@ function prayerRows(){
     const [h, mi] = String(DAY_TIMES[k]).split(':').map(Number);
     const at = h * 60 + mi;
     let cls = at < now ? 'past' : '';
-    if(at >= now && !next){ next = k; cls = 'next'; }
-    return `<li class="${cls}"><span>${names[k]}</span><span class="dt">${fmt12(h, mi)}</span></li>`;
+    let cd = '';
+    if(at >= now && !next){ next = k; cls = 'next'; cd = `<span class="cd" data-at="${at}">${countdownText(at)}</span>`; }
+    return `<li class="pr ${cls}"><span>${names[k]}</span>${cd}<span class="dt">${fmt12(h, mi)}</span></li>`;
   });
+}
+
+/** «بعد ٠١:٢٣:٤٥» to `at` (minutes after midnight, the place's time) */
+function countdownText(at){
+  const p = riyadhParts();
+  const left = Math.max(0, at * 60 - (p.h * 3600 + p.mi * 60 + p.s));
+  const hh = Math.floor(left / 3600), mm = Math.floor(left % 3600 / 60), ss = left % 60;
+  return 'بعد ' + ar(pad(hh) + ':' + pad(mm) + ':' + pad(ss));
+}
+/** every second: only the countdown's text changes (the row is redrawn when the prayer comes) */
+function tickCountdown(){
+  const el = document.querySelector('.week li.next .cd');
+  if(!el) return;
+  const at = +el.dataset.at, p = riyadhParts();
+  if(p.h * 60 + p.mi >= at){ renderPanel(false); return; }   // its time: the next prayer moves on
+  el.textContent = countdownText(at);
 }
 
 function forecastRows(){
@@ -1322,6 +1352,7 @@ function boot(){
   applyNight(); pixelShift();
 
   setInterval(tickClock, 1000);
+  setInterval(tickCountdown, 1000);
   setInterval(()=>{ tickDates(); tickPrayer(); tickRamadan(); if(PANEL === 'prayers') renderPanel(false); }, 15000);
   setInterval(rotateCard, ROTATE_MS);
   setInterval(() => renderMatches(false), 60000);
@@ -1356,6 +1387,7 @@ function bootWidget(){
   if(wants('forecast')){ loadWeather(); setInterval(loadWeather, 30*60*1000); }
   if(wants('matches')){ loadMatches(); setInterval(loadMatches, 30*60*1000); setInterval(loadLive, 2*60000); }
   setInterval(rotateCard, ROTATE_MS);
+  setInterval(tickCountdown, 1000);
   setInterval(() => {
     if(PANEL === 'matches'){ LIST_PAGE++; renderPanel(matchRows().length > WEEK_ROWS); }
   }, 25*1000);

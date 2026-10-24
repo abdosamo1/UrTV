@@ -76,7 +76,7 @@ const SAMPLE = {
     NEXT_LIST = { '136013': [ev('a', 'Al-Hilal', 'Al-Nassr', 3), ev('b', 'Al-Ahli', 'Al-Hilal', 80)] };
   },
 };
-const EXPECT = { prayers: [6, 'مواقيت اليوم'], forecast: [5, 'الأيام القادمة'], matches: [2, 'مباريات فرقك'],
+const EXPECT = { prayers: [6, 'مواقيت الصلاة'], forecast: [5, 'الأيام القادمة'], matches: [2, 'مباريات فرقك'],
                  verse: [2, null] };
 for (const [panel, [rows, title]] of Object.entries(EXPECT)) {
   const { p, ctx, errors } = await open('tv.html', 'teams=136013&panel=' + panel);
@@ -173,7 +173,7 @@ for (const panel of ['prayers', 'verse']) {
   });
   const verse = t => ['آية اليوم', 'حديث اليوم'].includes(t);
   check('auto: verse → prayers → forecast → (no games: skipped) → verse', !errors.length && verse(seq[0])
-        && seq[1] === 'مواقيت اليوم' && seq[2] === 'الأيام القادمة' && verse(seq[3]) && seq[4] === 'مواقيت اليوم', JSON.stringify(seq));
+        && seq[1] === 'مواقيت الصلاة' && seq[2] === 'الأيام القادمة' && verse(seq[3]) && seq[4] === 'مواقيت الصلاة', JSON.stringify(seq));
   const every = await p.evaluate(() => ROTATE_MS);
   check('auto: every 30 seconds', every === 30000, every);
   await ctx.close();
@@ -181,7 +181,7 @@ for (const panel of ['prayers', 'verse']) {
 {
   const { p, ctx } = await open('tv.html', 'panel=prayers');
   const r = await p.evaluate(() => { const a = document.getElementById('week-hd').textContent; rotateCard(); return [a, document.getElementById('week-hd').textContent]; });
-  check('a single chosen card does not rotate', r[0] === 'مواقيت اليوم' && r[1] === 'مواقيت اليوم', JSON.stringify(r));
+  check('a single chosen card does not rotate', r[0] === 'مواقيت الصلاة' && r[1] === 'مواقيت الصلاة', JSON.stringify(r));
   await ctx.close();
 }
 
@@ -203,6 +203,28 @@ for (const [hash, dimmed] of [['', false], ['night=0', false], ['night=1', true]
              x: parseFloat(w.style.getPropertyValue('--bgx')), left: rect.left };
   });
   check('card: glass over the blurred photo, lined up', r.photo && r.blur && r.radius === '24px' && Math.abs(r.x - (40 - r.left)) < 1, JSON.stringify(r));
+  await ctx.close();
+}
+
+// ---- the prayer card: «مواقيت الصلاة», times as ٠١:٠٣, a live countdown on the next prayer, black outline
+{
+  const { p, ctx, errors } = await open('tv.html', 'panel=prayers');
+  const r = await p.evaluate(async () => {
+    window.riyadhParts = () => ({ y: 2026, mo: 10, d: 24, h: 13, mi: 0, s: 15 });
+    DAY_TIMES = { Fajr: '05:10', Sunrise: '07:00', Dhuhr: '13:03', Asr: '15:40', Maghrib: '18:20', Isha: '20:05' };
+    renderPanel(false);
+    const li = document.querySelector('.week li.next');
+    const before = li.querySelector('.cd').textContent;
+    window.riyadhParts = () => ({ y: 2026, mo: 10, d: 24, h: 13, mi: 0, s: 16 });
+    tickCountdown();
+    return { hd: document.getElementById('week-hd').textContent, rows: [...document.querySelectorAll('.week li')].map(x => x.textContent),
+             before, after: li.querySelector('.cd').textContent, shadow: getComputedStyle(document.querySelector('.week')).textShadow };
+  });
+  check('prayer card: titled «مواقيت الصلاة»', !errors.length && r.hd === 'مواقيت الصلاة', JSON.stringify(r));
+  check('prayer card: times as ٠١:٠٣ (two-digit hours)', r.rows[0].includes('٠٥:١٠ ص') && r.rows[2].includes('٠١:٠٣ م'), JSON.stringify(r.rows));
+  check('prayer card: the next prayer counts down between its name and its time, every second',
+        r.before === 'بعد ٠٠:٠٢:٤٥' && r.after === 'بعد ٠٠:٠٢:٤٤' && (r.rows[2].startsWith('الظهر') || r.rows[2].startsWith('الجمعة')), JSON.stringify(r));
+  check('prayer card: words outlined in black', /rgb\(0, 0, 0\)/.test(r.shadow), r.shadow);
   await ctx.close();
 }
 

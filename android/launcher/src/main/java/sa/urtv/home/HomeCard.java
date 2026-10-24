@@ -31,6 +31,31 @@ final class HomeCard {
     private WebView web;
     private FrameLayout frame;   // the glass the card sits in (Glass: the frosted wallpaper, a tint, gloss and rim)
     private String url;
+    private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private int lastHeight = -1;
+
+    /** The frame takes the card's own height (the four cards differ, and they take turns): asked every 1.5 s. */
+    private final Runnable fit = new Runnable() {
+        @Override public void run() {
+            if (web == null || frame == null) return;
+            web.evaluateJavascript("(function(){var w=document.querySelector('.week');"
+                + "return w?Math.ceil(w.getBoundingClientRect().height):0;})()", v -> {
+                    try {
+                        int css = Integer.parseInt(v.replace("\"", "").trim());
+                        if (css <= 0 || frame == null) return;
+                        float d = activity.getResources().getDisplayMetrics().density;
+                        int px = Math.round(Math.min(css + 22, 560) * d);   // + the frame's padding
+                        if (px != lastHeight) {
+                            lastHeight = px;
+                            ViewGroup.LayoutParams lp = frame.getLayoutParams();
+                            lp.height = px;
+                            frame.setLayoutParams(lp);
+                        }
+                    } catch (Exception ignored) { }
+                });
+            handler.postDelayed(this, 1500);
+        }
+    };
 
     HomeCard(Activity activity, ViewGroup parent, FrameLayout.LayoutParams params) {
         this.activity = activity;
@@ -45,14 +70,19 @@ final class HomeCard {
         if (!want.equals(url)) { destroy(); create(want); }
         web.onResume();
         web.resumeTimers();
+        handler.removeCallbacks(fit);
+        handler.post(fit);
     }
 
     /** onPause: no timers or network while an app is in front. */
     void pause() {
+        handler.removeCallbacks(fit);
         if (web != null) { web.onPause(); web.pauseTimers(); }
     }
 
     void destroy() {
+        handler.removeCallbacks(fit);
+        lastHeight = -1;
         if (web == null) return;
         parent.removeView(frame);
         frame = null;
@@ -118,7 +148,7 @@ final class HomeCard {
         int pad = Math.round(14 * d);
         frame.setPadding(pad, Math.round(10 * d), pad, Math.round(10 * d));
         frame.addView(web, new FrameLayout.LayoutParams(-1, -1));
-        parent.addView(frame, params);
+        parent.addView(frame, new FrameLayout.LayoutParams(params));   // its own copy: the height changes
         url = u;
         web.loadUrl(u);
     }
