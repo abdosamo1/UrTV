@@ -995,7 +995,7 @@ function renderMatches(turn){
 // ---------- football-data.org (#fdkey): the next five games, home and away, for the clubs it covers ----------
 const FD = 'https://api.football-data.org/v4/';
 const FD_COMPS = ['PD', 'PL', 'SA', 'BL1', 'FL1', 'DED', 'PPL', 'CL'];   // the free plan's club competitions
-const FD_KEY = 'fdIndex1';
+const FD_KEY = 'fdIndex2';   // 2: fdIndex1 could hold a list missing a league (kept 30 days)
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let FD_PAUSE = CONFIG.fdNative ? 0 : 6500;   // in the app its proxy spaces requests already (10 a minute allowed)
 async function fdGet(path){
@@ -1010,6 +1010,7 @@ async function fdGet(path){
   }finally{ clearTimeout(t); }
 }
 // club name -> football-data id, from the competitions' team lists: built once a month, slowly (10 calls a minute)
+try{ localStorage.removeItem('fdIndex1'); }catch(e){}
 let FD_INDEX = (() => { try{ return JSON.parse(localStorage.getItem(FD_KEY) || 'null'); }catch(e){ return null; } })();
 let FD_BUILDING = null;
 function fdIndex(){
@@ -1017,14 +1018,18 @@ function fdIndex(){
   if(FD_BUILDING) return FD_BUILDING;
   FD_BUILDING = (async () => {
     const map = {};
+    let missed = 0;
     for(let i = 0; i < FD_COMPS.length; i++){
       if(i) await sleep(FD_PAUSE);
       try{
         for(const t of (await fdGet(`competitions/${FD_COMPS[i]}/teams`)).teams || [])
           for(const n of [t.name, t.shortName]) if(n && !(teamKey(n) in map)) map[teamKey(n)] = t.id;
-      }catch(e){ if(e === 401 || e === 403) break; }   // a wrong key: no use asking the rest
+      }catch(e){ missed++; if(e === 401 || e === 403) break; }   // a wrong key: no use asking the rest
     }
-    if(Object.keys(map).length){ FD_INDEX = {at: Date.now(), map}; try{ localStorage.setItem(FD_KEY, JSON.stringify(FD_INDEX)); }catch(e){} }
+    // kept 30 days only when every league answered: a list missing La Liga (refused once) left Barcelona on
+    // TheSportsDB for a month on the home screen. A partial list is used now and asked again in 10 minutes.
+    if(!missed){ FD_INDEX = {at: Date.now(), map}; try{ localStorage.setItem(FD_KEY, JSON.stringify(FD_INDEX)); }catch(e){} }
+    else if(Object.keys(map).length) FD_INDEX = {at: Date.now() - 30 * 86400000 + 600000, map};
     FD_BUILDING = null;
     return map;
   })();

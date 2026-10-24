@@ -341,6 +341,25 @@ for (const [hash, dimmed] of [['', false], ['night=0', false], ['night=1', true]
   await ctx.close();
 }
 
+// ---- a league refused while the list of clubs is made: that list is not kept a month (Barcelona left out)
+{
+  const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  await ctx.route(/^https?:/, r => {
+    const u = new URL(r.request().url()), cors = { 'Access-Control-Allow-Origin': '*' };
+    if (u.host !== 'api.football-data.org') return r.abort();
+    if (u.pathname === '/v4/competitions/PD/teams') return r.fulfill({ status: 400, headers: cors, contentType: 'application/json', body: '{"message":"Your API token is invalid."}' });
+    if (u.pathname === '/v4/competitions/PL/teams') return r.fulfill({ headers: cors, contentType: 'application/json', body: JSON.stringify({ teams: [{ id: 57, name: 'Arsenal FC', shortName: 'Arsenal' }] }) });
+    return r.fulfill({ headers: cors, contentType: 'application/json', body: '{"teams":[],"matches":[]}' });
+  });
+  const p = await ctx.newPage();
+  await p.goto(page('tv.html') + '#teams=133739&panel=matches&fdkey=abc123');
+  await p.evaluate(() => { FD_PAUSE = 0; });
+  const r = await p.evaluate(async () => { FD_INDEX = null; await fdIndex();
+    return { kept: localStorage.getItem('fdIndex2'), soon: FD_INDEX && Date.now() - FD_INDEX.at > 29 * 86400000 }; });
+  check('a league refused: the list of clubs is not kept, asked again soon', r.kept === null && r.soon, JSON.stringify(r));
+  await ctx.close();
+}
+
 // ---- in the app (#fdnative=1) the page sends no key at all: the app adds it (FdProxy), so no CORS preflight
 {
   const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
