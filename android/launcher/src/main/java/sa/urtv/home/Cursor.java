@@ -15,7 +15,7 @@ import android.webkit.WebView;
 
 /**
  * A mouse pointer for websites (WebAppActivity), drawn over the page like TV Bro's: a clear disc with a ring. The
- * arrows glide it, faster while held; past an edge the page (or the scrolling box under it) scrolls instead. OK is a
+ * arrows glide it, faster while held; pushed past an edge it drags the page like a finger instead. OK is a
  * real tap at its centre, down on press and up on release, built as TV Bro builds it (a finger, with pressure), so a
  * button clicks and a field opens the keyboard. It fades after a few idle seconds and comes back on the next arrow.
  * Keys the on-screen keyboard sends (its arrows and Enter) are left alone.
@@ -34,13 +34,14 @@ final class Cursor extends View {
     private boolean pressed;                // OK held: the finger is down
     private int held;                       // the arrows held now (UP | DOWN | LEFT | RIGHT)
     private long heldSince, lastFrame;
-    private float scrollX, scrollY;         // edge scrolling, sent to the page a few times a second
-    private long scrollSent;
+    private boolean dragging;               // edge scrolling: a second, invisible finger drags the page
+    private float fx, fy, fx0, fy0;         // where that finger is, and where it went down
+    private long dragDownAt;
     private WebView web;
     /** Every frame while an arrow is held: glides, from 260 dp/s up to 1100 dp/s after a second held. */
     private final Runnable frame = new Runnable() {
         @Override public void run() {
-            if (held == 0 || web == null) { flushScroll(true); return; }
+            if (held == 0 || web == null) { endDrag(); return; }
             long now = SystemClock.uptimeMillis();
             float dt = Math.min(now - lastFrame, 50) / 1000f;
             lastFrame = now;
@@ -131,30 +132,42 @@ final class Cursor extends View {
         float sy = ny < 0 ? ny : ny > maxY ? ny - maxY : 0;
         x = Math.max(0, Math.min(nx, maxX));
         y = Math.max(0, Math.min(ny, maxY));
-        if (sx != 0 || sy != 0) { scrollX += sx * 2; scrollY += sy * 2; flushScroll(false); }
+        if (sx != 0 || sy != 0) drag(sx * 2, sy * 2, web);
         invalidate();
     }
 
-    private void flushScroll(boolean now) {
-        if (scrollX == 0 && scrollY == 0 || web == null) return;
-        if (!now && SystemClock.uptimeMillis() - scrollSent < 60) return;
-        scroll(web, scrollX, scrollY);
-        scrollX = scrollY = 0;
-        scrollSent = SystemClock.uptimeMillis();
+    /**
+     * Scrolls as a finger would, like TV Bro: a drag from the middle of the screen, against the pointer's push, so
+     * whatever scrolls under it (the page, a site's own list or panel) moves natively. Lifted and started again
+     * from the middle when the finger nears an edge, and lifted still (no fling) when the arrow is let go.
+     */
+    private void drag(float dx, float dy, WebView web) {
+        long now = SystemClock.uptimeMillis();
+        if (!dragging) {
+            fx = fx0 = getWidth() / 2f;
+            fy = fy0 = getHeight() / 2f;
+            dragDownAt = now;
+            finger(web, MotionEvent.ACTION_DOWN, fx, fy, dragDownAt, now);
+            dragging = true;
+        }
+        fx -= dx;
+        fy -= dy;
+        finger(web, MotionEvent.ACTION_MOVE, fx, fy, dragDownAt, now);
+        if (fx < getWidth() * 0.1f || fx > getWidth() * 0.9f || fy < getHeight() * 0.1f || fy > getHeight() * 0.9f) endDrag();
     }
 
-    /** Scrolls the nearest scrolling box under the pointer (a site's own list, a dialog), else the page. */
-    @SuppressWarnings("deprecation")
-    private void scroll(WebView web, float dx, float dy) {
-        float scale = web.getScale() > 0 ? web.getScale() : d;   // screen pixels per CSS pixel
-        String js = "(function(x,y,dx,dy){var e=document.elementFromPoint(x,y);"
-            + "while(e&&e!==document.body&&e!==document.documentElement){var s=getComputedStyle(e);"
-            + "if((dy&&e.scrollHeight>e.clientHeight&&/(auto|scroll)/.test(s.overflowY))"
-            + "||(dx&&e.scrollWidth>e.clientWidth&&/(auto|scroll)/.test(s.overflowX))){e.scrollBy(dx,dy);return;}"
-            + "e=e.parentElement;}window.scrollBy(dx,dy);})("
-            + Math.round(x / scale) + "," + Math.round(y / scale) + ","
-            + Math.round(dx / scale) + "," + Math.round(dy / scale) + ")";
-        web.evaluateJavascript(js, null);
+    private void endDrag() {
+        if (!dragging || web == null) { dragging = false; return; }
+        long now = SystemClock.uptimeMillis();
+        if (Math.hypot(fx - fx0, fy - fy0) < 12 * d) {
+            // too short to be a drag: cancelled, so the page never takes it for a tap in the middle
+            finger(web, MotionEvent.ACTION_CANCEL, fx, fy, dragDownAt, now);
+        } else {
+            // a pause before lifting, so the page sees no speed and doesn't fling on
+            finger(web, MotionEvent.ACTION_MOVE, fx, fy, dragDownAt, now + 120);
+            finger(web, MotionEvent.ACTION_UP, fx, fy, dragDownAt, now + 140);
+        }
+        dragging = false;
     }
 
     /** For the log (urtv-web): what the tap hit, as the page sees it. */
@@ -167,15 +180,20 @@ final class Cursor extends View {
     }
 
     private void touch(WebView web, int action) {
+        if (action == MotionEvent.ACTION_DOWN) endDrag();
+        finger(web, action, x, y, downAt, SystemClock.uptimeMillis());
+    }
+
+    private static void finger(WebView web, int action, float px, float py, long down, long at) {
         MotionEvent.PointerProperties pp = new MotionEvent.PointerProperties();
         pp.id = 0;
         pp.toolType = MotionEvent.TOOL_TYPE_FINGER;
         MotionEvent.PointerCoords pc = new MotionEvent.PointerCoords();
-        pc.x = x;
-        pc.y = y;
+        pc.x = px;
+        pc.y = py;
         pc.pressure = 1f;
         pc.size = 1f;
-        MotionEvent ev = MotionEvent.obtain(downAt, SystemClock.uptimeMillis(), action, 1,
+        MotionEvent ev = MotionEvent.obtain(down, at, action, 1,
             new MotionEvent.PointerProperties[]{pp}, new MotionEvent.PointerCoords[]{pc}, 0, 0, 1f, 1f, 0, 0,
             InputDevice.SOURCE_TOUCHSCREEN, 0);
         web.dispatchTouchEvent(ev);
@@ -192,7 +210,7 @@ final class Cursor extends View {
     @Override
     public void onWindowFocusChanged(boolean has) {
         super.onWindowFocusChanged(has);
-        if (!has) held = 0;   // a key-up that went to the keyboard or another window must not leave it gliding
+        if (!has) { held = 0; endDrag(); }   // a key-up that went elsewhere must not leave it gliding or dragging
     }
 
     @Override

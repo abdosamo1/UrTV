@@ -42,6 +42,8 @@ public class WebAppActivity extends Activity {
     private View splash;
     private long shownAt;
     private final Handler h = new Handler(Looper.getMainLooper());
+    /** Shows the page again once it is laid out wide (desktop sites; at the latest 3 s after a page starts). */
+    private final Runnable reveal = () -> { if (web != null) web.animate().alpha(1f).setDuration(120).start(); };
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -74,10 +76,18 @@ public class WebAppActivity extends Activity {
                 Log.d(TAG, "go " + r.getMethod() + " " + r.getUrl());
                 return false;   // stay in the app
             }
-            @Override public void onPageStarted(WebView v, String url, Bitmap icon) { Log.d(TAG, "page " + url); }
+            @Override public void onPageStarted(WebView v, String url, Bitmap icon) {
+                Log.d(TAG, "page " + url);
+                // desktop: the new page stays out of sight until it is wide, not a phone layout that flips
+                if (site.desktop) { v.setAlpha(0f); h.removeCallbacks(reveal); h.postDelayed(reveal, 3000); }
+            }
+            @Override public void onPageCommitVisible(WebView v, String url) {
+                if (!site.desktop) return;
+                v.evaluateJavascript(WIDE, r -> { h.removeCallbacks(reveal); h.postDelayed(reveal, 150); });
+            }
             @Override public void onPageFinished(WebView v, String url) {
                 Log.d(TAG, "loaded " + url);
-                if (site.desktop) v.evaluateJavascript(WIDE, null);
+                if (site.desktop) v.evaluateJavascript(WIDE, r -> { h.removeCallbacks(reveal); h.postDelayed(reveal, 150); });
                 hideSplash();
             }
             @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError err) {
