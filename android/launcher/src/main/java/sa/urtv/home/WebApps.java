@@ -35,6 +35,7 @@ final class WebApps {
     static final class Site {
         String id, name, url;
         int background = 0xFF0E1410;
+        boolean desktop;   // opened as on a computer (WebAppActivity): a desktop browser, a wide page
     }
 
     static boolean isWeb(String key) { return key != null && key.startsWith(PREFIX); }
@@ -50,6 +51,7 @@ final class WebApps {
                 s.name = o.getString("name");
                 s.url = o.getString("url");
                 s.background = o.optInt("bg", s.background);
+                s.desktop = o.optBoolean("desktop", false);
                 out.add(s);
             }
         } catch (Exception ignored) { }
@@ -65,7 +67,8 @@ final class WebApps {
         JSONArray a = new JSONArray();
         try {
             for (Site s : sites)
-                a.put(new JSONObject().put("id", s.id).put("name", s.name).put("url", s.url).put("bg", s.background));
+                a.put(new JSONObject().put("id", s.id).put("name", s.name).put("url", s.url).put("bg", s.background)
+                    .put("desktop", s.desktop));
         } catch (Exception ignored) { }
         Dock.prefs(c).edit().putString("webapps", a.toString()).apply();
     }
@@ -153,6 +156,16 @@ final class WebApps {
         row.remove(PREFIX + id);
         Dock.save(c, row);
         return gone;
+    }
+
+    /** The computer version of the site (true) or the one its own layout picks for the TV's width (false). */
+    static boolean setDesktop(Context c, String id, boolean on) {
+        if (id.startsWith(PREFIX)) id = id.substring(PREFIX.length());
+        List<Site> sites = all(c);
+        boolean found = false;
+        for (Site s : sites) if (s.id.equals(id)) { s.desktop = on; found = true; }
+        if (found) store(c, sites);
+        return found;
     }
 
     static Intent intent(Context c, String id) {

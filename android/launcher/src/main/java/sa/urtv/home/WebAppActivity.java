@@ -62,6 +62,7 @@ public class WebAppActivity extends Activity {
         s.setLoadWithOverviewMode(true);
         s.setUseWideViewPort(true);
         s.setMediaPlaybackRequiresUserGesture(false);
+        if (site.desktop) s.setUserAgentString(desktopAgent(s.getUserAgentString()));
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
         // what a site does goes to the log (adb logcat -s urtv-web): its pages, errors and console, to see why a form
@@ -74,6 +75,7 @@ public class WebAppActivity extends Activity {
             @Override public void onPageStarted(WebView v, String url, Bitmap icon) { Log.d(TAG, "page " + url); }
             @Override public void onPageFinished(WebView v, String url) {
                 Log.d(TAG, "loaded " + url);
+                if (site.desktop) v.evaluateJavascript(WIDE, null);
                 hideSplash();
             }
             @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError err) {
@@ -120,6 +122,20 @@ public class WebAppActivity extends Activity {
         web.loadUrl(site.url);
         web.requestFocus();
     }
+
+    /** The same browser as a computer's: Chrome on Linux, without Android, "wv" or "Mobile" in its name. */
+    static String desktopAgent(String ua) {
+        return ua.replaceFirst("\\(Linux; Android[^)]*\\)", "(X11; Linux x86_64)")
+            .replace("; wv", "").replace(" Mobile", "").replace("Version/4.0 ", "");
+    }
+
+    /**
+     * A desktop-wide page (1280 CSS px) instead of the phone width the site's viewport asks for; the overview mode
+     * then zooms it to fit the screen, as a computer would show it.
+     */
+    static final String WIDE = "(function(){var m=document.querySelector('meta[name=viewport]');"
+        + "if(!m){m=document.createElement('meta');m.name='viewport';document.head.appendChild(m);}"
+        + "if(m.content!=='width=1280')m.content='width=1280';})()";
 
     /** At least 1.2 s of splash, like a phone's, then it fades. */
     private void hideSplash() {

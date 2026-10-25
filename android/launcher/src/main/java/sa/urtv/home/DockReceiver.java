@@ -22,6 +22,7 @@ import java.util.Map;
  *   am broadcast -n sa.urtv.home/.DockReceiver -a sa.urtv.home.WEBAPP_ADD --es url https://… [--es name 'اسم']
  *   am broadcast -n sa.urtv.home/.DockReceiver -a sa.urtv.home.WEBAPP_REMOVE --es id web:…
  *   am broadcast -n sa.urtv.home/.DockReceiver -a sa.urtv.home.WEBAPPS
+ *   am broadcast -n sa.urtv.home/.DockReceiver -a sa.urtv.home.WEBAPP_DESKTOP --es id web:… --es on true|false
  * A website added as an app goes first in the favourites row, and SET_DOCK keeps it there.
  *   am broadcast -n sa.urtv.home/.DockReceiver -a sa.urtv.home.PROFILE --es name 'محمد'   (the greeting's name)
  *   am broadcast -n sa.urtv.home/.DockReceiver -a sa.urtv.home.PROFILE_CLEAR            (no name, no photo)
@@ -85,6 +86,15 @@ public class DockReceiver extends BroadcastReceiver {
                 setResultData(WebApps.remove(c, id.trim()) ? "removed " + id : "error: no such web app " + id);
                 return;
             }
+            case "sa.urtv.home.WEBAPP_DESKTOP": {   // the computer version of the site, from its next opening
+                String id = i.getStringExtra("id"), on = i.getStringExtra("on");
+                if (id == null || on == null || !on.matches("true|false")) {
+                    setResultData("error: add --es id web:… --es on true|false"); return;
+                }
+                setResultData(WebApps.setDesktop(c, id.trim(), Boolean.parseBoolean(on))
+                    ? id + " desktop: " + on : "error: no such web app " + id);
+                return;
+            }
             case "sa.urtv.home.PROFILE": {
                 String n = i.getStringExtra("name");
                 if (n == null) { setResultData("error: add --es name 'الاسم'"); return; }
@@ -98,7 +108,8 @@ public class DockReceiver extends BroadcastReceiver {
                 return;
             case "sa.urtv.home.WEBAPPS": {
                 StringBuilder b = new StringBuilder();
-                for (WebApps.Site s : WebApps.all(c)) b.append(WebApps.PREFIX).append(s.id).append(" | ").append(s.name).append(" | ").append(s.url).append('\n');
+                for (WebApps.Site s : WebApps.all(c)) b.append(WebApps.PREFIX).append(s.id).append(" | ").append(s.name).append(" | ").append(s.url)
+                    .append(s.desktop ? " | desktop" : "").append('\n');
                 setResultData(b.length() == 0 ? "no web apps" : b.toString().trim());
                 return;
             }
