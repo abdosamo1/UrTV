@@ -13,8 +13,13 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
+import android.util.Log;
+import android.webkit.ConsoleMessage;
 import android.webkit.CookieManager;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -31,6 +36,7 @@ import android.widget.TextView;
  * a page and leaves on the first.
  */
 public class WebAppActivity extends Activity {
+    private static final String TAG = "urtv-web";
     private WebView web;
     private Cursor cursor;
     private View splash;
@@ -58,10 +64,30 @@ public class WebAppActivity extends Activity {
         s.setMediaPlaybackRequiresUserGesture(false);
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
+        // what a site does goes to the log (adb logcat -s urtv-web): its pages, errors and console, to see why a form
+        // or button doesn't react on a TV
         web.setWebViewClient(new WebViewClient() {
-            @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) { return false; }   // stay in the app
+            @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
+                Log.d(TAG, "go " + r.getMethod() + " " + r.getUrl());
+                return false;   // stay in the app
+            }
+            @Override public void onPageStarted(WebView v, String url, Bitmap icon) { Log.d(TAG, "page " + url); }
             @Override public void onPageFinished(WebView v, String url) {
+                Log.d(TAG, "loaded " + url);
                 hideSplash();
+            }
+            @Override public void onReceivedError(WebView v, WebResourceRequest r, WebResourceError err) {
+                Log.w(TAG, "error " + err.getErrorCode() + " " + err.getDescription() + " " + r.getUrl());
+            }
+            @Override public void onReceivedHttpError(WebView v, WebResourceRequest r, WebResourceResponse res) {
+                Log.w(TAG, "http " + res.getStatusCode() + " " + r.getMethod() + " " + r.getUrl());
+            }
+        });
+        // a browser's own chrome: JS dialogs (alert, confirm), the console; without it a WebView drops some of these
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onConsoleMessage(ConsoleMessage m) {
+                Log.d(TAG, "console " + m.messageLevel() + " " + m.message() + " @" + m.sourceId() + ":" + m.lineNumber());
+                return true;
             }
         });
         root.addView(web, new FrameLayout.LayoutParams(-1, -1));

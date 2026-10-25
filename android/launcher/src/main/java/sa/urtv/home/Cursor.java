@@ -3,10 +3,10 @@ package sa.urtv.home;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
-import android.graphics.Path;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.util.Log;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -14,42 +14,54 @@ import android.view.View;
 import android.webkit.WebView;
 
 /**
- * A mouse pointer for websites (WebAppActivity), drawn over the page. The arrows move it, faster while held; past an
- * edge the page (or the scrolling box under the pointer) scrolls instead. OK is a real tap at its tip: down on press,
- * up on release, so a site sees a finger, a button clicks and a field opens the keyboard. It fades after a few idle
- * seconds and comes back on the next arrow. Keys the on-screen keyboard sends (its arrows and Enter) are left alone.
+ * A mouse pointer for websites (WebAppActivity), drawn over the page like TV Bro's: a clear disc with a ring. The
+ * arrows glide it, faster while held; past an edge the page (or the scrolling box under it) scrolls instead. OK is a
+ * real tap at its centre, down on press and up on release, built as TV Bro builds it (a finger, with pressure), so a
+ * button clicks and a field opens the keyboard. It fades after a few idle seconds and comes back on the next arrow.
+ * Keys the on-screen keyboard sends (its arrows and Enter) are left alone.
  */
 final class Cursor extends View {
     private static final long HIDE_AFTER_MS = 6000;
 
     private final float d;
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG), edge = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Path arrow = new Path();
     private final Handler h = new Handler(Looper.getMainLooper());
     private final Runnable fade = () -> animate().alpha(0f).setDuration(400).start();
+    private static final int UP = 1, DOWN = 2, LEFT = 4, RIGHT = 8;
+    private static final float NUDGE = 6;   // dp, a single short press
     private float x = -1, y = -1;
     private long downAt;
+    private boolean pressed;                // OK held: the finger is down
+    private int held;                       // the arrows held now (UP | DOWN | LEFT | RIGHT)
+    private long heldSince, lastFrame;
+    private float scrollX, scrollY;         // edge scrolling, sent to the page a few times a second
+    private long scrollSent;
+    private WebView web;
+    /** Every frame while an arrow is held: glides, from 260 dp/s up to 1100 dp/s after a second held. */
+    private final Runnable frame = new Runnable() {
+        @Override public void run() {
+            if (held == 0 || web == null) { flushScroll(true); return; }
+            long now = SystemClock.uptimeMillis();
+            float dt = Math.min(now - lastFrame, 50) / 1000f;
+            lastFrame = now;
+            float speed = Math.min(260 + (now - heldSince) * 0.84f, 1100) * d * dt;
+            float dx = ((held & RIGHT) != 0 ? 1 : 0) - ((held & LEFT) != 0 ? 1 : 0);
+            float dy = ((held & DOWN) != 0 ? 1 : 0) - ((held & UP) != 0 ? 1 : 0);
+            move(dx * speed, dy * speed, web);
+            wake();
+            postOnAnimation(this);
+        }
+    };
 
     Cursor(Context c) {
         super(c);
         d = c.getResources().getDisplayMetrics().density;
         setFocusable(false);
         setClickable(false);
-        fill.setColor(0xFFFFFFFF);
-        edge.setColor(0xFF1A1A1A);
+        // like TV Bro's: a half-clear white disc with a grey ring, smaller while OK is held
+        fill.setColor(0x80FFFFFF);
+        edge.setColor(0xFF888888);
         edge.setStyle(Paint.Style.STROKE);
-        edge.setStrokeWidth(1.6f * d);
-        edge.setStrokeJoin(Paint.Join.ROUND);
-        // the classic pointer, its tip at (0, 0)
-        float s = 1.5f * d;
-        arrow.moveTo(0, 0);
-        arrow.lineTo(0, 17 * s);
-        arrow.lineTo(4.5f * s, 13 * s);
-        arrow.lineTo(7.5f * s, 20 * s);
-        arrow.lineTo(10 * s, 19 * s);
-        arrow.lineTo(7 * s, 12.5f * s);
-        arrow.lineTo(12.5f * s, 12.5f * s);
-        arrow.close();
         wake();
     }
 
@@ -62,11 +74,11 @@ final class Cursor extends View {
 
     @Override
     protected void onDraw(Canvas c) {
-        c.save();
-        c.translate(x, y);
-        c.drawPath(arrow, fill);
-        c.drawPath(arrow, edge);
-        c.restore();
+        float r = getWidth() / 100f;   // 19 px on a 1920 px screen, as in TV Bro
+        if (pressed) r = Math.max(r - 5 * d, r / 2);
+        edge.setStrokeWidth(Math.max(getWidth() / 400f, 1));
+        c.drawCircle(x, y, r, fill);
+        c.drawCircle(x, y, r, edge);
     }
 
     /** True when the key was the pointer's (arrows, OK), else the activity handles it (Back, media keys…). */
@@ -76,24 +88,35 @@ final class Cursor extends View {
         boolean down = e.getAction() == KeyEvent.ACTION_DOWN;
         if (k == KeyEvent.KEYCODE_DPAD_UP || k == KeyEvent.KEYCODE_DPAD_DOWN
                 || k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT) {
-            if (down) {
+            int bit = k == KeyEvent.KEYCODE_DPAD_UP ? UP : k == KeyEvent.KEYCODE_DPAD_DOWN ? DOWN
+                : k == KeyEvent.KEYCODE_DPAD_LEFT ? LEFT : RIGHT;
+            if (down && e.getRepeatCount() == 0) {   // the key's own repeats are ignored: the frames move it
                 wake();
-                // 9 dp a press, faster the longer it is held, up to 48 dp a step
-                float step = Math.min(9 + e.getRepeatCount() * 3, 48) * d;
-                float dx = k == KeyEvent.KEYCODE_DPAD_LEFT ? -step : k == KeyEvent.KEYCODE_DPAD_RIGHT ? step : 0;
-                float dy = k == KeyEvent.KEYCODE_DPAD_UP ? -step : k == KeyEvent.KEYCODE_DPAD_DOWN ? step : 0;
-                move(dx, dy, web);
+                this.web = web;
+                boolean start = held == 0;
+                if (start) { heldSince = SystemClock.uptimeMillis(); lastFrame = heldSince; }
+                held |= bit;
+                // a short press still moves a little, at once
+                move(bit == LEFT ? -NUDGE * d : bit == RIGHT ? NUDGE * d : 0, bit == UP ? -NUDGE * d : bit == DOWN ? NUDGE * d : 0, web);
+                if (start) postOnAnimation(frame);   // one glide loop, however many arrows are held
+            } else if (!down) {
+                held &= ~bit;
             }
             return true;
         }
         if (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER || k == KeyEvent.KEYCODE_NUMPAD_ENTER) {
             wake();
-            if (down && e.getRepeatCount() == 0) {
+            // some remotes send OK and Enter for one click: one finger down and up all the same
+            if (down && e.getRepeatCount() == 0 && !pressed) {
+                pressed = true;
                 downAt = SystemClock.uptimeMillis();
                 touch(web, MotionEvent.ACTION_DOWN);
-            } else if (!down && downAt != 0) {
+                invalidate();
+            } else if (!down && pressed) {
+                pressed = false;
                 touch(web, MotionEvent.ACTION_UP);
-                downAt = 0;
+                logTarget(web);
+                invalidate();
             }
             return true;
         }
@@ -108,8 +131,16 @@ final class Cursor extends View {
         float sy = ny < 0 ? ny : ny > maxY ? ny - maxY : 0;
         x = Math.max(0, Math.min(nx, maxX));
         y = Math.max(0, Math.min(ny, maxY));
-        if (sx != 0 || sy != 0) scroll(web, sx * 2, sy * 2);
+        if (sx != 0 || sy != 0) { scrollX += sx * 2; scrollY += sy * 2; flushScroll(false); }
         invalidate();
+    }
+
+    private void flushScroll(boolean now) {
+        if (scrollX == 0 && scrollY == 0 || web == null) return;
+        if (!now && SystemClock.uptimeMillis() - scrollSent < 60) return;
+        scroll(web, scrollX, scrollY);
+        scrollX = scrollY = 0;
+        scrollSent = SystemClock.uptimeMillis();
     }
 
     /** Scrolls the nearest scrolling box under the pointer (a site's own list, a dialog), else the page. */
@@ -126,9 +157,27 @@ final class Cursor extends View {
         web.evaluateJavascript(js, null);
     }
 
+    /** For the log (urtv-web): what the tap hit, as the page sees it. */
+    @SuppressWarnings("deprecation")
+    private void logTarget(WebView web) {
+        float scale = web.getScale() > 0 ? web.getScale() : d;
+        Log.d("urtv-web", "tap " + Math.round(x) + "," + Math.round(y));
+        web.evaluateJavascript("(function(){var e=document.elementFromPoint(" + Math.round(x / scale) + ","
+            + Math.round(y / scale) + ");console.log('tap hit '+(e?e.outerHTML.slice(0,160):'nothing'));})()", null);
+    }
+
     private void touch(WebView web, int action) {
-        MotionEvent ev = MotionEvent.obtain(downAt, SystemClock.uptimeMillis(), action, x, y, 0);
-        ev.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+        MotionEvent.PointerProperties pp = new MotionEvent.PointerProperties();
+        pp.id = 0;
+        pp.toolType = MotionEvent.TOOL_TYPE_FINGER;
+        MotionEvent.PointerCoords pc = new MotionEvent.PointerCoords();
+        pc.x = x;
+        pc.y = y;
+        pc.pressure = 1f;
+        pc.size = 1f;
+        MotionEvent ev = MotionEvent.obtain(downAt, SystemClock.uptimeMillis(), action, 1,
+            new MotionEvent.PointerProperties[]{pp}, new MotionEvent.PointerCoords[]{pc}, 0, 0, 1f, 1f, 0, 0,
+            InputDevice.SOURCE_TOUCHSCREEN, 0);
         web.dispatchTouchEvent(ev);
         ev.recycle();
     }
@@ -138,6 +187,12 @@ final class Cursor extends View {
         animate().cancel();
         setAlpha(1f);
         h.postDelayed(fade, HIDE_AFTER_MS);
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean has) {
+        super.onWindowFocusChanged(has);
+        if (!has) held = 0;   // a key-up that went to the keyboard or another window must not leave it gliding
     }
 
     @Override
