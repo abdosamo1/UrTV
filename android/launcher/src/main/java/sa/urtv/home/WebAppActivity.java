@@ -47,6 +47,8 @@ public class WebAppActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        // Chrome's DevTools over ADB (chrome://inspect): to see why a site misbehaves on a TV. ADB can do more anyway.
+        WebView.setWebContentsDebuggingEnabled(true);
         WebApps.Site site = WebApps.get(this, String.valueOf(getIntent().getStringExtra("id")));
         if (site == null) { finish(); return; }
         float d = getResources().getDisplayMetrics().density;
