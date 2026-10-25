@@ -135,7 +135,7 @@ public class WebAppActivity extends Activity {
      * A desktop-wide page (1280 CSS px) instead of the phone width the site's viewport asks for; the overview mode
      * then zooms it to fit the screen, as a computer would show it.
      */
-    static final String WIDE = "(function(){var m=document.querySelector('meta[name=viewport]');"
+    static final String WIDE = "(function(){if(!document.head)return;var m=document.querySelector('meta[name=viewport]');"
         + "if(!m){m=document.createElement('meta');m.name='viewport';document.head.appendChild(m);}"
         + "if(m.content!=='width=1280')m.content='width=1280';})()";
 
@@ -172,7 +172,9 @@ public class WebAppActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (web != null) web.onResume();
+        // the home screen's card pauses timers as it leaves (HomeCard.pause), and that is every WebView in this app:
+        // without this the site's setTimeout never fires, and a form never submits (Dar Al-Farah's sign-in)
+        if (web != null) { web.onResume(); web.resumeTimers(); }
     }
 
     @Override

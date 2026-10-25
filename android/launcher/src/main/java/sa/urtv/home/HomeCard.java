@@ -92,7 +92,8 @@ final class HomeCard {
         handler.post(fit);
     }
 
-    /** onPause: no timers or network while an app is in front. */
+    /** onPause: no timers or network while an app is in front. pauseTimers is for every WebView in this app, so a
+     *  website app (WebAppActivity) resumes them as it opens. */
     void pause() {
         handler.removeCallbacks(fit);
         if (web != null) { web.onPause(); web.pauseTimers(); }
