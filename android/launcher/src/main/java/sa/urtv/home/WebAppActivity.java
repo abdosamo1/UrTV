@@ -150,7 +150,11 @@ public class WebAppActivity extends Activity {
         + "var cur=null;function mark(e){if(cur)cur.classList.remove('urtv-f');cur=e;if(!e)return;e.classList.add('urtv-f');"
         + "try{e.focus({preventScroll:true});}catch(x){}e.scrollIntoView({block:'nearest',inline:'nearest',behavior:'smooth'});}"
         + "function c(r){return{x:r.left+r.width/2,y:r.top+r.height/2};}"
-        + "function go(dir){var els=all();if(!els.length)return false;if(!cur||!document.contains(cur)||!vis(cur)){"
+        // the page's own focus wins: the keyboard's Next/Done (or the site) can move it without the arrows
+        + "function sync(){var a=document.activeElement;if(a&&a!==cur&&a!==document.body&&a.matches&&a.matches(Q)&&vis(a)){"
+        + "if(cur)cur.classList.remove('urtv-f');cur=a;a.classList.add('urtv-f');}}"
+        + "document.addEventListener('focusin',sync,true);"
+        + "function go(dir){sync();var els=all();if(!els.length)return false;if(!cur||!document.contains(cur)||!vis(cur)){"
         + "var first=els.filter(function(e){var r=e.getBoundingClientRect();return r.top>=0&&r.top<innerHeight;})[0]||els[0];mark(first);return true;}"
         + "var ra=cur.getBoundingClientRect(),a=c(ra),best=null,bs=1e9;els.forEach(function(e){if(e===cur)return;var rb=e.getBoundingClientRect(),b=c(rb);"
         + "var dx=b.x-a.x,dy=b.y-a.y,main,side,v=dir==='ArrowDown'||dir==='ArrowUp';if(dir==='ArrowDown'){main=dy;side=dx;}else if(dir==='ArrowUp'){main=-dy;side=dx;}"
@@ -163,6 +167,7 @@ public class WebAppActivity extends Activity {
         + "var typing=t&&(t.tagName==='TEXTAREA'||(t.tagName==='INPUT'&&!/^(checkbox|radio|button|submit|reset|range|file|color)$/i.test(t.type)));"
         + "if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].indexOf(k)>=0){if(typing&&(k==='ArrowLeft'||k==='ArrowRight'))return;"
         + "if(go(k)){ev.preventDefault();}else if(k==='ArrowDown'||k==='ArrowUp'){window.scrollBy({top:(k==='ArrowDown'?1:-1)*innerHeight*0.6,behavior:'smooth'});ev.preventDefault();}}"
-        + "else if((k==='Enter'||k===' ')&&cur&&!typing&&cur.tagName!=='SELECT'){ev.preventDefault();cur.click();}},true);"
+        // OK clicks what is focused now (a sign-in button reached with the keyboard's Next), not a stale ring
+        + "else if((k==='Enter'||k===' ')&&!typing){sync();if(cur&&document.contains(cur)&&cur.tagName!=='SELECT'){ev.preventDefault();cur.click();}}},true);"
         + "setTimeout(function(){go('ArrowDown');},300);})();";
 }
