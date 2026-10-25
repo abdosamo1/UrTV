@@ -330,10 +330,9 @@ public class MainActivity extends Activity {
         for (TextView t : new TextView[]{greeting, clock, ampm, date}) t.setShadowLayer(dp(3), 0, dp(1), 0x80000000);
         left.setGravity(Gravity.RIGHT);
         for (TextView t : new TextView[]{greeting, date}) t.setGravity(Gravity.RIGHT);
-        LinearLayout corner = new LinearLayout(this);   // [greeting, clock, date] then the owner's photo, top right
-        corner.setOrientation(LinearLayout.HORIZONTAL);
-        corner.setGravity(Gravity.TOP);
-        corner.addView(left, new LinearLayout.LayoutParams(-2, -2));
+        LinearLayout corner = new LinearLayout(this);   // the owner's photo, then [greeting, clock, date] under it, top right
+        corner.setOrientation(LinearLayout.VERTICAL);
+        corner.setGravity(Gravity.RIGHT);
         avatar = new ImageView(this);
         avatar.setScaleType(ImageView.ScaleType.CENTER_CROP);
         avatar.setClipToOutline(true);
@@ -347,9 +346,10 @@ public class MainActivity extends Activity {
         avatar.setElevation(dp(6));
         avatar.setVisibility(View.GONE);
         LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(dp(68), dp(68));
-        ap.leftMargin = dp(16);
         ap.topMargin = dp(4);
+        ap.bottomMargin = dp(10);
         corner.addView(avatar, ap);
+        corner.addView(left, new LinearLayout.LayoutParams(-2, -2));
         header.addView(corner, new FrameLayout.LayoutParams(-2, -2, Gravity.RIGHT | Gravity.TOP));
 
         LinearLayout right = new LinearLayout(this);
