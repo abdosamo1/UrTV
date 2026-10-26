@@ -166,7 +166,7 @@ final class Prefs {
 
     // The card beside the clock: value sent to the page (#panel=), Arabic label
     static final String[][] PANELS = {
-        {"auto", "تبديل تلقائي كل ٣٠ ثانية"}, {"verse", "آية أو حديث اليوم"}, {"prayers", "مواقيت الصلاة اليوم"}, {"forecast", "طقس الأيام القادمة"},
+        {"auto", "تبديل تلقائي كل 30 ثانية"}, {"verse", "آية أو حديث اليوم"}, {"prayers", "مواقيت الصلاة اليوم"}, {"forecast", "طقس الأيام القادمة"},
         {"matches", "مباريات فرقك القادمة"}, {"none", "لا شيء"},
     };
 

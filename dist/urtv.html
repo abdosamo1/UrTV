@@ -144,7 +144,7 @@
   .week li.next .dt{color:#E0BA74}
   /* every word on the card outlined in black, so it reads on light glass and bright photos */
   .week{text-shadow:-1px 0 0 #000,1px 0 0 #000,0 -1px 0 #000,0 1px 0 #000,0 2px 6px rgba(0,0,0,.55)}
-  /* the prayer card: bigger rows, times as ٠١:٠٣, the next prayer's countdown between its name and its time */
+  /* the prayer card: bigger rows, Latin-digit times, the next prayer's countdown between its name and its time */
   .week li.pr{font-size:clamp(20px,1.6vw,31px);font-weight:500;padding:.95vh 0}
   .week li.pr .dt{flex:1 1 auto;font-size:.9em;color:#E9DFC8;font-variant-numeric:tabular-nums}
   .week li.pr.past{color:#C8BEA6}
@@ -174,8 +174,10 @@
   .week .empty{color:#9A9078;font-size:clamp(14px,1.1vw,21px);font-weight:300;margin-top:1vh}
 
   .dates{text-align:right;flex-shrink:0}
-  .hijri{font-size:clamp(19px,1.86vw,37px);font-weight:500;color:var(--sand);line-height:1.3}
-  .greg{margin-top:.55vh;font-size:clamp(12px,1.06vw,21px);font-weight:300;color:var(--dim)}
+  .hijri{font-size:clamp(28px,2.35vw,48px);font-weight:700;color:#FFFDF6;line-height:1.22;
+    text-shadow:0 2px 8px rgba(0,0,0,.9)}
+  .greg{margin-top:.65vh;font-size:clamp(18px,1.42vw,28px);font-weight:700;color:var(--sand);
+    text-shadow:0 1px 6px rgba(0,0,0,.95)}
   /* starts at the screen edge, under the first letters, and fades toward the middle */
   .rule{margin-top:1.2vh;width:clamp(100px,9vw,190px);height:1px;margin-left:auto;margin-right:0;
     background:linear-gradient(270deg,var(--gold),rgba(220,184,111,0))}
@@ -332,7 +334,7 @@
     </div>
 
     <div class="panel p-mid">
-      <div class="label" id="ramadan-label">رمضان ١٤٤٨</div>
+      <div class="label" id="ramadan-label">رمضان 1448</div>
       <div class="big"><span class="num" id="ramadan-days">—</span></div>
       <div class="sub" id="ramadan-sub">—</div>
     </div>
@@ -484,10 +486,10 @@ async function locate(force){
   return changed;
 }
 
-const GREG = 'ar-SA-u-ca-gregory-nu-arab';
-const AR = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
-const ar = s => String(s).replace(/[0-9]/g, d => AR[+d]);
-const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const GREG = 'ar-SA-u-ca-gregory-nu-latn';
+const englishDigits = s => String(s).replace(/[٠-٩۰-۹]/g, d => String(d.charCodeAt(0) - (d >= '۰' ? 0x06F0 : 0x0660)));
+const ar = englishDigits;
+const esc = s => englishDigits(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pad = n => String(n).padStart(2,'0');
 
 function riyadhParts(d = new Date()){
@@ -498,7 +500,7 @@ function riyadhParts(d = new Date()){
   }).formatToParts(d).reduce((a,p)=>(a[p.type]=p.value,a),{});
   return { y:+f.year, mo:+f.month, d:+f.day, h:(+f.hour)%24, mi:+f.minute, s:+f.second };
 }
-function fmt12(h, mi){   // «٠١:٠٣ م»: two-digit hours, so the times line up
+function fmt12(h, mi){   // 01:03 م: two-digit hours, so the times line up
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${ar(pad(h12))}:${ar(pad(mi))} ${h < 12 ? 'ص' : 'م'}`;
 }
@@ -506,12 +508,12 @@ function fmt12(h, mi){   // «٠١:٠٣ م»: two-digit hours, so the times line
 function tickClock(){
   const p = riyadhParts();
   const h12 = p.h % 12 === 0 ? 12 : p.h % 12;
-  // one box per digit: browsers ignore letter-spacing on Arabic digits, and ٤ reaches into the next digit
+  // one box per digit: browsers ignore letter-spacing on some fonts' digits
   const digits = s => [...s].map(ch => '<i>' + ch + '</i>').join('');
   const key = h12 + ':' + p.mi;
   if(key === tickClock.last) return;   // ticks every second, redraws once a minute
   tickClock.last = key;
-  document.getElementById('ck-h').innerHTML = digits(ar(pad(h12)));   // two digits: ٠٢:٥١
+  document.getElementById('ck-h').innerHTML = digits(ar(pad(h12)));
   document.getElementById('ck-m').innerHTML = digits(ar(pad(p.mi)));
   document.getElementById('ck-ap').textContent = p.h < 12 ? 'ص' : 'م';
 }
@@ -519,16 +521,16 @@ function tickClock(){
 function tickDates(){
   const now = new Date();
   try{
-    let h = new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura',{
+    let h = new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura-nu-latn',{
       timeZone: CONFIG.timezone, weekday:'long', day:'numeric', month:'long', year:'numeric'
     }).format(now);
     h = h.replace(/\s*هـ\s*$/,'').replace(/،\s*$/,'');
-    document.getElementById('hijri').textContent = h + ' هـ';
+    document.getElementById('hijri').textContent = englishDigits(h) + ' هـ';
   }catch(e){}
   try{
-    document.getElementById('greg').textContent = new Intl.DateTimeFormat(GREG,{
+    document.getElementById('greg').textContent = englishDigits(new Intl.DateTimeFormat(GREG,{
       timeZone: CONFIG.timezone, weekday:'long', day:'numeric', month:'long', year:'numeric'
-    }).format(now);
+    }).format(now));
   }catch(e){}
 }
 
@@ -1245,7 +1247,7 @@ function prayerRows(){
   });
 }
 
-/** «بعد ٠١:٢٣:٤٥» to `at` (minutes after midnight, the place's time) */
+/** Time remaining to `at` (minutes after midnight, the place's time) */
 function countdownText(at){
   const p = riyadhParts();
   const left = Math.max(0, at * 60 - (p.h * 3600 + p.mi * 60 + p.s));
@@ -1315,7 +1317,7 @@ function forecastRows(){
 }
 
 // every followed team's games this week, plus results from the last day, in time order
-/** «اليوم», «غداً», else «الأحد ٢٥ أكتوبر»: the date too, so the games read in order however far apart */
+/** «اليوم», «غداً», else «الأحد 25 أكتوبر»: the date too, so the games read in order however far apart */
 function matchDay(d){
   const key = x => new Intl.DateTimeFormat('en-CA', {timeZone:CONFIG.timezone}).format(x);
   if(key(d) === key(new Date())) return 'اليوم';

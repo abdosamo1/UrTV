@@ -32,13 +32,13 @@ final class Adhan {
     // file in assets/adhan (40 kb/s mono, loudness-normalised so one volume level sounds the same), Arabic name;
     // the Fajr ones carry «الصلاة خير من النوم» and are listed first for Fajr
     static final String[][] VOICES = {
-        {"makki-1", "الحرم المكي ١"},
-        {"makki-2", "الحرم المكي ٢"},
+        {"makki-1", "الحرم المكي 1"},
+        {"makki-2", "الحرم المكي 2"},
         {"madani", "الحرم المدني"},
         {"aqsa", "القدس"},
         {"ahmad-jalal-yahya", "أحمد جلال يحيى"},
-        {"voice-7", "أذان ٧"},
-        {"voice-8", "أذان ٨"},
+        {"voice-7", "أذان 7"},
+        {"voice-8", "أذان 8"},
         {"fajr-trabulsi", "أحمد الطرابلسي · أذان الفجر"},
     };
     static final String[] FAJR_FIRST = {"fajr-trabulsi"};

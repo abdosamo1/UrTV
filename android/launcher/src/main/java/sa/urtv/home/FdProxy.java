@@ -141,7 +141,7 @@ final class FdProxy {
         // working if anything got through in the last half hour (a side request may still be refused)
         if (System.currentTimeMillis() - p.getLong("okAt", 0) < 30 * 60_000L) return "تعمل";
         return code == 200 ? "تعمل"
-            : code == 400 ? "طلب مرفوض (٤٠٠)"
+            : code == 400 ? "طلب مرفوض (400)"
             : code == 401 || code == 403 ? "المفتاح مرفوض أو غير مفعّل"
             : code == 429 ? "طلبات كثيرة، تعود بعد دقيقة"
             : code == -1 ? "لا يوجد اتصال"

@@ -324,7 +324,8 @@ public class MainActivity extends Activity {
         clockRow.addView(clock);
         left.addView(clockRow, llp(-2, -2, 0, dp(-2), 0, 0));
 
-        date = text(14, "regular", 0xFFC6BBA4);
+        date = text(20, "medium", 0xFFFFFDF6);
+        date.setTypeface(Typeface.create(date.getTypeface(), Typeface.BOLD));
         date.setSingleLine(true);
         left.addView(date, llp(-2, -2, 0, dp(-6), dp(4), 0));   // the display font leaves a deep gap under its digits
         for (TextView t : new TextView[]{greeting, clock, ampm, date}) t.setShadowLayer(dp(3), 0, dp(1), 0x80000000);
@@ -664,7 +665,7 @@ public class MainActivity extends Activity {
                 labels.add("إزالة من المفضلة");
                 actions.add(() -> { dock.remove(pkg); saveDock(dock, dock.get(Math.max(0, i - 1))); });
             } else {
-                labels.add("المفضلة لا تقل عن " + arabicDigits(String.valueOf(MIN_DOCK)));
+                labels.add("المفضلة لا تقل عن " + englishDigits(String.valueOf(MIN_DOCK)));
                 actions.add(() -> { });
             }
         } else if (dock.size() < MAX_DOCK) {
@@ -788,7 +789,7 @@ public class MainActivity extends Activity {
         // by the hour, not by ص/م: the afternoon is not yet evening
         greeting.setText(greetingFor(h * 60 + now.get(Calendar.MINUTE), now.get(Calendar.DAY_OF_YEAR)));
         int hh = h % 12 == 0 ? 12 : h % 12;   // always 12-hour
-        clock.setText(arabicDigits(String.format(Locale.ROOT, "%02d:%02d", hh, now.get(Calendar.MINUTE))));   // ٠٢:٥١
+        clock.setText(englishDigits(String.format(Locale.ROOT, "%02d:%02d", hh, now.get(Calendar.MINUTE))));
         ampm.setText(h < 12 ? "ص" : "م");
         String hijri = "";
         try {
@@ -797,7 +798,7 @@ public class MainActivity extends Activity {
             hijri = f.format(now.getTime()).replaceAll("\\s*هـ\\s*$", "") + " هـ";
         } catch (Exception ignored) { }
         String greg = new SimpleDateFormat("d MMMM", new Locale("ar")).format(now.getTime());
-        date.setText(arabicDigits(hijri.isEmpty() ? greg : hijri + "  ·  " + greg));
+        date.setText(englishDigits(hijri.isEmpty() ? greg : hijri + "  ·  " + greg));
     }
 
     /** صباح الخير from Fajr, طاب يومك from Dhuhr, مساء الخير from Maghrib until Fajr (the mosque's times, from the
@@ -837,9 +838,13 @@ public class MainActivity extends Activity {
         avatar.setVisibility(b == null ? View.GONE : View.VISIBLE);
     }
 
-    private static String arabicDigits(String s) {
+    private static String englishDigits(String s) {
         StringBuilder b = new StringBuilder(s.length());
-        for (char c : s.toCharArray()) b.append(c >= '0' && c <= '9' ? (char) ('٠' + (c - '0')) : c);
+        for (char c : s.toCharArray()) {
+            if (c >= '٠' && c <= '٩') b.append((char) ('0' + (c - '٠')));
+            else if (c >= '۰' && c <= '۹') b.append((char) ('0' + (c - '۰')));
+            else b.append(c);
+        }
         return b.toString();
     }
 

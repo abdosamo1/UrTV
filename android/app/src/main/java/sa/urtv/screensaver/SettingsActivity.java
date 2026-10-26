@@ -194,7 +194,7 @@ public class SettingsActivity extends Activity {
         header("التوقيت");
         row("تبديل الصورة كل", minutesLabel(Integer.parseInt(prefs.photoMinutes())), R.drawable.ic_sync,
             new Runnable() { public void run() { pickPhotoMinutes(); } });
-        row("تعتيم ليلي", prefs.nightDim() ? "يعمل · ٩ م حتى ٧ ص" : "متوقف",
+        row("تعتيم ليلي", prefs.nightDim() ? "يعمل · 9 م حتى 7 ص" : "متوقف",
             R.drawable.ic_eye, new Runnable() { public void run() { prefs.setNightDim(!prefs.nightDim()); render(); } });
         row("بدء شاشة التوقف بعد", idleLabel(), R.drawable.ic_screensaver,
             new Runnable() { public void run() { pickIdle(); } });
@@ -203,7 +203,7 @@ public class SettingsActivity extends Activity {
         row("التحديث التلقائي", prefs.autoUpdate() ? "يعمل" : "متوقف", R.drawable.ic_sync, new Runnable() { public void run() {
             prefs.setAutoUpdate(!prefs.autoUpdate()); render(); } });
         String upd = SelfUpdate.status(this);
-        row("حدّث الآن", "الإصدار ٣٫" + SelfUpdate.arabic(SelfUpdate.mine(this)) + (upd.isEmpty() ? "" : " · " + upd),
+        row("حدّث الآن", "الإصدار 3." + SelfUpdate.arabic(SelfUpdate.mine(this)) + (upd.isEmpty() ? "" : " · " + upd),
             R.drawable.ic_sync, new Runnable() { public void run() { updateNow(); } });
 
         // after the layout pass: the scroll as it was, then the same row (by its name; else the same place)
@@ -424,7 +424,7 @@ public class SettingsActivity extends Activity {
 
     private void addTeam(String id, String name) {
         if (prefs.addTeam(id, name)) toast("تمت متابعة " + name);
-        else toast(prefs.teams().size() >= Prefs.MAX_TEAMS ? "الحد الأعلى ١٠ فرق" : "متابَع مسبقاً");
+        else toast(prefs.teams().size() >= Prefs.MAX_TEAMS ? "الحد الأعلى 10 فرق" : "متابَع مسبقاً");
         render();
     }
 
@@ -647,9 +647,7 @@ public class SettingsActivity extends Activity {
     }
 
     private static String arabicNum(int n) {
-        StringBuilder b = new StringBuilder();
-        for (char c : String.valueOf(n).toCharArray()) b.append((char) ('٠' + (c - '0')));
-        return b.toString();
+        return String.valueOf(n);
     }
 
     // ---------- small UI helpers ----------

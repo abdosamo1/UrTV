@@ -62,8 +62,8 @@ final class SelfUpdate {
             Matcher m = VERSION.matcher(rel.optString("body", ""));
             if (!m.find()) return say(c, "تعذر قراءة رقم الإصدار");
             long latest = Long.parseLong(m.group(1)), have = mine(c);
-            if (latest <= have) return say(c, "التطبيق محدث (٣٫" + arabic(have) + ")");
-            if (busy && !force) return say(c, "يوجد إصدار جديد ٣٫" + arabic(latest) + "، يُثبَّت حين لا يكون على الشاشة");
+            if (latest <= have) return say(c, "التطبيق محدث (3." + arabic(have) + ")");
+            if (busy && !force) return say(c, "يوجد إصدار جديد 3." + arabic(latest) + "، يُثبَّت حين لا يكون على الشاشة");
             String url = null;
             JSONArray assets = rel.optJSONArray("assets");
             for (int i = 0; assets != null && i < assets.length(); i++) {
@@ -81,7 +81,7 @@ final class SelfUpdate {
                 return say(c, "ملف التحديث غير صالح");
             }
             install(c, f);
-            return say(c, "جارٍ تثبيت الإصدار ٣٫" + arabic(got));
+            return say(c, "جارٍ تثبيت الإصدار 3." + arabic(got));
         } catch (Exception e) {
             return say(c, "تعذر التحديث: لا يوجد اتصال");
         }
@@ -178,7 +178,7 @@ final class SelfUpdate {
 
     static String arabic(long n) {
         StringBuilder b = new StringBuilder();
-        for (char ch : String.valueOf(n).toCharArray()) b.append((char) ('٠' + (ch - '0')));
+        for (char ch : String.valueOf(n).toCharArray()) b.append(ch);
         return b.toString();
     }
 }

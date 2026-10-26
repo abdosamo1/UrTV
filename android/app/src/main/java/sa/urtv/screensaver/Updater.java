@@ -110,8 +110,8 @@ final class Updater {
     private static String arabic(String v) {
         StringBuilder b = new StringBuilder();
         for (char ch : v.toCharArray()) {
-            if (ch >= '0' && ch <= '9') b.append((char) ('٠' + (ch - '0')));
-            else if (ch == '.') b.append('٫');
+            if (ch >= '0' && ch <= '9') b.append(ch);
+            else if (ch == '.') b.append('.');
             else b.append(ch);
         }
         return b.toString();

@@ -66,7 +66,7 @@ final class AdhanTimes {
         return now >= at - 60_000L && now <= at + 10 * 60_000L;
     }
 
-    /** "٣:٤٩ م", like the screen */
+    /** "3:49 م", like the screen */
     static String clock(long ms, TimeZone tz) {
         Calendar c = Calendar.getInstance(tz);
         c.setTimeInMillis(ms);
@@ -77,7 +77,11 @@ final class AdhanTimes {
 
     static String arabic(String s) {
         StringBuilder b = new StringBuilder(s.length());
-        for (char ch : s.toCharArray()) b.append(ch >= '0' && ch <= '9' ? (char) ('٠' + (ch - '0')) : ch);
+        for (char ch : s.toCharArray()) {
+            if (ch >= '٠' && ch <= '٩') b.append((char) ('0' + (ch - '٠')));
+            else if (ch >= '۰' && ch <= '۹') b.append((char) ('0' + (ch - '۰')));
+            else b.append(ch);
+        }
         return b.toString();
     }
 }
