@@ -324,7 +324,7 @@ public class MainActivity extends Activity {
         clockRow.addView(clock);
         left.addView(clockRow, llp(-2, -2, 0, dp(-2), 0, 0));
 
-        date = text(20, "medium", 0xFFFFFDF6);
+        date = text(26, "medium", 0xFFFFFDF6);
         date.setTypeface(Typeface.create(date.getTypeface(), Typeface.BOLD));
         date.setSingleLine(true);
         left.addView(date, llp(-2, -2, 0, dp(-6), dp(4), 0));   // the display font leaves a deep gap under its digits

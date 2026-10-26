@@ -142,8 +142,8 @@
   .week li.past{color:#8F8670}
   .week li.next{color:#FFE9B8}
   .week li.next .dt{color:#E0BA74}
-  /* every word on the card outlined in black, so it reads on light glass and bright photos */
-  .week{text-shadow:-1px 0 0 #000,1px 0 0 #000,0 -1px 0 #000,0 1px 0 #000,0 2px 6px rgba(0,0,0,.55)}
+  /* Keep a soft shadow for contrast without the heavy outline that blurs Arabic letter shapes. */
+  .week{text-shadow:0 1px 3px rgba(0,0,0,.55)}
   /* the prayer card: bigger rows, Latin-digit times, the next prayer's countdown between its name and its time */
   .week li.pr{font-size:clamp(20px,1.6vw,31px);font-weight:500;padding:.95vh 0}
   .week li.pr .dt{flex:1 1 auto;font-size:.9em;color:#E9DFC8;font-variant-numeric:tabular-nums}
@@ -174,9 +174,9 @@
   .week .empty{color:#9A9078;font-size:clamp(14px,1.1vw,21px);font-weight:300;margin-top:1vh}
 
   .dates{text-align:right;flex-shrink:0}
-  .hijri{font-size:clamp(28px,2.35vw,48px);font-weight:700;color:#FFFDF6;line-height:1.22;
+  .hijri{font-size:clamp(34px,2.8vw,56px);font-weight:700;color:#FFFDF6;line-height:1.22;
     text-shadow:0 2px 8px rgba(0,0,0,.9)}
-  .greg{margin-top:.65vh;font-size:clamp(18px,1.42vw,28px);font-weight:700;color:var(--sand);
+  .greg{margin-top:.65vh;font-size:clamp(22px,1.7vw,34px);font-weight:700;color:var(--sand);
     text-shadow:0 1px 6px rgba(0,0,0,.95)}
   /* starts at the screen edge, under the first letters, and fades toward the middle */
   .rule{margin-top:1.2vh;width:clamp(100px,9vw,190px);height:1px;margin-left:auto;margin-right:0;
