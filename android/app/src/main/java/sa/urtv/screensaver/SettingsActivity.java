@@ -182,14 +182,13 @@ public class SettingsActivity extends Activity {
                 : "football-data.org" + (FdProxy.status(this).isEmpty() ? " · لم يتصل بعد" : " · " + FdProxy.status(this)),
             R.drawable.ic_trophy, new Runnable() { public void run() { askFdKey(); } });
 
-        header("بجانب الساعة");
-        row("المحتوى", Prefs.panelLabel(prefs.panel()), R.drawable.ic_eye, new Runnable() { public void run() { pickPanel(false); } });
+        // one section, one card setting for both screens (the screensaver beside the clock, and the home screen)
+        header("شاشة تلفزيونك");
+        row("البطاقة على شاشتك", Prefs.panelLabel(prefs.panel()), R.drawable.ic_eye,
+            new Runnable() { public void run() { pickPanel(); } });
         row("أذكار الصباح والمساء", prefs.adhkar() ? "تعمل · من الفجر حتى ٩ ص، ومن ٩ م حتى ١٢ م" : "متوقفة",
             R.drawable.ic_star, new Runnable() { public void run() { prefs.setAdhkar(!prefs.adhkar()); render(); } });
 
-        header("الشاشة الرئيسية (تلفزيونك)");
-        row("بطاقة على الشاشة الرئيسية", Prefs.panelLabel(prefs.homePanel()), R.drawable.ic_eye,
-            new Runnable() { public void run() { pickPanel(true); } });
         row("ترتيب التطبيقات المفضلة", null, R.drawable.ic_star,
             new Runnable() { public void run() { openDockSettings(); } });
 
@@ -538,17 +537,19 @@ public class SettingsActivity extends Activity {
     }
 
     /** The card beside the screensaver's clock, or (home) the one on the launcher's home screen. */
-    private void pickPanel(final boolean home) {
+    /** The card beside the clock and on the home screen: one choice for both */
+    private void pickPanel() {
         String[] labels = new String[Prefs.PANELS.length];
-        String current = home ? prefs.homePanel() : prefs.panel();
+        String current = prefs.panel();
         int sel = 0;
         for (int i = 0; i < labels.length; i++) {
             labels[i] = Prefs.PANELS[i][1];
             if (Prefs.PANELS[i][0].equals(current)) sel = i;
         }
-        new AlertDialog.Builder(this, DIALOG_THEME).setTitle(home ? "بطاقة على الشاشة الرئيسية" : "بجانب الساعة")
+        new AlertDialog.Builder(this, DIALOG_THEME).setTitle("البطاقة على شاشتك")
             .setSingleChoiceItems(labels, sel, (d, i) -> {
-                if (home) prefs.setHomePanel(Prefs.PANELS[i][0]); else prefs.setPanel(Prefs.PANELS[i][0]);
+                prefs.setPanel(Prefs.PANELS[i][0]);
+                prefs.setHomePanel(Prefs.PANELS[i][0]);
                 d.dismiss();
                 render();
             })
@@ -567,7 +568,6 @@ public class SettingsActivity extends Activity {
             .show();
     }
 
-    /** The TV's own idle delay. Writing it needs WRITE_SETTINGS, which TVs rarely grant: then its own screen opens. */
     /** IdleWatch is an accessibility service: only the owner can turn it on, in the TV's own settings */
     private void openIdleWatch() {
         new AlertDialog.Builder(this, DIALOG_THEME).setTitle("شاشة التوقف فوق التطبيقات")
@@ -581,6 +581,7 @@ public class SettingsActivity extends Activity {
             .show();
     }
 
+    /** The TV's own idle delay. Writing it needs WRITE_SETTINGS, which TVs rarely grant: then its own screen opens. */
     private void pickIdle() {
         if (!Prefs.canWriteSettings(this)) {
             toast("غيّرها من إعدادات التلفاز، أو بأمر من مساعدك");
