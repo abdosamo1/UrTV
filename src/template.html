@@ -990,6 +990,10 @@ function renderMatches(turn){
   const now = Date.now(), shown = new Set();
   const slots = CONFIG.teamIds.map(id => matchSlot(id, now, shown)).filter(Boolean);
   const row = document.getElementById('match-row');
+  // no team picked: the place stays empty (no label, no «لا شيء هذا الأسبوع»)
+  const box = row.closest('.p-match');
+  if(box) box.style.visibility = CONFIG.teamIds.length ? '' : 'hidden';
+  if(!CONFIG.teamIds.length){ row.innerHTML = ''; return; }
   if(!slots.length){ if(!MATCHES_LOADED && row.firstElementChild) return; row.innerHTML = '<div class="none-week">لا شيء هذا الأسبوع</div>'; return; }
   const per = CONFIG.matchesPerPage, pages = Math.ceil(slots.length / per);
   if(turn) MATCH_PAGE++;
@@ -1294,7 +1298,7 @@ const wants = k => CONFIG.panel === 'auto' ? CARDS.includes(k) : CONFIG.panel ==
 function hasCard(k){
   if(k === 'prayers') return PRAYERS.length > 0;
   if(k === 'forecast') return FORECAST.length > 0;
-  if(k === 'matches') return matchRows().length > 0;
+  if(k === 'matches') return CONFIG.teamIds.length > 0 && matchRows().length > 0;   // no team picked: never in turn
   return true;
 }
 function rotateCard(){
@@ -1684,7 +1688,7 @@ function boot(){
   applyBackground(true);
   loadPhotoIndex().then(() => applyBackground(true));
   setInterval(() => applyBackground(false), 60*1000);
-  tickClock(); tickDates(); tickRamadan();
+  tickClock(); tickDates(); tickRamadan(); renderMatches(false);
   if(CONFIG.panel === 'none') document.querySelector('.week').style.display = 'none';
   else renderPanel(false);   // its own data arrives with prayers, weather, matches
   loadPrayers(); loadMatches(); loadWeather();

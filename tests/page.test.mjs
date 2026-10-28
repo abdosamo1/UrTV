@@ -446,6 +446,19 @@ for (const [hash, dimmed] of [['', false], ['night=0', false], ['night=1', true]
   await ctx2.close();
 }
 
+// ---- no team picked: the matches place stays empty, and the card in turn never shows the matches
+{
+  const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  await ctx.route(/^https?:/, r => r.abort());
+  const p = await ctx.newPage();
+  await p.goto(page('tv.html') + '#teams=&panel=auto');
+  await p.waitForTimeout(600);
+  const r = await p.evaluate(() => ({ vis: getComputedStyle(document.querySelector('.p-match')).visibility,
+    text: document.getElementById('match-row').textContent.trim(), turn: hasCard('matches') }));
+  check('no team: the matches place empty, never the matches card in turn', r.vis === 'hidden' && r.text === '' && !r.turn, JSON.stringify(r));
+  await ctx.close();
+}
+
 // ---- in the app (#fdnative=1) the page sends no key at all: the app adds it (FdProxy), so no CORS preflight
 {
   const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
