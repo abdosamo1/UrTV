@@ -184,6 +184,8 @@ public class SettingsActivity extends Activity {
 
         header("بجانب الساعة");
         row("المحتوى", Prefs.panelLabel(prefs.panel()), R.drawable.ic_eye, new Runnable() { public void run() { pickPanel(false); } });
+        row("أذكار الصباح والمساء", prefs.adhkar() ? "تعمل · من الفجر حتى ٩ ص، ومن ٩ م حتى ١٢ م" : "متوقفة",
+            R.drawable.ic_star, new Runnable() { public void run() { prefs.setAdhkar(!prefs.adhkar()); render(); } });
 
         header("الشاشة الرئيسية (تلفزيونك)");
         row("بطاقة على الشاشة الرئيسية", Prefs.panelLabel(prefs.homePanel()), R.drawable.ic_eye,

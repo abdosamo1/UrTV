@@ -202,6 +202,10 @@ final class Prefs {
 
     /** darken the screensaver from 21:00 to 07:00; off unless the owner turns it on */
     boolean nightDim() { return sp.getBoolean("nightDim", false); }
+
+    /** morning (Fajr to 09:00) and evening (21:00 to midnight) adhkar beside the clock, whatever the card; on by default */
+    boolean adhkar() { return sp.getBoolean("adhkar", true); }
+    void setAdhkar(boolean v) { sp.edit().putBoolean("adhkar", v).apply(); }
     void setNightDim(boolean v) { sp.edit().putBoolean("nightDim", v).apply(); }
 
     boolean autoUpdate() { return sp.getBoolean("autoUpdate", true); }
@@ -234,6 +238,7 @@ final class Prefs {
             + "&week=" + ("none".equals(panel()) ? "0" : "1")   // for a page older than #panel
             + "&photos=" + photoMinutes()
             + "&night=" + (nightDim() ? "1" : "0")
+            + "&adhkar=" + (adhkar() ? "1" : "0")
             + (fdKey().isEmpty() ? "" : "&fdkey=" + fdKey() + "&fdnative=1");   // the app adds the key (FdProxy)
     }
 
