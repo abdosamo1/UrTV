@@ -198,6 +198,8 @@ public class SettingsActivity extends Activity {
             R.drawable.ic_eye, new Runnable() { public void run() { prefs.setNightDim(!prefs.nightDim()); render(); } });
         row("بدء شاشة التوقف بعد", idleLabel(), R.drawable.ic_screensaver,
             new Runnable() { public void run() { pickIdle(); } });
+        row("شاشة التوقف فوق التطبيقات", IdleWatch.enabled(this) ? "تعمل · إن لم يُعرض فيديو" : "متوقفة · اضغط للتفعيل",
+            R.drawable.ic_screensaver, new Runnable() { public void run() { openIdleWatch(); } });
 
         header("التطبيق");
         row("التحديث التلقائي", prefs.autoUpdate() ? "يعمل" : "متوقف", R.drawable.ic_sync, new Runnable() { public void run() {
@@ -281,6 +283,7 @@ public class SettingsActivity extends Activity {
         final List<String> labels = new ArrayList<>();
         if (fajr) { ids.add(""); labels.add("بدون أذان للفجر"); }
         for (String f : Adhan.FAJR_FIRST) if (fajr) { ids.add(f); labels.add(Adhan.label(f)); }
+        ids.add(Adhan.RANDOM); labels.add(Adhan.RANDOM_LABEL);
         for (String[] v : Adhan.VOICES) if (!ids.contains(v[0])) { ids.add(v[0]); labels.add(v[1]); }
         String cur = fajr ? prefs.adhanFajr() : prefs.adhanVoice();
         new AlertDialog.Builder(this, DIALOG_THEME).setTitle(fajr ? "أذان الفجر" : "صوت الأذان")
@@ -335,8 +338,9 @@ public class SettingsActivity extends Activity {
 
     /** Plays the chosen voice now, at the adhan volume; «إيقاف» or Back stops it and puts the volume back. */
     private void testAdhan() {
-        AdhanService.start(this, prefs.adhanVoice(), true);
-        new AlertDialog.Builder(this, DIALOG_THEME).setTitle(Adhan.label(prefs.adhanVoice()))
+        String voice = Adhan.resolve(this, prefs.adhanVoice(), false);   // «عشوائي»: one of them, named in the title
+        AdhanService.start(this, voice, true);
+        new AlertDialog.Builder(this, DIALOG_THEME).setTitle(Adhan.label(voice))
             .setMessage("يعمل الأذان الآن")
             .setPositiveButton("إيقاف", null)
             .setOnDismissListener(d -> AdhanService.stop())
@@ -562,6 +566,19 @@ public class SettingsActivity extends Activity {
     }
 
     /** The TV's own idle delay. Writing it needs WRITE_SETTINGS, which TVs rarely grant: then its own screen opens. */
+    /** IdleWatch is an accessibility service: only the owner can turn it on, in the TV's own settings */
+    private void openIdleWatch() {
+        new AlertDialog.Builder(this, DIALOG_THEME).setTitle("شاشة التوقف فوق التطبيقات")
+            .setMessage("تعمل فوق أي تطبيق بعد مدة الخمول إذا لم تضغط أي زر ولا يُعرض فيديو.\n\n"
+                + "في الصفحة التالية اختر «" + getString(R.string.app_name) + "» وفعّله.")
+            .setPositiveButton("فتح الإعدادات", (d, w) -> {
+                try { startActivity(new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)); }
+                catch (Exception e) { toast("افتحها من إعدادات التلفاز ← إمكانية الوصول"); }
+            })
+            .setNegativeButton("إلغاء", null)
+            .show();
+    }
+
     private void pickIdle() {
         if (!Prefs.canWriteSettings(this)) {
             toast("غيّرها من إعدادات التلفاز، أو بأمر من مساعدك");

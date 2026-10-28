@@ -114,14 +114,14 @@ final class Prefs {
     /** the voice for Dhuhr, Asr, Maghrib and Isha (a file in assets/adhan) */
     String adhanVoice() {
         String v = sp.getString("adhanVoice", Adhan.DEFAULT_VOICE);
-        return Adhan.isVoice(v) ? v : Adhan.DEFAULT_VOICE;
+        return Adhan.isChoice(v) ? v : Adhan.DEFAULT_VOICE;
     }
     void setAdhanVoice(String v) { sp.edit().putString("adhanVoice", v).apply(); }
 
     /** Fajr's voice; "" = no adhan at Fajr (the default: it is at night) */
     String adhanFajr() {
         String v = sp.getString("adhanFajr", "");
-        return v.isEmpty() || Adhan.isVoice(v) ? v : "";
+        return v.isEmpty() || Adhan.isChoice(v) ? v : "";
     }
     void setAdhanFajr(String v) { sp.edit().putString("adhanFajr", v).apply(); }
 
