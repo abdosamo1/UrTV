@@ -1,0 +1,64 @@
+plugins {
+    id 'com.android.application'
+}
+
+// تلفزيونك المباشر: live TV, movies and series from a provider's MAG (Stalker) portal. The screens are a page
+// (assets/live/index.html, the design approved as a preview); the video is Media3 under it.
+android {
+    namespace 'sa.urtv.live'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'sa.urtv.live'
+        minSdk 26
+        targetSdk 34
+        // the same version as the other two apps (one release holds all three)
+        versionCode((System.getenv('GITHUB_RUN_NUMBER') ?: '1') as int)
+        versionName "3.${System.getenv('GITHUB_RUN_NUMBER') ?: '0'}"
+    }
+
+    signingConfigs {
+        if (System.getenv('ANDROID_KEYSTORE')) {
+            release {
+                storeFile file(System.getenv('ANDROID_KEYSTORE'))
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias 'urtv'
+                keyPassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.findByName('release') ?: signingConfigs.debug
+        }
+    }
+
+    sourceSets {
+        main { assets.srcDirs += ["$buildDir/generated/web"] }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lint { abortOnError false }
+}
+
+dependencies {
+    implementation 'androidx.media3:media3-exoplayer:1.4.1'
+    implementation 'androidx.media3:media3-exoplayer-hls:1.4.1'
+    implementation 'androidx.media3:media3-ui:1.4.1'
+    implementation 'androidx.media3:media3-datasource:1.4.1'
+}
+
+// the fonts and the backgrounds, shared with the other apps
+def copyWeb = tasks.register('copyWeb', Copy) {
+    from('../../assets/live') { into 'live' }
+    from('../../assets/fonts') { include '*.woff2'; into 'live/fonts' }
+    from('../../assets/backgrounds') { include '*.jpg'; into 'live/backgrounds' }
+    into "$buildDir/generated/web"
+}
+preBuild.dependsOn copyWeb

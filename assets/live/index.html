@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>تلفزيونك المباشر</title>
+<style>
+
+  @font-face{font-family:'ThmanyahDisplay';font-weight:700;src:url(fonts/ThmanyahDisplay-Bold.woff2) format('woff2')}
+  @font-face{font-family:'Thmanyah';font-weight:500;src:url(fonts/Thmanyah-Medium.woff2) format('woff2')}
+  :root{--gold:#D6AF6B;--gold-lt:#F1CF8A;--txt:#FFFDF6;--dim:rgba(255,253,246,.62)}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:transparent;color:var(--txt);font-family:'Thmanyah',system-ui,sans-serif}
+  body{overflow:hidden}
+  .tv{position:fixed;inset:0;overflow:hidden;container-type:inline-size;
+    background:#111 var(--bg) center/cover;box-shadow:0 20px 60px rgba(0,0,0,.5);outline:none}
+  .tv::before{content:'';position:absolute;inset:0;background:linear-gradient(270deg,rgba(0,0,0,.55),rgba(0,0,0,.25) 50%,rgba(0,0,0,.6))}
+  .glass{background:linear-gradient(165deg,rgba(255,255,255,.18),rgba(255,255,255,.06) 45%,rgba(255,255,255,.04) 70%,rgba(255,255,255,.1));
+    border:1px solid rgba(255,255,255,.24);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 14px 40px rgba(0,0,0,.35);
+    backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4)}
+  .screen{position:absolute;inset:0;display:none;font-size:1.1cqw}
+  .screen.on{display:block}
+  /* the focus: the card's own edge turns gold (no second ring around it) */
+  .focus{border-color:var(--gold-lt)!important;box-shadow:0 0 10px rgba(241,207,138,.3),0 14px 40px rgba(0,0,0,.4)!important;transform:scale(1.03)}
+  /* ---- home */
+  .top{position:absolute;top:4%;right:4%;left:4%;display:flex;align-items:center;justify-content:space-between}
+  .brand{font-family:'ThmanyahDisplay';font-size:2.4em}
+  .brand small{display:block;font-family:'Thmanyah';font-size:.42em;color:var(--gold-lt);margin-top:.2em}
+  .clock{font-family:'ThmanyahDisplay';font-size:2.2em}
+  .tabs{position:absolute;top:17%;right:4%;display:flex;gap:1.6em}
+  .tab{padding:.6em 1.5em;border-radius:999px;font-size:1.25em;transition:transform .2s}
+  .tab.sel{background:rgba(241,207,138,.25);border-color:rgba(241,207,138,.6)}
+  .rows{position:absolute;top:29%;right:0;left:0;bottom:0;overflow:hidden}
+  .row h3{padding-right:4cqw}
+  .cards{padding:0 4cqw}
+  .row h3{margin:0 0 1.1em;font-size:1.3em;color:var(--gold-lt);font-weight:500}
+  .row{margin-bottom:2.8em}
+  .rin{transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+  .cards{display:flex;gap:1.8em;transition:transform .3s cubic-bezier(.2,.8,.2,1)}
+  .card{flex:0 0 auto;border-radius:1.1em;overflow:hidden;position:relative;transition:transform .2s}
+  .card.wide{width:16em;height:9.2em}
+  .card.poster{width:9em;height:13em}
+  .card.chan{width:11em;height:6.6em;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:.3em}
+  .card .art{position:absolute;inset:0}
+  .card .cap{position:absolute;right:0;left:0;bottom:0;padding:.7em .9em;background:linear-gradient(transparent,rgba(0,0,0,.75));font-size:1.05em}
+  .card .cap small{display:block;color:var(--dim);font-size:.82em}
+  .bar{height:.32em;border-radius:1em;background:rgba(255,255,255,.25);margin-top:.45em;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--gold-lt);border-radius:1em}
+  .chan .num{font-family:'ThmanyahDisplay';font-size:1.8em}
+  .chan .nm{font-size:1.05em}
+  /* ---- live */
+  #live .video{position:absolute;inset:0;background:radial-gradient(circle at 30% 40%,#2f5d6e,#0d1b22 60%,#05090b);animation:drift 12s ease-in-out infinite alternate}
+  #live .video .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:1.3em;color:rgba(255,255,255,.35)}
+  @keyframes drift{to{filter:hue-rotate(40deg)}}
+  /* ---- two or four channels at once */
+  .multi{position:absolute;inset:0;display:none;gap:.5em;padding:.5em;background:#05090b}
+  .multi.on{display:grid}
+  .multi.n2{grid-template-columns:1fr 1fr;align-content:center}
+  .multi.n2 .tile{aspect-ratio:16/9}
+  .multi.n4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+  .tile{position:relative;border-radius:1em;overflow:hidden;border:1px solid rgba(255,255,255,.14);transition:border-color .2s,box-shadow .2s}
+  .tile .lbl{position:absolute;right:.8em;bottom:.8em;padding:.45em .9em;border-radius:999px;font-size:1.1em;display:flex;gap:.6em;align-items:center}
+  .tile .lbl b{font-family:'ThmanyahDisplay';color:var(--gold-lt);font-weight:700}
+  .tile .snd{position:absolute;left:.8em;top:.8em;padding:.3em .6em;border-radius:999px;background:rgba(0,0,0,.5);font-size:1em}
+  .tile.sel{border-color:var(--gold-lt);box-shadow:inset 0 0 0 1px var(--gold-lt),0 0 14px rgba(241,207,138,.3)}
+  .picker{position:absolute;left:50%;bottom:8%;transform:translateX(-50%);border-radius:1.6em;padding:1.1em 1.4em;text-align:center;
+    transition:opacity .3s,transform .3s}
+  .picker.hide{opacity:0;transform:translate(-50%,20%);pointer-events:none}
+  .picker h4{margin:0 0 .8em;font-size:1.2em;color:var(--gold-lt);font-weight:500}
+  .picker .opts{display:flex;gap:1.2em}
+  .picker .o{width:7.5em;padding:.8em .6em;border-radius:1em;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);font-size:1.05em}
+  .picker .o.sel{border-color:var(--gold-lt);background:rgba(241,207,138,.18)}
+  .picker .o .ic{display:grid;gap:.2em;width:3.4em;height:2em;margin:0 auto .5em}
+  .picker .o .ic i{background:rgba(241,207,138,.55);border-radius:.2em}
+  .picker small{display:block;color:var(--dim);font-size:.85em;margin-top:.8em}
+  .info{position:absolute;right:4%;left:4%;bottom:5%;border-radius:1.4em;padding:1.1em 1.6em;display:flex;align-items:center;gap:1.4em;
+    transition:opacity .35s,transform .35s}
+  .info.hide{opacity:0;transform:translateY(20%)}
+  .info .num{font-family:'ThmanyahDisplay';font-size:3em;color:var(--gold-lt);min-width:1.6em;text-align:center}
+  .info .nm{font-size:1.7em}
+  .info .now{color:var(--dim);font-size:1.05em;margin-top:.2em}
+  .info .prog{flex:1;max-width:30%}
+  .info .hint{color:var(--dim);font-size:.95em;margin-right:auto}
+  .list{position:absolute;top:5%;bottom:5%;right:3%;width:34%;border-radius:1.6em;padding:1.2em;display:flex;flex-direction:column;
+    transition:opacity .3s,transform .35s cubic-bezier(.2,.9,.25,1.1)}
+  .list.hide{opacity:0;transform:translateX(30%);pointer-events:none}
+  .list{flex-direction:row!important;gap:1em;transition:width .35s cubic-bezier(.2,.8,.2,1),opacity .3s,transform .35s cubic-bezier(.2,.9,.25,1.1)!important}
+  .list.wide{width:56%}
+  .list .chans{flex:1;display:flex;flex-direction:column;min-width:0}
+  .list .cats{width:0;overflow:hidden;display:flex;flex-direction:column;gap:.35em;transition:width .35s cubic-bezier(.2,.8,.2,1),opacity .3s;opacity:0}
+  .list.wide .cats{width:36%;opacity:1;border-left:1px solid rgba(255,255,255,.14);padding-left:1em}
+  .list .cats .c{padding:.6em .9em;border-radius:.9em;font-size:1.15em;display:flex;justify-content:space-between;white-space:nowrap}
+  .list .cats .c small{color:var(--dim)}
+  .list .cats .c.cur{color:var(--gold-lt)}
+  .list .cats .c.sel{background:rgba(255,255,255,.16);outline:1px solid rgba(241,207,138,.6)}
+  .list.wide .chans{opacity:.55}
+  .list .cat{display:flex;align-items:center;justify-content:space-between;font-size:1.3em;padding:.2em .3em .8em;color:var(--gold-lt)}
+  .list .cat .hint{font-size:.7em;color:var(--dim)}
+  .list .items{flex:1;overflow:hidden;display:flex;flex-direction:column;gap:.45em}
+  .list .it{display:flex;align-items:center;gap:.9em;padding:.65em .9em;border-radius:.9em;font-size:1.15em;transition:background .15s}
+  .list .it .n{font-family:'ThmanyahDisplay';color:var(--dim);min-width:2em;text-align:center}
+  .list .it.cur .n{color:var(--gold-lt)}
+  .list .it.sel{background:rgba(255,255,255,.16);outline:1px solid rgba(241,207,138,.6)}
+  .list .it small{display:block;color:var(--dim);font-size:.78em}
+  .sbtn{padding:.55em 1.4em;border-radius:999px;font-size:1.25em;transition:transform .2s}
+  /* ---- the notice in the middle (an empty favourites list) */
+  .notice{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:44%;border-radius:1.8em;padding:2.2em 2em;text-align:center}
+  .notice .ic{font-size:3.2em;color:var(--gold-lt);line-height:1}
+  .notice h2{font-family:'ThmanyahDisplay';font-size:2em;margin:.4em 0 .3em}
+  .notice p{color:var(--dim);font-size:1.15em;line-height:1.7;margin:0}
+  /* ---- search */
+  .sfield{position:absolute;top:15%;right:4%;left:4%;border-radius:999px;padding:.9em 1.6em;font-size:1.5em;display:flex;align-items:center;gap:.6em}
+  .sfield input{flex:1;background:none;border:0;outline:0;color:var(--txt);font:inherit}
+  .sfield{padding-left:.5em!important}
+  .mic{width:2.4em;height:2.4em;border-radius:50%;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);color:var(--gold-lt);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;transition:transform .2s,background .2s,box-shadow .2s}
+  .mic svg{width:55%;height:55%}
+  .lang{height:2.4em;min-width:2.4em;padding:0 .7em;border-radius:999px;border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.08);
+    color:var(--txt);font:inherit;font-size:.8em;cursor:pointer}
+  .lang:focus{outline:1px solid var(--gold-lt);outline-offset:2px}
+  .mic:focus{outline:1px solid var(--gold-lt);outline-offset:2px;transform:scale(1.06)}
+  .mic.on{background:rgba(241,207,138,.3);animation:pulse 1.2s ease-in-out infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(241,207,138,.5)}50%{box-shadow:0 0 0 .7em rgba(241,207,138,0)}}
+  .listen{position:absolute;top:26%;left:4%;color:var(--gold-lt);font-size:1.15em;min-height:1.4em}
+  .sres{position:absolute;top:30%;right:4%;left:4%;bottom:0;display:grid;grid-template-columns:repeat(6,1fr);gap:1.2em;align-content:start}
+  .sres .card{width:auto;height:auto;aspect-ratio:2/3}
+  .sres .none{grid-column:1/-1;text-align:center;color:var(--dim);font-size:1.3em;margin-top:3em}
+  /* ---- movies / series browser */
+  #browse .shade{position:absolute;inset:0;background:linear-gradient(270deg,rgba(0,0,0,.55),rgba(0,0,0,.75))}
+  .btop{position:absolute;top:4%;right:4%;left:4%;display:flex;align-items:center;justify-content:space-between}
+  .rail{position:absolute;top:15%;bottom:5%;right:3%;width:22%;border-radius:1.6em;padding:1em;display:flex;flex-direction:column;gap:.35em;overflow:hidden}
+  .rail .c{padding:.7em 1em;border-radius:.9em;font-size:1.2em;display:flex;justify-content:space-between;transition:background .15s}
+  .rail .c small{color:var(--dim)}
+  .rail .c.cur{color:var(--gold-lt)}
+  .rail .c.sel{background:rgba(255,255,255,.16);outline:1px solid rgba(241,207,138,.6)}
+  .grid{position:absolute;top:15%;bottom:0;right:28%;left:3%;overflow:hidden}
+  .grid .in{display:grid;grid-template-columns:repeat(5,1fr);gap:1.2em;padding-bottom:3em;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+  .grid .card{width:auto;height:auto;aspect-ratio:2/3}
+  .grid h3{grid-column:1/-1;margin:0;font-size:1.4em;color:var(--gold-lt);font-weight:500}
+  /* ---- movie details */
+  #movie .back{position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.2),rgba(0,0,0,.85) 60%)}
+  #movie .poster{position:absolute;top:12%;left:6%;width:22%;aspect-ratio:2/3;border-radius:1.4em}
+  #movie .meta{position:absolute;top:14%;right:5%;width:52%}
+  #movie h1{font-family:'ThmanyahDisplay';font-size:3.2em;margin:0 0 .25em;font-weight:700}
+  #movie .sub{color:var(--dim);font-size:1.15em;display:flex;align-items:center;gap:.6em}
+  .rate{display:inline-flex;align-items:baseline;gap:.15em;padding:.25em .7em;border-radius:999px;background:rgba(241,207,138,.2);border:1px solid rgba(241,207,138,.55);color:var(--gold-lt);font-family:'ThmanyahDisplay'}
+  .rate small{font-family:'Thmanyah';font-size:.7em;opacity:.8}
+  .card .kind{position:absolute;top:.5em;right:.5em;padding:.15em .6em;border-radius:999px;background:rgba(241,207,138,.85);color:#1a1408;font-size:.8em}
+  .card .badge{position:absolute;top:.5em;left:.5em;padding:.15em .55em;border-radius:999px;background:rgba(0,0,0,.55);color:var(--gold-lt);font-size:.85em;font-family:'ThmanyahDisplay'}
+  #movie p{font-size:1.15em;line-height:1.8;color:#E9DFC8;max-width:90%}
+  #movie .btns{display:flex;gap:1em;margin-top:1.6em}
+  #movie .btn{padding:.8em 1.8em;border-radius:999px;font-size:1.25em;transition:transform .2s}
+  #movie .btn.main{background:rgba(241,207,138,.3);border-color:rgba(241,207,138,.7)}
+  #movie .btn small{display:block;font-size:.7em;color:var(--dim)}
+  .keys{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+  .keys button{font:inherit;font-size:15px;border-radius:999px;border:1px solid #3a4a41;background:#18211c;color:var(--txt);padding:8px 16px;cursor:pointer}
+  .note{color:#bfb5a0;font-size:14px;text-align:center;max-width:760px;line-height:1.7;margin:0}
+
+  /* ---- on the device: the video is under the page */
+  /* over a bright picture the glass needs a dark base to stay readable */
+  .list,.info,.pbar,.picker,.tile .lbl{background-color:rgba(10,12,11,.62)!important}
+  .tv.video{background:none!important}
+  .tv.video::before{display:none}
+  #live .video{background:none!important;animation:none}
+  .multi{background:transparent!important}
+  .tile{background:transparent!important}
+  .card .art{background-size:cover!important;background-position:center!important}
+  .chanlogo{width:2.2em;height:2.2em;object-fit:contain;border-radius:.4em;background:rgba(255,255,255,.08)}
+  /* ---- the activation screen (the image shown to the provider) */
+  #setup .shade{position:absolute;inset:0;background:rgba(0,0,0,.55)}
+  .act{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:60%;border-radius:2.5em;padding:3.4em 4em;text-align:center}
+  .act h1{font-family:'ThmanyahDisplay';font-size:3.1em;margin:0 0 .15em}
+  .act .sub{color:var(--dim);font-size:1.5em;margin-bottom:2.2em}
+  .act .lbl{color:var(--gold-lt);font-size:1.4em;margin-bottom:.7em}
+  .act .mac{font-family:'ThmanyahDisplay';direction:ltr;font-size:4.2em;letter-spacing:.06em;padding:.25em 0 .35em;border-radius:.4em;
+    background:rgba(0,0,0,.25);border:1px solid rgba(241,207,138,.45)}
+  .act .field{margin-top:2.2em;text-align:right}
+  .act input{width:100%;direction:ltr;text-align:left;border-radius:999px;padding:.75em 1.3em;font:inherit;font-size:1.6em;color:var(--txt);
+    border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);outline:none}
+  .act input:focus{border-color:var(--gold-lt)}
+  .act .go{display:inline-block;margin-top:1.4em;padding:.6em 2.2em;border-radius:999px;font-size:1.4em;border:1px solid rgba(241,207,138,.6);
+    background:rgba(241,207,138,.25);color:var(--txt);font-family:inherit}
+  .act .go:focus{outline:1px solid var(--gold-lt);outline-offset:2px}
+  .act .st{margin-top:1.6em;font-size:1.4em;color:var(--dim)}
+  .act .st b{color:var(--gold-lt);font-weight:500}
+  .act .ver{margin-top:1em;font-size:1em;color:rgba(255,253,246,.4)}
+  /* ---- a film or an episode playing */
+  .pbar{position:absolute;right:4%;left:4%;bottom:5%;border-radius:1.4em;padding:1.2em 1.6em;transition:opacity .35s,transform .35s}
+  .pbar.hide{opacity:0;transform:translateY(20%)}
+  .pbar .t{font-size:1.6em;margin-bottom:.6em}
+  .pbar .row2{display:flex;align-items:center;gap:1em;direction:ltr;font-family:'ThmanyahDisplay';font-size:1.2em}
+  .pbar .bar{flex:1;height:.45em}
+  .pbar .st2{direction:rtl;color:var(--dim);font-family:'Thmanyah';font-size:.95em;margin-top:.5em}
+  /* ---- series: seasons and episodes */
+  #movie .eps{margin-top:1.6em}
+  #movie .eps .lineh{color:var(--gold-lt);font-size:1.1em;margin:.8em 0 .5em}
+  #movie .pills{display:flex;gap:.6em;flex-wrap:wrap;max-height:7.5em;overflow:hidden}
+  #movie .pill{padding:.45em 1em;border-radius:999px;font-size:1.05em}
+  #movie .pill.cur{border-color:rgba(241,207,138,.7)}
+  #movie .pill.seen{opacity:.6}
+  /* ---- loading, messages */
+  .toast{position:absolute;left:50%;top:6%;transform:translate(-50%,-30%);opacity:0;border-radius:999px;padding:.7em 1.6em;font-size:1.3em;
+    transition:opacity .3s,transform .3s;z-index:9;pointer-events:none}
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+  .loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:1.6em;color:var(--dim)}
+  #home .empty{color:var(--dim);font-size:1.2em;padding-right:4cqw}
+</style>
+</head>
+<body>
+<div class="tv" id="tv" tabindex="0">
+  <!-- activation: this TV's MAC for the provider, and his portal's address -->
+  <section class="screen" id="setup">
+    <div class="shade"></div>
+    <div class="act glass">
+      <h1>تفعيل الاشتراك</h1>
+      <div class="sub">أرسل عنوان الماك هذا إلى مزوّد الخدمة ليسجّله في البوابة</div>
+      <div class="lbl">عنوان الماك (MAC) لهذا الجهاز</div>
+      <div class="mac" id="smac"></div>
+      <div class="field"><div class="lbl">رابط البوابة (Portal URL) من المزوّد</div>
+        <input id="surl" placeholder="http://portal.example:8080/c/" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+      <button class="go" id="sgo">اتصال</button>
+      <div class="st">الحالة: <b id="sst">بانتظار تسجيل الجهاز لدى المزوّد</b></div>
+      <div class="ver" id="sver"></div>
+    </div>
+  </section>
+  <!-- home -->
+  <section class="screen" id="home">
+    <div class="top"><div class="brand">تلفزيونك المباشر<small id="acct">اشتراكك · فعّال</small></div><div class="clock" id="clk"></div></div>
+    <div class="tabs" id="tabs"></div>
+    <div class="rows" id="rows"></div>
+  </section>
+  <!-- live -->
+  <section class="screen" id="live">
+    <div class="video" id="video"><div class="ph"></div></div>
+    <div class="multi" id="multi"></div>
+    <div class="picker glass hide" id="picker"></div>
+    <div class="info glass hide" id="info">
+      <div class="num" id="inum"></div>
+      <div><div class="nm" id="inm"></div><div class="now" id="inow"></div></div>
+      <div class="prog"><div class="bar"><i id="ibar" style="width:0"></i></div></div>
+      <div class="hint">▲▼ القناة · OK القائمة · ◀▶ طريقة العرض</div>
+    </div>
+    <div class="list glass hide" id="list">
+      <div class="cats" id="lcats"></div>
+      <div class="chans">
+        <div class="cat"><span id="lcat"></span><span class="hint">▶ الأقسام</span></div>
+        <div class="items" id="items"></div>
+      </div>
+    </div>
+  </section>
+  <!-- movies / series: the sections on the right, the posters beside -->
+  <section class="screen" id="browse">
+    <div class="shade"></div>
+    <div class="btop"><div class="brand" id="bkind"></div><div class="sbtn glass" id="sbtn">⌕ بحث</div></div>
+    <div class="rail glass" id="rail"></div>
+    <div class="grid" id="grid"></div>
+  </section>
+  <!-- favourites -->
+  <section class="screen" id="favs">
+    <div class="shade" style="position:absolute;inset:0;background:rgba(0,0,0,.55)"></div>
+    <div class="btop"><div class="brand">المفضلة</div></div>
+    <div id="favbody"></div>
+  </section>
+  <!-- search -->
+  <section class="screen" id="search">
+    <div class="shade" style="position:absolute;inset:0;background:rgba(0,0,0,.65)"></div>
+    <div class="btop"><div class="brand">بحث</div></div>
+    <div class="sfield glass">⌕<input id="q" placeholder="اسم فيلم أو مسلسل أو قناة…" autocomplete="off">
+      <button class="lang" id="lang" title="لغة البحث الصوتي">ع</button>
+      <button class="mic" id="mic" title="البحث الصوتي"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="3" width="6" height="11" rx="3" fill="rgba(241,207,138,.25)"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8.5 21h7"/></svg></button></div>
+    <div class="listen" id="listen"></div>
+    <div class="sres" id="sres"></div>
+  </section>
+  <!-- a film or a series -->
+  <section class="screen" id="movie">
+    <div class="back"></div>
+    <div class="poster glass" id="mposter"></div>
+    <div class="meta">
+      <h1 id="mtitle"></h1>
+      <div class="sub" id="msub"></div>
+      <p id="mtext"></p>
+      <div class="btns" id="mbtns"></div>
+      <div class="eps" id="meps"></div>
+    </div>
+  </section>
+  <!-- a film or an episode playing -->
+  <section class="screen" id="player">
+    <div class="pbar glass" id="pbar">
+      <div class="t" id="ptitle"></div>
+      <div class="row2"><span id="pcur">0:00</span><div class="bar"><i id="pfill" style="width:0"></i></div><span id="pdur">0:00</span></div>
+      <div class="st2">OK إيقاف/تشغيل · ◀▶ تقديم وترجيع</div>
+    </div>
+  </section>
+  <div class="loading" id="loading" style="display:none">جارٍ التحميل…</div>
+  <div class="toast glass" id="toast"></div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
