@@ -380,12 +380,19 @@ public class MainActivity extends Activity {
     protected void onPause() {
         super.onPause();
         js("window.onLeave && onLeave()");   // the page keeps where a film stopped
+        // the streams close as soon as the app is left: the server counts the connection gone at once, not
+        // minutes later (two counted connections answer 461); the page saved the film's place first
+        h.postDelayed(this::stopAll, 300);
     }
 
     @Override
     protected void onStop() {
         super.onStop();
         stopAll();
+        for (ExoPlayer p : players) p.release();   // and their connections with them
+        players.clear();
+        for (PlayerView v : views) videos.removeView(v);
+        views.clear();
         // off screen: a newer version installs now (it would wait while watching)
         net.execute(() -> SelfUpdate.check(this, "urtv-live.apk", false, false));
     }

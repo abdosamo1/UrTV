@@ -17,8 +17,16 @@ try{ CFG = JSON.parse(Live ? Live.config() : '{}'); }catch(e){}
 
 // ---- the portal: Live.call(id, query) answers window.__done(id, ok, text)
 let SEQ = 0; const PEND = {};
-window.__done = (id, ok, text) => { const p = PEND[id]; if(!p) return; delete PEND[id]; ok ? p.res(text) : p.rej(new Error(text)); };
-function raw(q){ return new Promise((res, rej) => { if(!Live) return rej(new Error('خارج التطبيق')); const id = ++SEQ; PEND[id] = { res, rej }; Live.call(id, q); }); }
+// a refusal (461, 429, 403, 401): the server is left alone for 10 minutes, so a short pause does not grow longer
+let PAUSE_UNTIL = store.get('pauseUntil', 0);
+const paused = () => Date.now() < PAUSE_UNTIL;
+const pauseMsg = () => 'رفض السيرفر الطلبات، والتطبيق متوقف عن الطلب حتى ' + new Date(PAUSE_UNTIL).toTimeString().slice(0, 5).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]) + ' حتى لا يطول الإيقاف';
+window.__done = (id, ok, text) => {
+  const p = PEND[id]; if(!p) return; delete PEND[id];
+  if(!ok && /\((461|429|403|401|458)\)/.test(text)){ PAUSE_UNTIL = Date.now() + 10 * 60e3; store.set('pauseUntil', PAUSE_UNTIL); }
+  ok ? p.res(text) : p.rej(new Error(text));
+};
+function raw(q){ return new Promise((res, rej) => { if(paused()) return rej(new Error(pauseMsg())); if(!Live) return rej(new Error('خارج التطبيق')); const id = ++SEQ; PEND[id] = { res, rej }; Live.call(id, q); }); }
 const call = q => raw(q).then(t => { try{ return JSON.parse(t); }catch(e){ return null; } });
 const enc = encodeURIComponent;
 const abs = u => !u ? '' : /^https?:/.test(u) ? u : u.startsWith('/') ? CFG.root + u : CFG.root + '/stalker_portal/misc/logos/320/' + u;
@@ -41,9 +49,9 @@ function parseXtream(link){
     return { base: url.origin, u, p: pw };
   }catch(e){ return null; }
 }
-function rawGet(url){ return new Promise((res, rej) => { if(!Live) return rej(new Error('خارج التطبيق')); const id = ++SEQ; PEND[id] = { res, rej }; Live.get(id, url); }); }
+function rawGet(url){ return new Promise((res, rej) => { if(paused()) return rej(new Error(pauseMsg())); if(!Live) return rej(new Error('خارج التطبيق')); const id = ++SEQ; PEND[id] = { res, rej }; Live.get(id, url); }); }
 // the long lists come trimmed by the app (only what the screens use)
-function rawSlim(url, fields){ return new Promise((res, rej) => { if(!Live || !Live.getSlim) return rawGet(url).then(res, rej); const id = ++SEQ; PEND[id] = { res, rej }; Live.getSlim(id, url, fields); }); }
+function rawSlim(url, fields){ return new Promise((res, rej) => { if(paused()) return rej(new Error(pauseMsg())); if(!Live || !Live.getSlim) return rawGet(url).then(res, rej); const id = ++SEQ; PEND[id] = { res, rej }; Live.getSlim(id, url, fields); }); }
 // FRESH: ask the server (a refresh); otherwise the copy kept on the TV first, the server only without one
 let FRESH = false, OLDEST = 0;
 function kept(url){
@@ -60,13 +68,16 @@ const xurl = (kind, id, ext) => `${XT.base}/${kind}/${enc(XT.u)}/${enc(XT.p)}/${
 const unix = t => { const n = +t; return n ? new Date(n * 1000).toISOString().replace('T', ' ').slice(0, 19) : String(t || ''); };
 const b64 = t => { try{ return decodeURIComponent(escape(atob(t))); }catch(e){ return t || ''; } };
 let XACCOUNT = null;
-async function xLogin(){
+async function xLogin(force){
+  const k = store.get('acct:' + XT.base + XT.u, null);
+  if(!force && k && Date.now() - k.at < 24 * 3600e3){ XACCOUNT = k.ui; return; }
   const j = await xget('');
   if(!j || !j.user_info) throw new Error('تعذّر الاتصال بالسيرفر، تحقق من الرابط');
   const ui = j.user_info;
   if(String(ui.auth) !== '1') throw new Error('اسم المستخدم أو كلمة المرور غير صحيحة');
   if(ui.status && ui.status !== 'Active') throw new Error('الاشتراك غير فعّال (' + ui.status + ')');
   XACCOUNT = ui;
+  store.set('acct:' + XT.base + XT.u, { at: Date.now(), ui });
 }
 async function xLoadLive(){
   const cats = await xcats('&action=get_live_categories') || [], st = await xlist('&action=get_live_streams', 'num,name,stream_id,stream_icon,category_id') || [];
@@ -98,7 +109,7 @@ async function xLoadVod(){
 }
 function keptDetails(it){
   const d = store.get('det:' + it.kind + ':' + it.id, null);
-  if(!d || Date.now() - d.at > 7 * 864e5) return null;
+  if(!d || Date.now() - d.at > 30 * 864e5) return null;
   Object.assign(it, d.fields);
   return d;
 }
@@ -336,7 +347,7 @@ function drawTabsOnly(){ $('prof').classList.toggle('focus', row === -2); $('tab
 // ---- live
 function lastChannel(){ const id = store.get('lastChannel', null); const i = ALL.findIndex(c => c.id === id); return i >= 0 ? i : 0; }
 function keepChannel(){ if(ALL[cur]) store.set('lastChannel', ALL[cur].id); }
-let zapT = 0, epgT = 0, playSeq = 0;
+let zapT = 0, playSeq = 0;
 async function playTile(t, chIdx){
   const ch = ALL[chIdx]; if(!ch) return;
   const my = ++playSeq;
@@ -346,29 +357,7 @@ async function playTile(t, chIdx){
 function zap(){
   drawLive(true);
   clearTimeout(zapT);
-  zapT = setTimeout(() => { playTile(0, cur); keepChannel(); epg(); }, 600);   // the stream opens when the key rests
-}
-function epg(){
-  const ch = ALL[cur]; if(!ch) return;
-  clearTimeout(epgT);
-  epgT = setTimeout(async () => {
-    let e;
-    if(M3U) return;
-    if(XT){
-      const j = await xget('&action=get_short_epg&limit=1&stream_id=' + enc(ch.id)).catch(() => null);
-      const x = j && j.epg_listings && j.epg_listings[0];
-      e = x && { name: b64(x.title), start_timestamp: +x.start_timestamp, stop_timestamp: +x.stop_timestamp };
-    } else {
-      const j = await call(`type=itv&action=get_short_epg&ch_id=${enc(ch.id)}&size=1`).catch(() => null);
-      e = listOf(j)[0];
-    }
-    if(ALL[cur] !== ch) return;
-    $('inow').textContent = e ? 'الآن: ' + e.name : '';
-    if(e && e.start_timestamp && e.stop_timestamp){
-      const p = (Date.now() / 1000 - e.start_timestamp) / (e.stop_timestamp - e.start_timestamp);
-      $('ibar').style.width = Math.max(0, Math.min(100, p * 100)) + '%';
-    } else $('ibar').style.width = '0';
-  }, 250);
+  zapT = setTimeout(() => { playTile(0, cur); keepChannel(); }, 600);   // the stream opens when the key rests
 }
 function openLive(i){
   if(!ALL.length){ toast('لا توجد قنوات في اشتراكك'); return; }
@@ -376,7 +365,10 @@ function openLive(i){
   layout = 1; tiles = [i]; tsel = 0; Live && Live.layout(1);
   show(); zap();
 }
-const LAYOUTS = [[1, 'قناة واحدة'], [2, 'قناتان'], [4, 'أربع قنوات']];
+const ALL_LAYOUTS = [[1, 'قناة واحدة'], [2, 'قناتان'], [4, 'أربع قنوات']];
+// the subscription's own limit (Xtream says it; a MAG portal does not: then all)
+const maxTiles = () => { const m = XT && XACCOUNT ? +XACCOUNT.max_connections : 0; return m > 0 ? m : 4; };
+let LAYOUTS = ALL_LAYOUTS;
 function drawMulti(){
   const m = $('multi');
   m.className = 'multi' + (layout > 1 ? ' on n' + layout : '');
@@ -385,6 +377,7 @@ function drawMulti(){
     + `<div class="lbl glass"><b>${ar(ALL[ch].num)}</b>${esc(ALL[ch].n)}</div></div>`).join('');
   const pk = $('picker');
   pk.classList.toggle('hide', !pickOpen);
+  LAYOUTS = ALL_LAYOUTS.filter(x => x[0] <= maxTiles());
   if(pickOpen) pk.innerHTML = '<h4>طريقة العرض</h4><div class="opts">' + LAYOUTS.map(([n, t], i) =>
     `<div class="o${i === psel ? ' sel' : ''}"><div class="ic" style="grid-template-columns:repeat(${n === 1 ? 1 : 2},1fr)">${'<i></i>'.repeat(n)}</div>${t}</div>`).join('')
     + '</div><small>كل قناة إضافية اتصال إضافي بالاشتراك. الصوت للقناة المحددة بالذهبي.</small>';
@@ -405,7 +398,7 @@ function drawLive(flash){
   $('inum').textContent = ar(c.num);
   $('inm').textContent = c.n;
   const info = $('info');
-  if(flash){ $('inow').textContent = ''; info.classList.remove('hide'); clearTimeout(infoT); infoT = setTimeout(() => info.classList.add('hide'), 3500); }
+  if(flash){ info.classList.remove('hide'); clearTimeout(infoT); infoT = setTimeout(() => info.classList.add('hide'), 3500); }
   if(listOpen || pickOpen || layout > 1){ clearTimeout(infoT); info.classList.add('hide'); }
   const list = $('list');
   list.classList.toggle('hide', !listOpen);
@@ -571,7 +564,11 @@ window.onEnded = tile => {
   }
   stopVod(); screen = 'home'; show();
 };
-window.onPlayerError = (tile, code) => { toast('تعذّر التشغيل، أعد المحاولة أو اختر غيره'); };
+window.onPlayerError = async (tile, code) => {
+  // a stream that fails: the account is checked again now (it may have ended or be paused)
+  if(XT){ try{ await xLogin(true); }catch(e){ return toast(e.message); } }
+  toast('تعذّر التشغيل، أعد المحاولة أو اختر غيره');
+};
 
 // ---- favourites and search
 function drawFavs(){
@@ -649,7 +646,7 @@ function key(k, repeat){
   } else if(screen === 'live'){
     if(!listOpen){
       if(pickOpen){
-        if(k === 'ArrowLeft') psel = Math.min(2, psel + 1);
+        if(k === 'ArrowLeft') psel = Math.min(LAYOUTS.length - 1, psel + 1);
         else if(k === 'ArrowRight') psel = Math.max(0, psel - 1);
         else if(k === 'Enter'){ pickOpen = false; setLayout(LAYOUTS[psel][0]); if(layout === 1) zap(); return drawLive(false); }
         else if(k === 'Escape' || k === 'ArrowDown') pickOpen = false;
@@ -666,7 +663,10 @@ function key(k, repeat){
         cur = tiles[tsel]; Live && Live.focus(tsel);
         return drawLive(false);
       }
-      if(k === 'ArrowLeft' || k === 'ArrowRight'){ pickOpen = true; psel = 0; return drawLive(false); }
+      if(k === 'ArrowLeft' || k === 'ArrowRight'){
+        if(maxTiles() < 2){ toast('اشتراكك يسمح باتصال واحد، فلا تتوفر المشاهدة المتعددة'); return; }
+        pickOpen = true; psel = 0; return drawLive(false);
+      }
       if(k === 'ArrowUp' || k === 'ChannelUp'){ cur = (cur + 1) % ALL.length; zap(); }
       else if(k === 'ArrowDown' || k === 'ChannelDown'){ cur = (cur - 1 + ALL.length) % ALL.length; zap(); }
       else if(k === 'Enter') openList();
@@ -819,24 +819,32 @@ window.onBack = () => {
   return true;
 };
 window.onLeave = () => { if(screen === 'player') saveProgress(true); };
-// ---- fresh lists: new films, series and channels appear without closing the app. On coming back to the app
-// after 6 hours, and every 6 hours while it stays on the home screen; quietly, the screens stay as they are.
+// ---- fresh lists: films and series once a day, channels once a week. When the app is open at night (03:00–05:00)
+// it does it then; otherwise on coming back or at the start, in the background, when a list is over its age.
 let LOADED_AT = 0, REFRESHING = false;
-async function refreshLists(){
-  if(REFRESHING || !READY || Date.now() - LOADED_AT < 6 * 3600e3) return;
+const DAY = 24 * 3600e3;
+function ageOf(q){ if(!XT || !Live || !Live.cacheAge) return 0; const a = +Live.cacheAge(xapi(q)); return a < 0 ? Infinity : a; }
+function due(){
+  if(XT) return { vod: ageOf('&action=get_vod_streams') > DAY, live: ageOf('&action=get_live_streams') > 7 * DAY };
+  const old = Date.now() - LOADED_AT;
+  return { vod: old > DAY, live: old > 7 * DAY };
+}
+async function refreshLists(night){
+  if(REFRESHING || !READY || paused()) return;
+  const d = due(); if(!d.vod && !d.live) return;
   REFRESHING = true; FRESH = true;
   try{
-    if(XT){ await xLoadLive(); await xLoadVod(); }
+    if(XT){ if(d.live) await xLoadLive(); if(d.vod) await xLoadVod(); }
     else if(M3U) await loadM3u(CFG.portal.replace(/([?&])pasword=/, '$1password='));
-    else { for(const k of Object.keys(PAGES)) delete PAGES[k]; await loadLive(); await loadVodCats(); }
+    else { for(const k of Object.keys(PAGES)) delete PAGES[k]; if(d.live) await loadLive(); await loadVodCats(); }
     await loadHome();
     LOADED_AT = Date.now();
     if(screen === 'home') drawHome();
   }catch(e){}
   REFRESHING = false; FRESH = false;
 }
-setInterval(() => { if(screen === 'home') refreshLists(); }, 30 * 60e3);
-window.onReturn = () => { refreshLists(); if(screen === 'live') zap(); if(screen === 'player' && PLAY){ const it = PLAY.it; const rs = resumeOf(it); stopVod(); openMovie(it); } };
+setInterval(() => { const h = new Date().getHours(); if(h >= 3 && h < 5) refreshLists(true); }, 20 * 60e3);
+window.onReturn = () => { refreshLists(false); if(screen === 'live') zap(); if(screen === 'player' && PLAY){ const it = PLAY.it; const rs = resumeOf(it); stopVod(); openMovie(it); } };
 
 // ---- search: the field, the language, the microphone
 const q = $('q'), mic = $('mic'), langBtn = $('lang');
@@ -894,7 +902,7 @@ async function start(){
     READY = true;
     // the kept lists were shown at once; older than 6 hours: new ones are asked for in the background
     LOADED_AT = Date.now() - OLDEST;
-    if(OLDEST > 6 * 3600e3) setTimeout(refreshLists, 3000);
+    setTimeout(() => refreshLists(false), 3000);   // only what is over its age
     await loadHome().catch(() => {});   // the home screen appears whole: its rows are made first
     loadAccount();
     screen = 'home'; tab = 0; row = rowsData().length ? 0 : -1; show(); preload();
