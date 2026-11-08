@@ -459,6 +459,21 @@ for (const [hash, dimmed] of [['', false], ['night=0', false], ['night=1', true]
   await ctx.close();
 }
 
+// ---- football-data's names: «Club Atlético de Madrid» (short «Atleti») is Atlético Madrid, not Atlético Huila
+{
+  const ctx = await browser.newContext();
+  await ctx.route(/^https?:/, r => r.abort());
+  const p = await ctx.newPage();
+  await p.goto(page('tv.html'));
+  const r = await p.evaluate(() => {
+    const ev = fdEvent({ id: 9, utcDate: new Date().toISOString(), status: 'TIMED', homeTeam: { id: 81, name: 'FC Barcelona', shortName: 'Barça' },
+      awayTeam: { id: 78, name: 'Club Atlético de Madrid', shortName: 'Atleti' }, score: { fullTime: {} } });
+    return { id: ev.idAwayTeam, ar: teamAr(ev.strAwayTeam, ev.idAwayTeam), en: ev.strAwayTeam };
+  });
+  check('football-data: Club Atlético de Madrid → أتلتيكو مدريد (not found by «Atleti»)', r.ar === 'أتلتيكو مدريد' && r.en !== 'Atleti', JSON.stringify(r));
+  await ctx.close();
+}
+
 // ---- in the app (#fdnative=1) the page sends no key at all: the app adds it (FdProxy), so no CORS preflight
 {
   const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });

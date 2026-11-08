@@ -805,6 +805,7 @@ const teamKey = s => String(s).replace(/ı/g,'i').replace(/ß/g,'ss').normalize(
   .replace(/[^a-z0-9]+/g,' ').trim().replace(/^al /,'al');
 const TEAM_BY_ID = __TEAMS_BY_ID__;   // assets/shared/teams.json: TheSportsDB id -> Arabic
 const TEAM_EN = __TEAMS_EN__;         // and -> English, to find the club on football-data.org
+const TEAM_ALT = __TEAMS_ALT__;       // and -> all its English names (alt too), to know football-data's names
 const TEAM_KEYS = {};
 // first entry wins on a clash: the Saudi "Al-Faisaly" before the Jordanian "Al Faisaly"
 for(const [en, arName] of Object.entries(TEAM_AR)) if(!(teamKey(en) in TEAM_KEYS)) TEAM_KEYS[teamKey(en)] = arName;
@@ -1049,16 +1050,28 @@ function fdIndex(){
   return FD_BUILDING;
 }
 // a football-data club name -> the TheSportsDB id we know it by (for its curated Arabic name)
+// football-data's names to our clubs: «Club Atlético de Madrid» is «Atlético Madrid» here, so the small words
+// (de, del, la, ...) go too, and each club's other names count. Its short names («Atleti») are not used for the
+// Arabic name: a search for «Atleti» found Atlético Huila.
+const fdKey = s => teamKey(s).replace(/\b(de|del|la|le|el|di|do|da|des|of|the|y|e|cd|sd|ud|rcd|ca|ss|ac|as|us|sv|vfb|vfl|tsg|bv|rc|ogc)\b/g, ' ').replace(/\s+/g, ' ').trim();
 const TEAM_ID_BY_KEY = {};
-for(const [id, en] of Object.entries(TEAM_EN)) if(!(teamKey(en) in TEAM_ID_BY_KEY)) TEAM_ID_BY_KEY[teamKey(en)] = id;
-const fdTeamId = t => TEAM_ID_BY_KEY[teamKey(t.name || '')] || TEAM_ID_BY_KEY[teamKey(t.shortName || '')] || null;
+for(const [id, names] of Object.entries(TEAM_ALT)) for(const n of names){
+  for(const k of [teamKey(n), fdKey(n)]) if(k && !(k in TEAM_ID_BY_KEY)) TEAM_ID_BY_KEY[k] = id;
+}
+const fdTeamId = t => {
+  for(const n of [t.name, t.shortName]) if(n){
+    const id = TEAM_ID_BY_KEY[teamKey(n)] || TEAM_ID_BY_KEY[fdKey(n)];
+    if(id) return id;
+  }
+  return null;
+};
 const FD_STATUS = {FINISHED: 'FT', AWARDED: 'FT', PAUSED: 'HT', IN_PLAY: '1H', LIVE: '1H'};
 /** a football-data match in TheSportsDB's shape, so the rest of the page needs no change */
 function fdEvent(m){
   const ft = (m.score && m.score.fullTime) || {};
   return {idEvent: 'fd' + m.id, fdId: m.id, strTimestamp: m.utcDate,
-          strHomeTeam: m.homeTeam.shortName || m.homeTeam.name, idHomeTeam: fdTeamId(m.homeTeam),
-          strAwayTeam: m.awayTeam.shortName || m.awayTeam.name, idAwayTeam: fdTeamId(m.awayTeam),
+          strHomeTeam: m.homeTeam.name || m.homeTeam.shortName, idHomeTeam: fdTeamId(m.homeTeam),
+          strAwayTeam: m.awayTeam.name || m.awayTeam.shortName, idAwayTeam: fdTeamId(m.awayTeam),
           intHomeScore: ft.home == null ? null : ft.home, intAwayScore: ft.away == null ? null : ft.away,
           strStatus: FD_STATUS[m.status] || 'NS', strProgress: m.minute || '',
           timeTbc: m.status === 'SCHEDULED'};

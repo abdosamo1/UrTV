@@ -226,6 +226,7 @@ def main():
     html = html.replace("__TEAMS_BY_ID__", js_json(by_id))
     # and the English names: football-data.org's clubs are matched to the followed ones by name
     html = html.replace("__TEAMS_EN__", js_json({c["id"]: c["en"] for c in clubs if c.get("id") and c.get("en")}))
+    html = html.replace("__TEAMS_ALT__", js_json({c["id"]: [c["en"]] + list(c.get("alt") or []) for c in clubs if c.get("id") and c.get("en")}))
     html = html.replace("__VERSES__", js_json(verses_for_screen()))
     # the Quran in the morning and evening adhkar, fetched like the verses (.github/tools/fetch_verses.py)
     html = html.replace("__ADHKAR_QURAN__", js_json(verses_for_screen("adhkar.json")))
