@@ -757,14 +757,21 @@ document.addEventListener('keydown', e => {
   const k = map[e.key] || e.key;
   if(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Escape'].includes(k)){
     e.preventDefault();
-    if(k === 'Enter' && e.repeat){ if(!LONG.armed){ LONG.armed = true; key('Enter', true); } return; }
-    if(k === 'Enter'){ LONG.armed = false; LONG.done = false; return; }   // a short OK acts on release (below)
+    // OK: a long press is timed here (the TV may not repeat a held OK at all); a short one acts on release
+    if(k === 'Enter'){
+      if(e.repeat) return;
+      LONG.armed = false; LONG.done = false;
+      clearTimeout(LONG.t);
+      LONG.t = setTimeout(() => { LONG.armed = true; key('Enter', true); }, 700);
+      return;
+    }
     key(k, e.repeat);
   }
 }, true);
 document.addEventListener('keyup', e => {
   if(screen === 'setup' || e.key !== 'Enter') return;
   const t = e.target; if(t && (t.id === 'q' || t.id === 'mic' || t.id === 'lang')) return;
+  clearTimeout(LONG.t);
   if(!LONG.armed) key('Enter', false);
   LONG.armed = false;
 }, true);
