@@ -167,6 +167,28 @@ public class MainActivity extends Activity {
             });
         }
 
+        /** a plain GET (Xtream's player_api.php): the page on file:// may not fetch another site itself */
+        @JavascriptInterface public void get(final int id, final String url) {
+            net.execute(() -> {
+                String out; boolean ok;
+                try {
+                    if (!url.startsWith("http://") && !url.startsWith("https://")) throw new Exception("رابط غير صالح");
+                    java.net.HttpURLConnection con = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                    con.setConnectTimeout(15000); con.setReadTimeout(60000);
+                    con.setRequestProperty("User-Agent", "IPTVSmartersPlayer");
+                    int code = con.getResponseCode();
+                    if (code >= 400) throw new Exception("رفض السيرفر الطلب (" + code + ")");
+                    java.io.InputStream in = con.getInputStream();
+                    java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+                    byte[] buf = new byte[65536]; int n;
+                    while ((n = in.read(buf)) > 0) b.write(buf, 0, n);
+                    in.close(); con.disconnect();
+                    out = b.toString("UTF-8"); ok = true;
+                } catch (Exception e) { out = e.getMessage() == null ? "تعذّر الاتصال" : e.getMessage(); ok = false; }
+                js("window.__done(" + id + "," + ok + "," + JSONObject.quote(out) + ")");
+            });
+        }
+
         @JavascriptInterface public void play(final int tile, final String url) {
             h.post(() -> {
                 ExoPlayer p = player(tile);
