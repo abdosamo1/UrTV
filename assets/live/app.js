@@ -787,7 +787,24 @@ window.onBack = () => {
   return true;
 };
 window.onLeave = () => { if(screen === 'player') saveProgress(true); };
-window.onReturn = () => { if(screen === 'live') zap(); if(screen === 'player' && PLAY){ const it = PLAY.it; const rs = resumeOf(it); stopVod(); openMovie(it); } };
+// ---- fresh lists: new films, series and channels appear without closing the app. On coming back to the app
+// after 6 hours, and every 6 hours while it stays on the home screen; quietly, the screens stay as they are.
+let LOADED_AT = 0, REFRESHING = false;
+async function refreshLists(){
+  if(REFRESHING || !READY || Date.now() - LOADED_AT < 6 * 3600e3) return;
+  REFRESHING = true;
+  try{
+    if(XT){ await xLoadLive(); await xLoadVod(); }
+    else if(M3U) await loadM3u(CFG.portal.replace(/([?&])pasword=/, '$1password='));
+    else { for(const k of Object.keys(PAGES)) delete PAGES[k]; await loadLive(); await loadVodCats(); }
+    await loadHome();
+    LOADED_AT = Date.now();
+    if(screen === 'home') drawHome();
+  }catch(e){}
+  REFRESHING = false;
+}
+setInterval(() => { if(screen === 'home') refreshLists(); }, 30 * 60e3);
+window.onReturn = () => { refreshLists(); if(screen === 'live') zap(); if(screen === 'player' && PLAY){ const it = PLAY.it; const rs = resumeOf(it); stopVod(); openMovie(it); } };
 
 // ---- search: the field, the language, the microphone
 const q = $('q'), mic = $('mic'), langBtn = $('lang');
@@ -842,7 +859,7 @@ async function start(){
     }
     else if(listy) await loadM3u(CFG.portal);
     else { await raw('login'); await loadLive(); await loadVodCats(); }
-    READY = true;
+    READY = true; LOADED_AT = Date.now();
     screen = 'home'; row = -1; tab = 0; show();
     loadAccount();
     loadHome().then(() => { if(screen === 'home'){ row = rowsData().length ? 0 : -1; drawHome(); } });
