@@ -103,6 +103,45 @@ async function xDetails(it){   // the plot, the genre, the length: asked when a 
   return null;
 }
 
+// ---- a plain M3U list (iptv-org's, or a get.php that answers only as a list): channels by their group;
+// films (…/movie/…) and episodes (…/series/…) in it go to «أفلام» and «مسلسلات» by their group too
+let M3U = false;
+function parseM3u(text){
+  const lines = String(text).split(/\r?\n/), ch = [], vod = [], ser = [];
+  let meta = null;
+  for(const l of lines){
+    const t = l.trim();
+    if(t.startsWith('#EXTINF')){
+      const attr = k => { const m = t.match(new RegExp(k + '="([^"]*)"')); return m ? m[1] : ''; };
+      meta = { name: t.slice(t.lastIndexOf(',') + 1).trim(), logo: attr('tvg-logo'), group: attr('group-title') || 'عام' };
+    } else if(t && !t.startsWith('#') && meta){
+      const it = Object.assign({ url: t }, meta);
+      (/\/movie\//.test(t) ? vod : /\/series\//.test(t) ? ser : ch).push(it);
+      meta = null;
+    }
+  }
+  const groups = list => { const g = []; for(const x of list) if(!g.includes(x.group)) g.push(x.group); return g; };
+  ALL = ch.map((x, i) => ({ id: 'm' + i, n: x.name, num: i + 1, cmd: x.url, logo: x.logo, g: x.group }));
+  CATS = groups(ALL.map(c => ({ group: c.g }))).map(g => ({ id: g, name: g, ch: ALL.filter(c => c.g === g) }));
+  ALL.forEach(c => { c.ci = CATS.findIndex(x => x.id === c.g); });
+  const fill = (kind, list, k) => {
+    const items = list.map((x, i) => ({ kind: 'vod', id: k + i, name: x.name, img: x.logo, r: null, year: '', desc: '', time: 0, added: '', genres: '', cmd: x.url, cat: x.group }));
+    VOD_CATS[kind] = groups(list).map(g => ({ id: g, name: g }));
+    PAGES[kind + ':*'] = { items, page: 1, total: items.length };
+    for(const c of VOD_CATS[kind]){ const it = items.filter(i => i.cat === c.id); PAGES[kind + ':' + c.id] = { items: it, page: 1, total: it.length }; }
+  };
+  fill('أفلام', vod, 'mv'); fill('مسلسلات', ser, 'ms');
+  if(!ALL.length && !vod.length && !ser.length) throw new Error('القائمة فارغة أو الرابط لا يعطي قائمة قنوات');
+}
+async function loadM3u(url){
+  let text;
+  try{ text = await rawGet(url); }
+  catch(e){ throw new Error('تعذّر تنزيل القائمة: ' + (e.message || '')); }
+  if(!/#EXTM3U|#EXTINF/.test(text)) throw new Error('الرابط لا يعطي قائمة M3U');
+  M3U = true; XT = null;
+  parseM3u(text);
+}
+
 // ---- data from the portal
 let CATS = [], ALL = [];                     // live sections and channels (by number)
 const VOD_CATS = { 'أفلام': [], 'مسلسلات': [] };
@@ -141,7 +180,7 @@ async function loadVodCats(){
   }
 }
 async function page(kind, catId){
-  if(XT) return PAGES[kind + ':' + catId] || { items: [], page: 1, total: 0 };
+  if(XT || M3U) return PAGES[kind + ':' + catId] || { items: [], page: 1, total: 0 };
   const key = kind + ':' + catId, P = PAGES[key] || (PAGES[key] = { items: [], page: 0, total: Infinity, busy: false });
   if(P.busy || P.items.length >= P.total) return P;
   P.busy = true;
@@ -155,6 +194,7 @@ async function page(kind, catId){
   return P;
 }
 async function loadHome(){
+  if(M3U){ RECENT = []; HI_SERIES = []; HI_MOVIES = []; return; }   // a plain list has no dates or ratings
   if(XT){
     const byNew = (a, b) => String(b.added).localeCompare(String(a.added));
     RECENT = XVOD.slice().sort(byNew).slice(0, 15).concat(XSER.slice().sort(byNew).slice(0, 15)).sort(byNew).slice(0, 10);
@@ -170,6 +210,7 @@ async function loadHome(){
   HI_MOVIES = mv.items.filter(x => x.r >= 8).slice(0, 20);
 }
 async function loadAccount(){
+  if(M3U){ $('acct').textContent = 'قائمة قنوات'; return; }
   if(XT){
     const e = XACCOUNT && +XACCOUNT.exp_date;
     $('acct').textContent = e ? 'اشتراكك · فعّال حتى ' + ar(new Date(e * 1000).toISOString().slice(0, 10)) : 'اشتراكك · فعّال';
@@ -266,7 +307,7 @@ let zapT = 0, epgT = 0, playSeq = 0;
 async function playTile(t, chIdx){
   const ch = ALL[chIdx]; if(!ch) return;
   const my = ++playSeq;
-  try{ const u = XT ? ch.cmd : await link('itv', ch.cmd); if(t === 0 && layout === 1 && my !== playSeq) return; Live && Live.play(t, u); }
+  try{ const u = XT || M3U ? ch.cmd : await link('itv', ch.cmd); if(t === 0 && layout === 1 && my !== playSeq) return; Live && Live.play(t, u); }
   catch(e){ toast('تعذّر تشغيل «' + ch.n + '»'); }
 }
 function zap(){
@@ -279,6 +320,7 @@ function epg(){
   clearTimeout(epgT);
   epgT = setTimeout(async () => {
     let e;
+    if(M3U) return;
     if(XT){
       const j = await xget('&action=get_short_epg&limit=1&stream_id=' + enc(ch.id)).catch(() => null);
       const x = j && j.epg_listings && j.epg_listings[0];
@@ -394,6 +436,7 @@ function drawBrowse(){
 // ---- a film or a series
 async function openMovie(it){
   screen = 'movie'; MOV = { item: it, seasons: null, sIdx: 0, eIdx: 0, focus: 'btns' }; mbtn = 0; show();
+  if(M3U) return;
   if(XT){
     const seasons = await xDetails(it).catch(() => []);
     if(it.kind === 'series') MOV.seasons = seasons || [];
@@ -446,7 +489,7 @@ async function playVod(it, opts = {}){
       if(!e) throw new Error('');
       u = xurl('series', e.id, e.ext);
       title = `${it.name} — ${S.name || ''} · الحلقة ${ar(opts.ep)}`;
-    } else if(XT) u = it.cmd;
+    } else if(XT || M3U) u = it.cmd;
     else if(it.kind === 'series'){
       const S = opts.season; u = await link('vod', S.cmd, '&series=' + opts.ep);
       title = `${it.name} — ${S.name || ''} · الحلقة ${ar(opts.ep)}`;
@@ -516,7 +559,10 @@ function drawSearch(){
   searchT = setTimeout(async () => {
     const chans = ALL.filter(c => c.n.toLowerCase().includes(q.toLowerCase())).slice(0, 6).map(c => ({ kind: 'live', id: c.id, name: c.n, img: c.logo, ch: c }));
     let found;
-    if(XT){
+    if(M3U){
+      const lq = q.toLowerCase(), all = (PAGES['أفلام:*'] || { items: [] }).items.concat((PAGES['مسلسلات:*'] || { items: [] }).items);
+      found = all.filter(x => x.name.toLowerCase().includes(lq)).slice(0, 24);
+    } else if(XT){
       const lq = q.toLowerCase();
       found = XVOD.filter(x => x.name.toLowerCase().includes(lq)).slice(0, 12).concat(XSER.filter(x => x.name.toLowerCase().includes(lq)).slice(0, 12));
     } else {
@@ -774,8 +820,17 @@ async function start(){
   if(!CFG.portal){ return openSetup(); }
   $('loading').style.display = 'flex';
   try{
-    XT = parseXtream(CFG.portal);
-    if(XT){ await xLogin(); await xLoadLive(); await xLoadVod(); }
+    XT = parseXtream(CFG.portal); M3U = false;
+    const listy = /get\.php|\.m3u8?(\?|$)|type=m3u/i.test(CFG.portal);
+    if(XT){
+      try{ await xLogin(); await xLoadLive(); await xLoadVod(); }
+      catch(e){   // the server may answer only with the list itself
+        if(!listy) throw e;
+        try{ await loadM3u(CFG.portal.replace(/([?&])pasword=/, '$1password=')); }
+        catch(e2){ throw new Error(e.message + ' — ' + e2.message); }
+      }
+    }
+    else if(listy) await loadM3u(CFG.portal);
     else { await raw('login'); await loadLive(); await loadVodCats(); }
     READY = true;
     screen = 'home'; row = -1; tab = 0; show();
