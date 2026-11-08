@@ -124,6 +124,12 @@ public class IdleWatch extends AccessibilityService {
         if (e.getAction() == android.view.KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) keysSeen++;
         boolean vol = k == android.view.KeyEvent.KEYCODE_VOLUME_UP || k == android.view.KeyEvent.KEYCODE_VOLUME_DOWN
             || k == android.view.KeyEvent.KEYCODE_VOLUME_MUTE;
+        if (!vol && keysSeen >= 8 && volumeSeen == 0 && new Prefs(this).volumeWheel()) {
+            // the TV keeps the volume keys to itself (they never come here): stop taking keys, leave its bar
+            new Prefs(this).setVolumeWheelRefused();
+            h.post(this::applyVolumeSetting);
+            return false;
+        }
         if (!vol || !new Prefs(this).volumeWheel()) return false;   // not ours: on to the app, untouched
         if (e.getAction() == android.view.KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) volumeSeen++;
         AudioManager am0 = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
