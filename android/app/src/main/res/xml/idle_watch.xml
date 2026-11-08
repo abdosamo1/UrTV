@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- IdleWatch: focus, clicks and screens opening (to know the TV is idle); it reads no screen content and never
-     filters keys (that made a held volume key count once) -->
+<!-- IdleWatch: focus, clicks and screens opening (to know the TV is idle); it reads no screen content. It may take the
+     volume keys only (the wheel of numbers, settings «شكل الصوت»): the flag is set at run time, every other key passes -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/idle_watch_description"
     android:accessibilityEventTypes="typeWindowStateChanged|typeViewFocused|typeViewClicked|typeViewLongClicked|typeViewSelected"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagDefault"
+    android:canRequestFilterKeyEvents="true"
     android:canRetrieveWindowContent="false"
     android:notificationTimeout="1000" />

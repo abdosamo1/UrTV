@@ -203,6 +203,10 @@ final class Prefs {
     /** darken the screensaver from 21:00 to 07:00; off unless the owner turns it on */
     boolean nightDim() { return sp.getBoolean("nightDim", false); }
 
+    /** the volume as a wheel of numbers instead of the TV's bar (IdleWatch, when it is on); on by default */
+    boolean volumeWheel() { return sp.getBoolean("volumeWheel", true); }
+    void setVolumeWheel(boolean v) { sp.edit().putBoolean("volumeWheel", v).apply(); }
+
     /** morning (Fajr to 09:00) and evening (21:00 to midnight) adhkar beside the clock, whatever the card; on by default */
     boolean adhkar() { return sp.getBoolean("adhkar", true); }
     void setAdhkar(boolean v) { sp.edit().putBoolean("adhkar", v).apply(); }

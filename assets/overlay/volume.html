@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- The volume over any app (IdleWatch shows it in an accessibility overlay, the TV's own bar stays hidden):
+     a glass capsule on the left, a drum of numbers turning, the current one large. IdleWatch calls vol(v, max, muted). -->
+<style>
+  @font-face{font-family:'ThmanyahDisplay';font-weight:700;src:url(../fonts/ThmanyahDisplay-Bold.woff2) format('woff2')}
+  @font-face{font-family:'Thmanyah';font-weight:500;src:url(../fonts/Thmanyah-Medium.woff2) format('woff2')}
+  html,body{margin:0;height:100%;background:transparent;overflow:hidden;font-family:'Thmanyah',sans-serif}
+  .vol{position:absolute;left:3vw;top:50%;width:6.2vw;height:40vh;
+    transform:translate(-30%,-50%) scale(.94);opacity:0;transition:opacity .35s ease,transform .45s cubic-bezier(.2,.9,.25,1.15);
+    border-radius:999px;isolation:isolate;overflow:hidden;
+    /* no photo behind an overlay to blur: a darker glass that reads over anything */
+    background:linear-gradient(165deg,rgba(60,66,62,.80),rgba(22,26,24,.78) 45%,rgba(18,22,20,.80) 70%,rgba(48,52,50,.82));
+    border:1px solid rgba(255,255,255,.26);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 -1px 0 rgba(255,255,255,.12),0 22px 60px rgba(0,0,0,.45)}
+  .vol.show{opacity:1;transform:translate(0,-50%) scale(1)}
+  .drum{position:absolute;inset:0;perspective:420px}
+  .n{position:absolute;left:0;right:0;top:50%;height:1.1em;margin-top:-.55em;text-align:center;color:#E9DFC8;
+    font-family:'ThmanyahDisplay','Thmanyah',serif;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;
+    transition:transform .32s cubic-bezier(.2,.8,.2,1),opacity .32s;backface-visibility:hidden}
+  .n.on{color:#FFFDF6;text-shadow:0 2px 18px rgba(0,0,0,.45),0 0 26px rgba(241,207,138,.25)}
+  .lens{position:absolute;left:12%;right:12%;top:50%;height:22%;transform:translateY(-50%);border-radius:22px;
+    background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14)}
+  .icon{position:absolute;left:0;right:0;bottom:5%;display:flex;justify-content:center;opacity:.9}
+  .icon svg{width:34%;height:auto}
+  .word{position:absolute;left:0;right:0;top:6%;text-align:center;font-size:1vw;color:#F1CF8A}
+</style>
+</head>
+<body>
+<div class="vol" id="vol">
+  <div class="lens"></div>
+  <div class="word">الصوت</div>
+  <div class="drum" id="drum"></div>
+  <div class="icon" id="icon"></div>
+</div>
+<script>
+  let MAX = 100, v = 0, muted = false, hideT = 0, els = [];
+  const drum = document.getElementById('drum'), box = document.getElementById('vol');
+  const ar = n => n.toLocaleString('ar-EG');
+  const ICON = (lvl, m) => `<svg viewBox="0 0 24 24" fill="none" stroke="#F1CF8A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="rgba(241,207,138,.25)"/>
+    ${m || lvl === 0 ? '<path d="M16 9.5l5 5M21 9.5l-5 5"/>' :
+      '<path d="M15.5 9.2a4 4 0 0 1 0 5.6"/>' + (lvl > MAX / 3 ? '<path d="M18 7a7 7 0 0 1 0 10"/>' : '') + (lvl > MAX * 2 / 3 ? '<path d="M20.4 4.7a10.3 10.3 0 0 1 0 14.6"/>' : '')}</svg>`;
+  function build(){
+    drum.innerHTML = ''; els = [];
+    for(let i = 0; i <= MAX; i++){ const d = document.createElement('div'); d.className = 'n'; d.textContent = ar(i); drum.appendChild(d); els.push(d); }
+  }
+  function draw(){
+    const h = box.clientHeight, fs = box.clientWidth * .46, R = h * .40;
+    els.forEach((el, i) => {
+      const d = i - v, a = Math.abs(d);
+      el.classList.toggle('on', a === 0);
+      if(a > 2){ el.style.opacity = 0; el.style.transform = `translateY(${-Math.sign(d) * R}px) rotateX(${Math.sign(d) * 85}deg)`; return; }
+      const ang = Math.max(-85, Math.min(85, d * 34));             // a drum: higher numbers above, tilted away
+      el.style.fontSize = fs + 'px';
+      el.style.transform = `translateY(${-Math.sin(ang * Math.PI / 180) * R}px) rotateX(${ang}deg) scale(${a === 0 ? 1 : a === 1 ? .62 : .46})`;
+      el.style.opacity = a === 0 ? (muted ? .45 : 1) : a === 1 ? .55 : 0;
+    });
+    document.getElementById('icon').innerHTML = ICON(v, muted);
+  }
+  /** IdleWatch: the volume now; shows the capsule, which goes after 2 s without a key */
+  function vol(value, max, isMuted){
+    if(max > 0 && max !== MAX){ MAX = max; build(); }
+    v = Math.max(0, Math.min(MAX, value)); muted = !!isMuted;
+    draw();
+    box.classList.add('show');
+    clearTimeout(hideT); hideT = setTimeout(() => box.classList.remove('show'), 2000);
+  }
+  build(); draw();
+</script>
+</body>
+</html>
