@@ -285,7 +285,6 @@ function toast(t){ const el = $('toast'); el.textContent = t; el.classList.add('
 const TABS = ['الرئيسية', 'مباشر', 'أفلام', 'مسلسلات', 'المفضلة'];
 let screen = 'home', tab = 0, row = 0, col = 0, cur = 0, listOpen = false, lcat = 0, lsel = 0, infoT = 0, mbtn = 0;
 let catsOpen = false, csel = 0;
-let layout = 1, tiles = [0], tsel = 0, pickOpen = false, psel = 0;
 let bKind = 'أفلام', bcat = 0, bfocus = 'rail', bi = 0, bScroll = 0;
 let MOV = null;   // the film or series open: { item, seasons, sIdx, eIdx, focus }
 
@@ -351,7 +350,7 @@ let zapT = 0, playSeq = 0;
 async function playTile(t, chIdx){
   const ch = ALL[chIdx]; if(!ch) return;
   const my = ++playSeq;
-  try{ const u = XT || M3U ? ch.cmd : await link('itv', ch.cmd); if(t === 0 && layout === 1 && my !== playSeq) return; Live && Live.play(t, u); }
+  try{ const u = XT || M3U ? ch.cmd : await link('itv', ch.cmd); if(my !== playSeq) return; Live && Live.play(t, u); }
   catch(e){ toast('تعذّر تشغيل «' + ch.n + '»'); }
 }
 function zap(){
@@ -361,45 +360,16 @@ function zap(){
 }
 function openLive(i){
   if(!ALL.length){ toast('لا توجد قنوات في اشتراكك'); return; }
-  screen = 'live'; cur = i; listOpen = false; catsOpen = false; pickOpen = false;
-  layout = 1; tiles = [i]; tsel = 0; Live && Live.layout(1);
+  screen = 'live'; cur = i; listOpen = false; catsOpen = false;
   show(); zap();
 }
-const ALL_LAYOUTS = [[1, 'قناة واحدة'], [2, 'قناتان'], [4, 'أربع قنوات']];
-// the subscription's own limit (Xtream says it; a MAG portal does not: then all)
-const maxTiles = () => { const m = XT && XACCOUNT ? +XACCOUNT.max_connections : 0; return m > 0 ? m : 4; };
-let LAYOUTS = ALL_LAYOUTS;
-function drawMulti(){
-  const m = $('multi');
-  m.className = 'multi' + (layout > 1 ? ' on n' + layout : '');
-  m.innerHTML = layout === 1 ? '' : tiles.map((ch, i) =>
-    `<div class="tile${i === tsel ? ' sel' : ''}"><div class="snd">${i === tsel ? '🔊' : '🔇'}</div>`
-    + `<div class="lbl glass"><b>${ar(ALL[ch].num)}</b>${esc(ALL[ch].n)}</div></div>`).join('');
-  const pk = $('picker');
-  pk.classList.toggle('hide', !pickOpen);
-  LAYOUTS = ALL_LAYOUTS.filter(x => x[0] <= maxTiles());
-  if(pickOpen) pk.innerHTML = '<h4>طريقة العرض</h4><div class="opts">' + LAYOUTS.map(([n, t], i) =>
-    `<div class="o${i === psel ? ' sel' : ''}"><div class="ic" style="grid-template-columns:repeat(${n === 1 ? 1 : 2},1fr)">${'<i></i>'.repeat(n)}</div>${t}</div>`).join('')
-    + '</div><small>كل قناة إضافية اتصال إضافي بالاشتراك. الصوت للقناة المحددة بالذهبي.</small>';
-}
-function setLayout(n){
-  const old = tiles.slice();
-  layout = n;
-  const base = layout === 1 ? [cur] : old.slice(0, n);
-  while(base.length < n) base.push((base[base.length - 1] + 1) % ALL.length);
-  tiles = base; tsel = 0; cur = tiles[0];
-  Live && Live.layout(n);
-  tiles.forEach((ch, t) => playTile(t, ch));
-  Live && Live.focus(0);
-}
 function drawLive(flash){
-  drawMulti();
   const c = ALL[cur]; if(!c) return;
   $('inum').textContent = ar(c.num);
   $('inm').textContent = c.n;
   const info = $('info');
   if(flash){ info.classList.remove('hide'); clearTimeout(infoT); infoT = setTimeout(() => info.classList.add('hide'), 3500); }
-  if(listOpen || pickOpen || layout > 1){ clearTimeout(infoT); info.classList.add('hide'); }
+  if(listOpen){ clearTimeout(infoT); info.classList.add('hide'); }
   const list = $('list');
   list.classList.toggle('hide', !listOpen);
   if(listOpen){
@@ -523,7 +493,6 @@ async function playVod(it, opts = {}){
     PLAY = { it, key, title, season: opts.season || null, ep: opts.ep || null, lastSave: 0 };
     screen = 'player'; show();
     $('ptitle').textContent = title;
-    Live && Live.layout(1);
     if(Live) Live.playFrom(0, u, opts.from || 0);
     showPbar();
     clearInterval(pollT); pollT = setInterval(pollPlayer, 500);
@@ -645,28 +614,6 @@ function key(k, repeat){
     drawHome();
   } else if(screen === 'live'){
     if(!listOpen){
-      if(pickOpen){
-        if(k === 'ArrowLeft') psel = Math.min(LAYOUTS.length - 1, psel + 1);
-        else if(k === 'ArrowRight') psel = Math.max(0, psel - 1);
-        else if(k === 'Enter'){ pickOpen = false; setLayout(LAYOUTS[psel][0]); if(layout === 1) zap(); return drawLive(false); }
-        else if(k === 'Escape' || k === 'ArrowDown') pickOpen = false;
-        return drawLive(false);
-      }
-      if(layout > 1){
-        const cols = 2, rowsN = layout / cols, r = Math.floor(tsel / cols), c = tsel % cols;
-        if(k === 'ArrowLeft' && c < cols - 1) tsel++;
-        else if(k === 'ArrowRight' && c > 0) tsel--;
-        else if(k === 'ArrowDown' && r < rowsN - 1) tsel += cols;
-        else if(k === 'ArrowUp'){ if(r > 0) tsel -= cols; else { pickOpen = true; psel = LAYOUTS.findIndex(x => x[0] === layout); } }
-        else if(k === 'Enter'){ cur = tiles[tsel]; openList(); }
-        else if(k === 'Escape'){ setLayout(1); screen = 'home'; return show(); }
-        cur = tiles[tsel]; Live && Live.focus(tsel);
-        return drawLive(false);
-      }
-      if(k === 'ArrowLeft' || k === 'ArrowRight'){
-        if(maxTiles() < 2){ toast('اشتراكك يسمح باتصال واحد، فلا تتوفر المشاهدة المتعددة'); return; }
-        pickOpen = true; psel = 0; return drawLive(false);
-      }
       if(k === 'ArrowUp' || k === 'ChannelUp'){ cur = (cur + 1) % ALL.length; zap(); }
       else if(k === 'ArrowDown' || k === 'ChannelDown'){ cur = (cur - 1 + ALL.length) % ALL.length; zap(); }
       else if(k === 'Enter') openList();
@@ -685,7 +632,6 @@ function key(k, repeat){
       else if(k === 'Enter' && repeat){ const c = chans[lsel]; if(c && !LONG.done){ LONG.done = true; toggleFav({ kind: 'live', id: c.id, name: c.n, img: c.logo }); } }
       else if(k === 'Enter'){
         cur = ALL.indexOf(chans[lsel]); listOpen = false;
-        if(layout > 1){ tiles[tsel] = cur; playTile(tsel, cur); return drawLive(false); }
         return zap();
       }
       else if(k === 'Escape'){ listOpen = false; }
