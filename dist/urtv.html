@@ -185,18 +185,21 @@
     background:linear-gradient(270deg,var(--gold),rgba(220,184,111,0))}
 
   /* the card keeps its width on the left; the clock is centred in the space between it and the right edge */
-  .mid{display:grid;grid-template-columns:1fr auto;align-items:center;gap:4.5vw}
-  .clockwrap{display:flex;flex-direction:column;align-items:center;justify-self:center}
+  /* the clock's column never grows (minmax(0,1fr)): a wide time cannot push the card; the clock is sized to fit
+     its column with room to spare, and every digit has the same box, so nothing moves from minute to minute */
+  .mid{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4.5vw}
+  .clockwrap{display:flex;flex-direction:column;align-items:center;justify-self:center;max-width:100%}
   .clock{
     display:flex;align-items:baseline;justify-content:center;direction:ltr;
     font-family:'ThmanyahDisplay','Thmanyah',serif;
     font-weight:700;
-    font-size:clamp(120px,min(17vw,31vh),345px);line-height:.92;letter-spacing:.022em;
+    font-size:clamp(100px,min(14vw,27vh),290px);line-height:.92;letter-spacing:.022em;white-space:nowrap;
     color:#FFFDF6;font-variant-numeric:tabular-nums;
     text-shadow:0 4px 70px rgba(0,0,0,.65), 0 0 130px rgba(255,236,190,.12);
   }
   .clock .d{unicode-bidi:isolate}
-  .clock .d i{font-style:normal}
+  .clock .d i{font-style:normal;display:inline-block;width:.54em;text-align:center}
+  .clock .ampm{display:inline-block;min-width:1em;text-align:center}
   .clock .d i + i{margin-left:var(--digit-gap,.09em)}
   .clock .sep{
     font-size:.46em;align-self:center;transform:translateY(-.08em);color:var(--gold);opacity:.9;padding:0 .1em;
