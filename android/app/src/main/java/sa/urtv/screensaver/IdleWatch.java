@@ -9,13 +9,13 @@ import android.os.Looper;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.text.TextUtils;
-import android.view.KeyEvent;
 import android.view.accessibility.AccessibilityEvent;
 
 /**
  * The screensaver over apps too. Android starts it only when nothing keeps the screen on, and most TV apps
  * (IPTV, Netflix, YouTube) keep it on even in their menus, so it came only on the home screen. This service
- * sees each remote key (it never takes one: onKeyEvent returns false) and, after the TV's own idle delay with
+ * sees the remote in use (focus moving, clicks, screens opening, the volume; never the keys themselves) and,
+ * after the TV's own idle delay with
  * no key and nothing playing, shows the screensaver (MainActivity, as the dream would). A video or the adhan
  * playing (AudioManager.isMusicActive) is watching, not idle: then it waits. So is a TV input on screen (HDMI: a
  * PlayStation played with its own controller and headphones sends no remote key and no sound through the TV),
@@ -73,20 +73,38 @@ public class IdleWatch extends AccessibilityService {
         return ms + MARGIN_MS;
     }
 
-    @Override protected void onServiceConnected() { h.removeCallbacks(tick); h.postDelayed(tick, TICK_MS); }
+    // The remote is seen through what it does, not its keys: filtering keys (flagRequestFilterKeyEvents) made
+    // the TV deliver a held key once, so holding volume up raised it one step only. Now: a focus moving, a click,
+    // a screen opening (accessibility events), or the volume changing (its broadcast) count as a key.
+    private final android.content.BroadcastReceiver volume = new android.content.BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) { touched(); }
+    };
+
+    private void touched() {
+        lastKey = System.currentTimeMillis();   // the clock starts again
+        shown = false;
+    }
 
     @Override
-    protected boolean onKeyEvent(KeyEvent e) {
-        lastKey = System.currentTimeMillis();   // any key: the clock starts again
-        shown = false;
-        return false;       // and the key goes on to the app as usual
+    protected void onServiceConnected() {
+        h.removeCallbacks(tick);
+        h.postDelayed(tick, TICK_MS);
+        try {   // the system's broadcast: Android 13+ wants it said that it comes from outside
+            android.content.IntentFilter f = new android.content.IntentFilter("android.media.VOLUME_CHANGED_ACTION");
+            if (android.os.Build.VERSION.SDK_INT >= 33) registerReceiver(volume, f, Context.RECEIVER_EXPORTED);
+            else registerReceiver(volume, f);
+        }
+        catch (Exception ignored) { }
     }
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent e) {
-        if (e == null || e.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || e.getPackageName() == null) return;
-        String pkg = e.getPackageName().toString();
-        if (pkg.equals(getPackageName()) || pkg.equals("com.android.systemui")) return;   // ours, or a volume bar
+        if (e == null) return;
+        String pkg = e.getPackageName() == null ? "" : e.getPackageName().toString();
+        if (pkg.equals(getPackageName())) return;   // our own screens
+        touched();                                  // focus, click, a new screen: someone is using the remote
+        if (e.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || pkg.isEmpty()) return;
+        if (pkg.equals("com.android.systemui")) return;   // a volume bar is not the app on screen
         front = pkg;
     }
     @Override public void onInterrupt() { }
@@ -94,6 +112,7 @@ public class IdleWatch extends AccessibilityService {
     @Override
     public void onDestroy() {
         h.removeCallbacksAndMessages(null);
+        try { unregisterReceiver(volume); } catch (Exception ignored) { }
         super.onDestroy();
     }
 

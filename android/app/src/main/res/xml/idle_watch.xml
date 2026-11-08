@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- IdleWatch: only the remote's keys (to know the TV is idle); it reads no screen content -->
+<!-- IdleWatch: focus, clicks and screens opening (to know the TV is idle); it reads no screen content and never
+     filters keys (that made a held volume key count once) -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/idle_watch_description"
-    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeViewFocused|typeViewClicked|typeViewLongClicked|typeViewSelected"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:accessibilityFlags="flagRequestFilterKeyEvents"
-    android:canRequestFilterKeyEvents="true"
+    android:accessibilityFlags="flagDefault"
     android:canRetrieveWindowContent="false"
     android:notificationTimeout="1000" />
