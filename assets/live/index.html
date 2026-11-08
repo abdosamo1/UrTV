@@ -122,8 +122,9 @@
   .mic.on{background:rgba(241,207,138,.3);animation:pulse 1.2s ease-in-out infinite}
   @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(241,207,138,.5)}50%{box-shadow:0 0 0 .7em rgba(241,207,138,0)}}
   .listen{position:absolute;top:26%;left:4%;color:var(--gold-lt);font-size:1.15em;min-height:1.4em}
-  .sres{position:absolute;top:30%;right:4%;left:4%;bottom:0;display:grid;grid-template-columns:repeat(6,1fr);gap:1.2em;align-content:start}
-  .sres .card{width:auto;height:auto;aspect-ratio:2/3}
+  /* the cards' size given outright: on the TV's WebView a 2:3 ratio in a grid let the rows overlap */
+  .sres{position:absolute;top:30%;right:4%;left:4%;bottom:0;display:grid;grid-template-columns:repeat(6,1fr);grid-auto-rows:max-content;gap:1.2em;align-content:start;overflow:hidden;padding:.6em .4em 2em}
+  .sres .card{width:auto;height:calc((92cqw - 7em) / 6 * 1.5)}
   .sres .none{grid-column:1/-1;text-align:center;color:var(--dim);font-size:1.3em;margin-top:3em}
   /* ---- movies / series browser */
   #browse .shade{position:absolute;inset:0;background:linear-gradient(270deg,rgba(0,0,0,.55),rgba(0,0,0,.75))}
@@ -134,8 +135,8 @@
   .rail .c.cur{color:var(--gold-lt)}
   .rail .c.sel{background:rgba(255,255,255,.16);outline:1px solid rgba(241,207,138,.6)}
   .grid{position:absolute;top:15%;bottom:0;right:28%;left:3%;overflow:hidden}
-  .grid .in{display:grid;grid-template-columns:repeat(5,1fr);gap:1.2em;padding-bottom:3em;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
-  .grid .card{width:auto;height:auto;aspect-ratio:2/3}
+  .grid .in{display:grid;grid-template-columns:repeat(5,1fr);grid-auto-rows:max-content;gap:1.2em;padding-bottom:3em;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+  .grid .card{width:auto;height:calc((69cqw - 4.8em) / 5 * 1.5)}
   .grid h3{grid-column:1/-1;margin:0;font-size:1.4em;color:var(--gold-lt);font-weight:500}
   /* ---- movie details */
   #movie .back{position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.2),rgba(0,0,0,.85) 60%)}

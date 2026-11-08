@@ -399,8 +399,20 @@ async function loadCat(){
   if(!PAGES[key]) { drawBrowse(); await page(bKind, c.id); }
   if(screen === 'browse') drawBrowse();
 }
+let BWIN = '';   // the rows drawn now (section, first row, count): within them only the focus moves
 function drawBrowse(){
   const cats = VOD_CATS[bKind];
+  if(bfocus === 'grid'){
+    const its = curItems(), first = Math.max(0, Math.floor(bi / COLS) - 3) * COLS;
+    if(BWIN === bKind + ':' + bcat + ':' + first + ':' + its.length){
+      const g = $('grid'), cards = g.querySelectorAll('.card');
+      cards.forEach((c, k) => c.classList.toggle('focus', first + k === bi));
+      $('sbtn').classList.remove('focus');
+      const rail = $('rail').querySelector('.sel'); if(rail) rail.classList.remove('sel');
+      scrollGrid();
+      return;
+    }
+  }
   $('bkind').textContent = bKind;
   $('sbtn').classList.toggle('focus', bfocus === 'search');
   const from = Math.max(0, Math.min(bcat - 6, cats.length - 12));
@@ -416,7 +428,12 @@ function drawBrowse(){
       return `<div class="card poster glass${bfocus === 'grid' && i === bi ? ' focus' : ''}"><div class="art" style="${cardArt(it, i)}"></div>${badge(it)}`
         + `<div class="cap">${esc(it.name)}<small>${ar(it.year)}</small></div></div>`; }).join('')
     || '<div class="empty" style="grid-column:1/-1;color:var(--dim)">جارٍ التحميل…</div>'}</div>`;
-  if(bfocus !== 'grid') { bScroll = 0; g.firstChild.style.transform = 'none'; return; }
+  BWIN = bKind + ':' + bcat + ':' + start + ':' + items.length;
+  if(bfocus !== 'grid') { bScroll = 0; g.firstChild.style.transform = 'none'; BWIN = ''; return; }
+  scrollGrid();
+}
+function scrollGrid(){
+  const g = $('grid'), cats = VOD_CATS[bKind], items = curItems();
   const card = g.querySelector('.card.focus'); if(!card) return;
   const gb = g.getBoundingClientRect(), cb = card.getBoundingClientRect();
   let s2 = bScroll;
@@ -550,7 +567,7 @@ function drawFavs(){
   body.innerHTML = `<div class="sres">${f.map((x, i) => `<div class="card poster glass${i === FSEL ? ' focus' : ''}"><div class="art" style="${cardArt(x, i)}"></div>`
     + `${x.kind === 'live' ? '<div class="kind">قناة</div>' : ''}<div class="cap">${esc(x.name)}</div></div>`).join('')}</div>`;
 }
-let FSEL = 0, SSEL = -1, SRES = [], searchT = 0;
+let FSEL = 0, SSEL = -1, SRES = [], searchT = 0, LAST_IDS = '';
 function drawSearch(){
   const q = $('q').value.trim();
   if(q.length < 2){ SRES = []; $('sres').innerHTML = '<div class="none">اكتب حرفين أو أكثر، أو استخدم البحث الصوتي من جهاز التحكم</div>'; return; }
@@ -569,9 +586,17 @@ function drawSearch(){
       found = listOf(v).map(x => vItem(x, 'vod')).concat(listOf(s).map(x => vItem(x, 'series')));
     }
     if($('q').value.trim() !== q) return;
-    SRES = chans.concat(found).slice(0, 30);
+    const next = chans.concat(found).slice(0, 30), ids = next.map(x => x.kind + x.id).join();
+    if(ids === LAST_IDS) return;   // the same results: nothing drawn again
+    LAST_IDS = ids; SRES = next;
     SSEL = -1; drawSearchRes(q);
-  }, 450);
+  }, 700);   // asked when the typing pauses
+}
+/** the gold card moves; nothing is drawn again (a redraw fetched every picture anew) */
+function moveFocus(box, i){
+  const cards = box.querySelectorAll('.card');
+  cards.forEach((c, k) => c.classList.toggle('focus', k === i));
+  if(cards[i]) cards[i].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 function drawSearchRes(q){
   $('sres').innerHTML = !SRES.length ? '<div class="none">لا توجد نتائج لـ «' + esc(q || $('q').value.trim()) + '»</div>'
@@ -669,16 +694,16 @@ function key(k, repeat){
       if(x.kind === 'live'){ const i = ALL.findIndex(c => c.id === x.id); if(i >= 0) return openLive(i); return toast('القناة لم تعد موجودة'); }
       return openMovie(Object.assign({ desc: '', genres: '' }, x));
     }
-    drawFavs();
+    moveFocus($('favbody'), FSEL);
   } else if(screen === 'search'){
     if(k === 'Escape'){ screen = 'home'; return show(); }
     if(SSEL >= 0){
       if(k === 'ArrowLeft') SSEL = Math.min(SRES.length - 1, SSEL + 1);
       else if(k === 'ArrowRight') SSEL = Math.max(0, SSEL - 1);
       else if(k === 'ArrowDown') SSEL = Math.min(SRES.length - 1, SSEL + 6);
-      else if(k === 'ArrowUp'){ if(SSEL < 6){ SSEL = -1; $('q').focus(); } else SSEL -= 6; }
+      else if(k === 'ArrowUp'){ if(SSEL < 6){ SSEL = -1; moveFocus($('sres'), -1); $('q').focus(); return; } else SSEL -= 6; }
       else if(k === 'Enter' && SRES[SSEL]) return openResult(SRES[SSEL]);
-      drawSearchRes();
+      if(SSEL >= 0) moveFocus($('sres'), SSEL);
     }
   } else if(screen === 'movie'){
     const it = MOV.item, S = MOV.seasons && MOV.seasons[MOV.sIdx];
@@ -730,7 +755,7 @@ document.addEventListener('keydown', e => {
   const t = e.target;
   if(screen === 'setup') return setupKey(e);
   if(t && (t.id === 'q' || t.id === 'mic' || t.id === 'lang')){
-    if(t.id === 'q' && e.key === 'ArrowDown' && SRES.length){ e.preventDefault(); t.blur(); $('tv').focus(); SSEL = 0; drawSearchRes(); }
+    if(t.id === 'q' && e.key === 'ArrowDown' && SRES.length){ e.preventDefault(); t.blur(); $('tv').focus(); SSEL = 0; moveFocus($('sres'), 0); }
     if(e.key === 'Escape'){ e.preventDefault(); screen = 'home'; show(); }
     return;
   }
@@ -760,7 +785,7 @@ window.remote = name => key(name, false);
 window.onBack = () => {
   if(screen === 'home' && !$('setup').classList.contains('on')){ return false; }   // leave the app
   if(screen === 'setup'){ if(CFG.portal && READY){ screen = 'home'; show(); return true; } return false; }
-  if(screen === 'search' && SSEL >= 0){ SSEL = -1; drawSearchRes(); $('q').focus(); return true; }
+  if(screen === 'search' && SSEL >= 0){ SSEL = -1; moveFocus($('sres'), -1); $('q').focus(); return true; }
   key('Escape', false);
   return true;
 };
