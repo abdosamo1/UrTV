@@ -840,7 +840,7 @@ async function start(){
       catch(e){   // the server may answer only with the list itself
         if(!listy) throw e;
         try{ await loadM3u(CFG.portal.replace(/([?&])pasword=/, '$1password=')); }
-        catch(e2){ throw new Error(e.message + ' — ' + e2.message); }
+        catch(e2){ throw e; }   // one reason is enough (the list asks the same server)
       }
     }
     else if(listy) await loadM3u(CFG.portal);

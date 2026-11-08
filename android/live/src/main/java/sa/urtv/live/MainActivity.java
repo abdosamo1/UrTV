@@ -321,8 +321,7 @@ public class MainActivity extends Activity {
             con.setRequestProperty("User-Agent", "IPTVSmartersPlayer");
             int code = con.getResponseCode();
             if (code == 401 || code == 403 || code == 461 || code == 429 || code == 458)
-                throw new Exception("رفض السيرفر الطلب (" + code + "): غالباً تجاوز عدد الاتصالات المسموح أو أُوقف الطلب مؤقتاً. "
-                    + "أغلق أي تطبيق آخر يستخدم الاشتراك، وانتظر بضع دقائق ثم أعد المحاولة");
+                throw new Exception("رفض السيرفر الطلب (" + code + "): اتصالات أكثر من المسموح أو إيقاف مؤقت. أغلق التطبيقات الأخرى وانتظر قليلاً");
             if (code >= 400) throw new Exception("رفض السيرفر الطلب (" + code + ")");
             java.io.InputStream in = con.getInputStream();
             java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
