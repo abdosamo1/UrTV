@@ -199,7 +199,8 @@ public class SettingsActivity extends Activity {
             R.drawable.ic_eye, new Runnable() { public void run() { prefs.setNightDim(!prefs.nightDim()); render(); } });
         row("بدء شاشة التوقف بعد", idleLabel(), R.drawable.ic_screensaver,
             new Runnable() { public void run() { pickIdle(); } });
-        row("شكل الصوت", !prefs.volumeWheel() ? "شريط التلفاز" : IdleWatch.enabled(this) ? "عجلة الأرقام" : "عجلة الأرقام · فعّل «شاشة التوقف فوق التطبيقات» أولاً",
+        row("شكل الصوت", (!prefs.volumeWheel() ? "شريط التلفاز" : IdleWatch.enabled(this) ? "عجلة الأرقام" : "عجلة الأرقام · فعّل «شاشة التوقف فوق التطبيقات» أولاً")
+                + (IdleWatch.lastError.isEmpty() ? "" : " · " + IdleWatch.lastError),
             R.drawable.ic_screensaver, new Runnable() { public void run() {
                 prefs.setVolumeWheel(!prefs.volumeWheel()); IdleWatch.settingChanged(); render(); } });
         row("شاشة التوقف فوق التطبيقات", IdleWatch.enabled(this) ? "تعمل · إن لم يُعرض فيديو" : "متوقفة · اضغط للتفعيل",

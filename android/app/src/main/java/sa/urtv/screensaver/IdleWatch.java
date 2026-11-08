@@ -90,7 +90,7 @@ public class IdleWatch extends AccessibilityService {
     // pause, then faster, as the TV's own would; the volume is set without the system's bar (no FLAG_SHOW_UI).
     static volatile IdleWatch self;
     private android.view.WindowManager wm;
-    private android.webkit.WebView volView;
+    private VolumeWheel volView;
     private int heldKey = 0, heldSteps = 0;
 
     private final Runnable repeat = new Runnable() {
@@ -121,22 +121,30 @@ public class IdleWatch extends AccessibilityService {
         boolean vol = k == android.view.KeyEvent.KEYCODE_VOLUME_UP || k == android.view.KeyEvent.KEYCODE_VOLUME_DOWN
             || k == android.view.KeyEvent.KEYCODE_VOLUME_MUTE;
         if (!vol || !new Prefs(this).volumeWheel()) return false;   // not ours: on to the app, untouched
-        touched();
-        if (e.getAction() == android.view.KeyEvent.ACTION_DOWN) {
-            if (e.getRepeatCount() > 0) return true;                 // repeats come from our own timer
-            stepVolume(k);
-            if (k != android.view.KeyEvent.KEYCODE_VOLUME_MUTE) {
-                heldKey = k; heldSteps = 0;
-                h.removeCallbacks(repeat);
-                h.postDelayed(repeat, 380);
-            }
-        } else if (e.getAction() == android.view.KeyEvent.ACTION_UP) {
-            if (k == heldKey) { heldKey = 0; h.removeCallbacks(repeat); }
-        }
+        AudioManager am0 = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (am0 == null || am0.isVolumeFixed()) return false;        // the TV's volume is not ours to set (a fixed output)
+        // answer the system at once (it waits only briefly for us); the volume is changed right after
+        final int action = e.getAction(), repeats = e.getRepeatCount();
+        h.post(() -> {
+            try {
+                touched();
+                if (action == android.view.KeyEvent.ACTION_DOWN) {
+                    if (repeats > 0) return;                         // repeats come from our own timer
+                    stepVolume(k);
+                    if (k != android.view.KeyEvent.KEYCODE_VOLUME_MUTE) {
+                        heldKey = k; heldSteps = 0;
+                        h.removeCallbacks(repeat);
+                        h.postDelayed(repeat, 380);
+                    }
+                } else if (action == android.view.KeyEvent.ACTION_UP && k == heldKey) {
+                    heldKey = 0; h.removeCallbacks(repeat);
+                }
+            } catch (Exception ex) { note("key: " + ex); }
+        });
         return true;
     }
 
-    private void stepVolume(int key) {
+    private void stepVolume(final int key) {
         AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         if (am == null) return;
         int dir = key == android.view.KeyEvent.KEYCODE_VOLUME_UP ? AudioManager.ADJUST_RAISE
@@ -150,48 +158,50 @@ public class IdleWatch extends AccessibilityService {
             am.isStreamMute(AudioManager.STREAM_MUSIC));
     }
 
-    @android.annotation.SuppressLint("SetJavaScriptEnabled")
-    private void showVolume(int v, int max, boolean muted) {
+    /** the wheel's window: made once, when the service starts, so a key never waits for it */
+    private void ensureWheel() {
+        if (volView != null) return;
         try {
-            if (volView == null) {
-                wm = (android.view.WindowManager) getSystemService(Context.WINDOW_SERVICE);
-                volView = new android.webkit.WebView(this);
-                volView.setBackgroundColor(android.graphics.Color.TRANSPARENT);
-                volView.getSettings().setJavaScriptEnabled(true);
-                volView.getSettings().setAllowFileAccess(true);
-                volView.setFocusable(false);
-                android.view.WindowManager.LayoutParams lp = new android.view.WindowManager.LayoutParams(
-                    android.view.WindowManager.LayoutParams.MATCH_PARENT, android.view.WindowManager.LayoutParams.MATCH_PARENT,
-                    android.view.WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                    android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                        | android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                    android.graphics.PixelFormat.TRANSLUCENT);
-                wm.addView(volView, lp);
-                final String js = call(v, max, muted);
-                volView.setWebViewClient(new android.webkit.WebViewClient() {
-                    @Override public void onPageFinished(android.webkit.WebView w, String url) { w.evaluateJavascript(js, null); }
-                });
-                volView.loadUrl("file:///android_asset/overlay/volume.html");
-                return;
-            }
-            volView.setVisibility(android.view.View.VISIBLE);
-            volView.evaluateJavascript(call(v, max, muted), null);
-        } catch (Exception ignored) { }
+            wm = (android.view.WindowManager) getSystemService(Context.WINDOW_SERVICE);
+            android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+            volView = new VolumeWheel(this);
+            android.view.WindowManager.LayoutParams lp = new android.view.WindowManager.LayoutParams(
+                Math.round(dm.widthPixels * .062f), Math.round(dm.heightPixels * .40f),
+                android.view.WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                    | android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                android.graphics.PixelFormat.TRANSLUCENT);
+            lp.gravity = android.view.Gravity.LEFT | android.view.Gravity.CENTER_VERTICAL;
+            lp.x = Math.round(dm.widthPixels * .03f);
+            wm.addView(volView, lp);
+        } catch (Exception e) {
+            volView = null;
+            note("wheel: " + e);
+        }
     }
 
-    private static String call(int v, int max, boolean muted) { return "vol(" + v + "," + max + "," + muted + ")"; }
+    private void showVolume(int v, int max, boolean muted) {
+        ensureWheel();
+        if (volView != null) volView.show(v, max, muted);
+    }
 
     private void hideVolume() {
         if (volView == null) return;
         try { wm.removeView(volView); } catch (Exception ignored) { }
-        volView.destroy();
         volView = null;
     }
+
+    /** the last trouble, for the settings row (an error here must not cost the service its keys) */
+    static volatile String lastError = "";
+    private static void note(String e) { lastError = e; }
 
     @Override
     protected void onServiceConnected() {
         self = this;
-        applyVolumeSetting();
+        try {
+            applyVolumeSetting();
+            if (new Prefs(this).volumeWheel()) ensureWheel();
+        } catch (Exception e) { note("start: " + e); }
         h.removeCallbacks(tick);
         h.postDelayed(tick, TICK_MS);
         try {   // the system's broadcast: Android 13+ wants it said that it comes from outside
