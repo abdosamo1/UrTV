@@ -110,6 +110,9 @@ public class IdleWatch extends AccessibilityService {
         if (on) info.flags |= android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS;
         else info.flags &= ~android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS;
         setServiceInfo(info);
+        android.accessibilityservice.AccessibilityServiceInfo now = getServiceInfo();
+        filterOn = on && now != null && (now.flags & android.accessibilityservice.AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS) != 0
+            && (now.getCapabilities() & android.accessibilityservice.AccessibilityServiceInfo.CAPABILITY_CAN_REQUEST_FILTER_KEY_EVENTS) != 0;
         if (!on) hideVolume();
     }
 
@@ -118,9 +121,11 @@ public class IdleWatch extends AccessibilityService {
     @Override
     protected boolean onKeyEvent(android.view.KeyEvent e) {
         int k = e.getKeyCode();
+        if (e.getAction() == android.view.KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) keysSeen++;
         boolean vol = k == android.view.KeyEvent.KEYCODE_VOLUME_UP || k == android.view.KeyEvent.KEYCODE_VOLUME_DOWN
             || k == android.view.KeyEvent.KEYCODE_VOLUME_MUTE;
         if (!vol || !new Prefs(this).volumeWheel()) return false;   // not ours: on to the app, untouched
+        if (e.getAction() == android.view.KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) volumeSeen++;
         AudioManager am0 = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         if (am0 == null || am0.isVolumeFixed()) return false;        // the TV's volume is not ours to set (a fixed output)
         // answer the system at once (it waits only briefly for us); the volume is changed right after
@@ -193,6 +198,16 @@ public class IdleWatch extends AccessibilityService {
 
     /** the last trouble, for the settings row (an error here must not cost the service its keys) */
     static volatile String lastError = "";
+    // what the TV hands us, for the settings row: keys seen at all, volume keys among them, the key filter granted
+    static volatile int keysSeen, volumeSeen;
+    static volatile boolean filterOn;
+
+    /** «أزرار ١٢ · صوت ٤ · الاعتراض يعمل»: whether the TV gives this service the keys at all */
+    static String diagnose() {
+        IdleWatch w = self;
+        if (w == null) return "الخدمة لا تعمل";
+        return "أزرار " + keysSeen + " · صوت " + volumeSeen + " · " + (filterOn ? "الاعتراض مفعّل" : "الاعتراض غير مسموح: أوقف الخدمة وشغّلها");
+    }
     private static void note(String e) { lastError = e; }
 
     @Override

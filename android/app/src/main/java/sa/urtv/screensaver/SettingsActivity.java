@@ -200,6 +200,7 @@ public class SettingsActivity extends Activity {
         row("بدء شاشة التوقف بعد", idleLabel(), R.drawable.ic_screensaver,
             new Runnable() { public void run() { pickIdle(); } });
         row("شكل الصوت", (!prefs.volumeWheel() ? "شريط التلفاز" : IdleWatch.enabled(this) ? "عجلة الأرقام" : "عجلة الأرقام · فعّل «شاشة التوقف فوق التطبيقات» أولاً")
+                + (prefs.volumeWheel() ? "\n" + IdleWatch.diagnose() : "")
                 + (IdleWatch.lastError.isEmpty() ? "" : " · " + IdleWatch.lastError),
             R.drawable.ic_screensaver, new Runnable() { public void run() {
                 prefs.setVolumeWheel(!prefs.volumeWheel()); IdleWatch.settingChanged(); render(); } });
