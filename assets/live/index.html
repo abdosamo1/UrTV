@@ -156,6 +156,10 @@
   .keys button{font:inherit;font-size:15px;border-radius:999px;border:1px solid #3a4a41;background:#18211c;color:var(--txt);padding:8px 16px;cursor:pointer}
   .note{color:#bfb5a0;font-size:14px;text-align:center;max-width:760px;line-height:1.7;margin:0}
 
+  /* ---- the profile button beside the clock: ▲ from the tabs, OK opens the activation (the link, the MAC) */
+  .tleft{display:flex;align-items:center;gap:1.2em}
+  .prof{width:3.4em;height:3.4em;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--gold-lt);transition:transform .2s}
+  .prof svg{width:58%;height:58%}
   /* ---- on the device: the video is under the page */
   /* over a bright picture the glass needs a dark base to stay readable */
   .list,.info,.pbar,.picker,.tile .lbl{background-color:rgba(10,12,11,.62)!important}
@@ -225,7 +229,9 @@
   </section>
   <!-- home -->
   <section class="screen" id="home">
-    <div class="top"><div class="brand">تلفزيونك المباشر<small id="acct">اشتراكك · فعّال</small></div><div class="clock" id="clk"></div></div>
+    <div class="top"><div class="brand">تلفزيونك المباشر<small id="acct">اشتراكك · فعّال</small></div><div class="tleft"><div class="clock" id="clk"></div>
+      <div class="prof glass" id="prof" title="الاشتراك والرابط"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <circle cx="12" cy="8.5" r="3.6" fill="rgba(241,207,138,.22)"/><path d="M4.8 19.5c1.2-3.4 4-5.2 7.2-5.2s6 1.8 7.2 5.2"/></svg></div></div></div>
     <div class="tabs" id="tabs"></div>
     <div class="rows" id="rows"></div>
   </section>

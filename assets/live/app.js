@@ -278,6 +278,7 @@ let VSHIFT = 0;
 function setV(v){ VSHIFT = Math.max(0, v); const r = document.querySelector('#rows .rin'); if(r) r.style.transform = `translateY(${-VSHIFT}px)`; }
 const SHIFT = {};
 function drawHome(){
+  $('prof').classList.toggle('focus', row === -2);
   $('tabs').innerHTML = TABS.map((t, i) => `<div class="tab glass${i === tab ? ' sel' : ''}${row === -1 && i === tab ? ' focus' : ''}">${t}</div>`).join('');
   const R = rowsData();
   if(!R.length){ $('rows').innerHTML = '<div class="empty">لا توجد عناوين بعد.</div>'; if(row >= 0) row = -1; return drawTabsOnly(); }
@@ -298,7 +299,7 @@ function drawHome(){
   if(shift < 0) shift = 0;
   if(shift !== (SHIFT[row] || 0)){ SHIFT[row] = shift; cards.style.transform = `translateX(${shift}px)`; }
 }
-function drawTabsOnly(){ $('tabs').innerHTML = TABS.map((t, i) => `<div class="tab glass${i === tab ? ' sel' : ''}${row === -1 && i === tab ? ' focus' : ''}">${t}</div>`).join(''); }
+function drawTabsOnly(){ $('prof').classList.toggle('focus', row === -2); $('tabs').innerHTML = TABS.map((t, i) => `<div class="tab glass${i === tab ? ' sel' : ''}${row === -1 && i === tab ? ' focus' : ''}">${t}</div>`).join(''); }
 
 // ---- live
 function lastChannel(){ const id = store.get('lastChannel', null); const i = ALL.findIndex(c => c.id === id); return i >= 0 ? i : 0; }
@@ -599,11 +600,13 @@ function show(){
 function key(k, repeat){
   if(screen === 'home'){
     const R = rowsData();
-    if(k === 'ArrowDown'){ if(row < R.length - 1){ row++; col = Math.min(col, R[row].items.length - 1); } }
-    else if(k === 'ArrowUp'){ if(row > -1){ row--; if(row >= 0) col = Math.min(col, R[row].items.length - 1); } }
+    if(row === -2 && (k === 'ArrowLeft' || k === 'ArrowRight')) return drawHome();   // the profile stands alone
+    if(k === 'ArrowDown'){ if(row < R.length - 1){ row++; if(row >= 0) col = Math.min(col, R[row].items.length - 1); } }
+    else if(k === 'ArrowUp'){ if(row > -2){ row--; if(row >= 0) col = Math.min(col, R[row].items.length - 1); } }   // above the tabs: the profile
     else if(k === 'ArrowLeft'){ if(row === -1) tab = Math.min(TABS.length - 1, tab + 1); else col = Math.min(R[row].items.length - 1, col + 1); }
     else if(k === 'ArrowRight'){ if(row === -1) tab = Math.max(0, tab - 1); else col = Math.max(0, col - 1); }
     else if(k === 'Enter' && row >= 0) return R[row].items[col].go();
+    else if(k === 'Enter' && row === -2) return openSetup();
     else if(k === 'Enter' && row === -1){
       if(repeat && TABS[tab] === 'الرئيسية'){ openSetup(); return; }   // a long OK on «الرئيسية»: the activation screen
       if(TABS[tab] === 'أفلام' || TABS[tab] === 'مسلسلات') return openBrowse(TABS[tab]);
