@@ -71,7 +71,17 @@ public class MainActivity extends Activity {
         s.setAllowFileAccess(true);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);   // posters and logos from an http portal
         web.setWebChromeClient(new WebChromeClient());
-        web.setWebViewClient(new WebViewClient());
+        web.setWebViewClient(new WebViewClient() {
+            // the page's own process may run out of memory on a huge list: without this the whole app closed.
+            // Now the players stop and the app starts its screens again.
+            @Override public boolean onRenderProcessGone(WebView v, android.webkit.RenderProcessGoneDetail d) {
+                stopAll();
+                if (web == v) web = null;
+                try { ((android.view.ViewGroup) v.getParent()).removeView(v); v.destroy(); } catch (Exception ignored) { }
+                h.post(MainActivity.this::recreate);
+                return true;
+            }
+        });
         web.addJavascriptInterface(new Bridge(), "Live");
         root.addView(web, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
@@ -167,24 +177,36 @@ public class MainActivity extends Activity {
             });
         }
 
+        /** a GET of a long list (Xtream's films, series, channels: tens of thousands), only the given fields kept:
+         *  the whole answer through the page took more memory than its process had, and the app closed */
+        @JavascriptInterface public void getSlim(final int id, final String url, final String fields) {
+            net.execute(() -> {
+                String out; boolean ok;
+                try {
+                    String body = fetchText(url);
+                    org.json.JSONArray a = new org.json.JSONArray(body.trim());
+                    String[] keep = fields.split(",");
+                    StringBuilder b = new StringBuilder(a.length() * 120).append('[');
+                    for (int i = 0; i < a.length(); i++) {
+                        org.json.JSONObject x = a.optJSONObject(i);
+                        if (x == null) continue;
+                        org.json.JSONObject y = new org.json.JSONObject();
+                        for (String k : keep) if (x.has(k) && !x.isNull(k)) y.put(k, x.opt(k));
+                        if (b.length() > 1) b.append(',');
+                        b.append(y.toString());
+                    }
+                    out = b.append(']').toString(); ok = true;
+                } catch (Exception e) { out = e.getMessage() == null ? "تعذّر الاتصال" : e.getMessage(); ok = false; }
+                js("window.__done(" + id + "," + ok + "," + JSONObject.quote(out) + ")");
+            });
+        }
+
         /** a plain GET (Xtream's player_api.php): the page on file:// may not fetch another site itself */
         @JavascriptInterface public void get(final int id, final String url) {
             net.execute(() -> {
                 String out; boolean ok;
-                try {
-                    if (!url.startsWith("http://") && !url.startsWith("https://")) throw new Exception("رابط غير صالح");
-                    java.net.HttpURLConnection con = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
-                    con.setConnectTimeout(15000); con.setReadTimeout(60000);
-                    con.setRequestProperty("User-Agent", "IPTVSmartersPlayer");
-                    int code = con.getResponseCode();
-                    if (code >= 400) throw new Exception("رفض السيرفر الطلب (" + code + ")");
-                    java.io.InputStream in = con.getInputStream();
-                    java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
-                    byte[] buf = new byte[65536]; int n;
-                    while ((n = in.read(buf)) > 0) b.write(buf, 0, n);
-                    in.close(); con.disconnect();
-                    out = b.toString("UTF-8"); ok = true;
-                } catch (Exception e) { out = e.getMessage() == null ? "تعذّر الاتصال" : e.getMessage(); ok = false; }
+                try { out = fetchText(url); ok = true; }
+                catch (Exception e) { out = e.getMessage() == null ? "تعذّر الاتصال" : e.getMessage(); ok = false; }
                 js("window.__done(" + id + "," + ok + "," + JSONObject.quote(out) + ")");
             });
         }
@@ -254,6 +276,26 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface public void exit() { h.post(MainActivity.this::finish); }
+    }
+
+    private static String fetchText(String url) throws Exception {
+        if (!url.startsWith("http://") && !url.startsWith("https://")) throw new Exception("رابط غير صالح");
+        java.net.HttpURLConnection con = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+        try {
+            con.setConnectTimeout(15000); con.setReadTimeout(90000);
+            con.setRequestProperty("User-Agent", "IPTVSmartersPlayer");
+            int code = con.getResponseCode();
+            if (code == 401 || code == 403 || code == 461 || code == 429 || code == 458)
+                throw new Exception("رفض السيرفر الطلب (" + code + "): غالباً تجاوز عدد الاتصالات المسموح أو أُوقف الطلب مؤقتاً. "
+                    + "أغلق أي تطبيق آخر يستخدم الاشتراك، وانتظر بضع دقائق ثم أعد المحاولة");
+            if (code >= 400) throw new Exception("رفض السيرفر الطلب (" + code + ")");
+            java.io.InputStream in = con.getInputStream();
+            java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[65536]; int n;
+            while ((n = in.read(buf)) > 0) b.write(buf, 0, n);
+            in.close();
+            return b.toString("UTF-8");
+        } finally { con.disconnect(); }
     }
 
     private String portalLogin() throws Exception { portal.login(); return "ok"; }

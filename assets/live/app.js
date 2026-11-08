@@ -42,6 +42,9 @@ function parseXtream(link){
   }catch(e){ return null; }
 }
 function rawGet(url){ return new Promise((res, rej) => { if(!Live) return rej(new Error('خارج التطبيق')); const id = ++SEQ; PEND[id] = { res, rej }; Live.get(id, url); }); }
+// the long lists come trimmed by the app (only what the screens use)
+function rawSlim(url, fields){ return new Promise((res, rej) => { if(!Live || !Live.getSlim) return rawGet(url).then(res, rej); const id = ++SEQ; PEND[id] = { res, rej }; Live.getSlim(id, url, fields); }); }
+const xlist = (q, fields) => rawSlim(`${XT.base}/player_api.php?username=${enc(XT.u)}&password=${enc(XT.p)}${q}`, fields).then(t => { try{ return JSON.parse(t); }catch(e){ return []; } });
 const xget = q => rawGet(`${XT.base}/player_api.php?username=${enc(XT.u)}&password=${enc(XT.p)}${q}`).then(t => { try{ return JSON.parse(t); }catch(e){ return null; } });
 const xurl = (kind, id, ext) => `${XT.base}/${kind}/${enc(XT.u)}/${enc(XT.p)}/${id}.${ext || 'ts'}`;
 const unix = t => { const n = +t; return n ? new Date(n * 1000).toISOString().replace('T', ' ').slice(0, 19) : String(t || ''); };
@@ -56,7 +59,7 @@ async function xLogin(){
   XACCOUNT = ui;
 }
 async function xLoadLive(){
-  const cats = await xget('&action=get_live_categories') || [], st = await xget('&action=get_live_streams') || [];
+  const cats = await xget('&action=get_live_categories') || [], st = await xlist('&action=get_live_streams', 'num,name,stream_id,stream_icon,category_id') || [];
   ALL = st.map((x, i) => ({ id: String(x.stream_id), n: x.name, num: +x.num || i + 1, cmd: xurl('live', x.stream_id, 'ts'), logo: x.stream_icon || '', g: String(x.category_id) }))
     .sort((a, b) => a.num - b.num);
   CATS = cats.map(c => ({ id: String(c.category_id), name: c.category_name, ch: ALL.filter(x => x.g === String(c.category_id)) })).filter(c => c.ch.length);
@@ -72,7 +75,8 @@ function xItem(x, kind){
 }
 async function xLoadVod(){
   const [vc, sc, v, se] = await Promise.all([xget('&action=get_vod_categories'), xget('&action=get_series_categories'),
-    xget('&action=get_vod_streams'), xget('&action=get_series')]);
+    xlist('&action=get_vod_streams', 'stream_id,name,stream_icon,rating,year,added,category_id,container_extension'),
+    xlist('&action=get_series', 'series_id,name,cover,rating,year,releaseDate,last_modified,category_id')]);
   XVOD = (v || []).map(x => xItem(x, 'vod')); XSER = (se || []).map(x => xItem(x, 'series'));
   const fill = (kind, cats, items) => {
     VOD_CATS[kind] = (cats || []).map(c => ({ id: String(c.category_id), name: c.category_name })).filter(c => items.some(i => i.cat === c.id));
