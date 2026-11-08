@@ -44,7 +44,17 @@ function parseXtream(link){
 function rawGet(url){ return new Promise((res, rej) => { if(!Live) return rej(new Error('خارج التطبيق')); const id = ++SEQ; PEND[id] = { res, rej }; Live.get(id, url); }); }
 // the long lists come trimmed by the app (only what the screens use)
 function rawSlim(url, fields){ return new Promise((res, rej) => { if(!Live || !Live.getSlim) return rawGet(url).then(res, rej); const id = ++SEQ; PEND[id] = { res, rej }; Live.getSlim(id, url, fields); }); }
-const xlist = (q, fields) => rawSlim(`${XT.base}/player_api.php?username=${enc(XT.u)}&password=${enc(XT.p)}${q}`, fields).then(t => { try{ return JSON.parse(t); }catch(e){ return []; } });
+// FRESH: ask the server (a refresh); otherwise the copy kept on the TV first, the server only without one
+let FRESH = false, OLDEST = 0;
+function kept(url){
+  if(FRESH || !Live || !Live.cacheGet) return null;
+  const t = Live.cacheGet(url); if(!t) return null;
+  OLDEST = Math.max(OLDEST, +Live.cacheAge(url) || 0);
+  try{ return JSON.parse(t); }catch(e){ return null; }
+}
+const xapi = q => `${XT.base}/player_api.php?username=${enc(XT.u)}&password=${enc(XT.p)}${q}`;
+const xlist = (q, fields) => { const k = kept(xapi(q)); return k ? Promise.resolve(k) : rawSlim(xapi(q), fields).then(t => { try{ return JSON.parse(t); }catch(e){ return []; } }); };
+const xcats = q => { const k = kept(xapi(q)); return k ? Promise.resolve(k) : rawGet(xapi(q)).then(t => { try{ return JSON.parse(t); }catch(e){ return []; } }); };
 const xget = q => rawGet(`${XT.base}/player_api.php?username=${enc(XT.u)}&password=${enc(XT.p)}${q}`).then(t => { try{ return JSON.parse(t); }catch(e){ return null; } });
 const xurl = (kind, id, ext) => `${XT.base}/${kind}/${enc(XT.u)}/${enc(XT.p)}/${id}.${ext || 'ts'}`;
 const unix = t => { const n = +t; return n ? new Date(n * 1000).toISOString().replace('T', ' ').slice(0, 19) : String(t || ''); };
@@ -59,7 +69,7 @@ async function xLogin(){
   XACCOUNT = ui;
 }
 async function xLoadLive(){
-  const cats = await xget('&action=get_live_categories') || [], st = await xlist('&action=get_live_streams', 'num,name,stream_id,stream_icon,category_id') || [];
+  const cats = await xcats('&action=get_live_categories') || [], st = await xlist('&action=get_live_streams', 'num,name,stream_id,stream_icon,category_id') || [];
   ALL = st.map((x, i) => ({ id: String(x.stream_id), n: x.name, num: +x.num || i + 1, cmd: xurl('live', x.stream_id, 'ts'), logo: x.stream_icon || '', g: String(x.category_id) }))
     .sort((a, b) => a.num - b.num);
   CATS = cats.map(c => ({ id: String(c.category_id), name: c.category_name, ch: ALL.filter(x => x.g === String(c.category_id)) })).filter(c => c.ch.length);
@@ -74,7 +84,7 @@ function xItem(x, kind){
     cmd: kind === 'series' ? '' : xurl('movie', x.stream_id, x.container_extension || 'mp4'), cat: String(x.category_id) };
 }
 async function xLoadVod(){
-  const [vc, sc, v, se] = await Promise.all([xget('&action=get_vod_categories'), xget('&action=get_series_categories'),
+  const [vc, sc, v, se] = await Promise.all([xcats('&action=get_vod_categories'), xcats('&action=get_series_categories'),
     xlist('&action=get_vod_streams', 'stream_id,name,stream_icon,rating,year,added,category_id,container_extension'),
     xlist('&action=get_series', 'series_id,name,cover,rating,year,releaseDate,last_modified,category_id')]);
   XVOD = (v || []).map(x => xItem(x, 'vod')); XSER = (se || []).map(x => xItem(x, 'series'));
@@ -86,7 +96,20 @@ async function xLoadVod(){
   };
   fill('أفلام', vc, XVOD); fill('مسلسلات', sc, XSER);
 }
-async function xDetails(it){   // the plot, the genre, the length: asked when a film or series opens
+function keptDetails(it){
+  const d = store.get('det:' + it.kind + ':' + it.id, null);
+  if(!d || Date.now() - d.at > 7 * 864e5) return null;
+  Object.assign(it, d.fields);
+  return d;
+}
+async function xDetails(it){   // the plot, the genre, the length: asked when a film or series opens, kept a week
+  const k = keptDetails(it);
+  if(k) return k.seasons;
+  const seasons = await xDetailsNow(it);
+  store.set('det:' + it.kind + ':' + it.id, { at: Date.now(), seasons, fields: { desc: it.desc, genres: it.genres, time: it.time, year: it.year } });
+  return seasons;
+}
+async function xDetailsNow(it){
   if(it.kind === 'series'){
     const j = await xget('&action=get_series_info&series_id=' + enc(it.id));
     if(!j) return [];
@@ -138,8 +161,9 @@ function parseM3u(text){
   if(!ALL.length && !vod.length && !ser.length) throw new Error('القائمة فارغة أو الرابط لا يعطي قائمة قنوات');
 }
 async function loadM3u(url){
-  let text;
-  try{ text = await rawGet(url); }
+  let text = !FRESH && Live && Live.cacheGet ? Live.cacheGet(url) : '';
+  if(text) OLDEST = Math.max(OLDEST, +Live.cacheAge(url) || 0);
+  try{ if(!text) text = await rawGet(url); }
   catch(e){ throw new Error('تعذّر تنزيل القائمة: ' + (e.message || '')); }
   if(!/#EXTM3U|#EXTINF/.test(text)) throw new Error('الرابط لا يعطي قائمة M3U');
   M3U = true; XT = null;
@@ -212,6 +236,10 @@ async function loadHome(){
   RECENT = mv.items.slice(0, 15).concat(se.items.slice(0, 15)).sort(byAdded).slice(0, 10);
   HI_SERIES = se.items.filter(x => x.r >= 8).slice(0, 20);
   HI_MOVIES = mv.items.filter(x => x.r >= 8).slice(0, 20);
+}
+// the home screen's pictures fetched at once (the WebView keeps them in its cache for the next time)
+function preload(){
+  for(const it of RECENT.concat(HI_SERIES, HI_MOVIES).slice(0, 60)) if(it.img){ const im = new Image(); im.src = it.img; }
 }
 async function loadAccount(){
   if(M3U){ $('acct').textContent = 'قائمة قنوات'; return; }
@@ -796,7 +824,7 @@ window.onLeave = () => { if(screen === 'player') saveProgress(true); };
 let LOADED_AT = 0, REFRESHING = false;
 async function refreshLists(){
   if(REFRESHING || !READY || Date.now() - LOADED_AT < 6 * 3600e3) return;
-  REFRESHING = true;
+  REFRESHING = true; FRESH = true;
   try{
     if(XT){ await xLoadLive(); await xLoadVod(); }
     else if(M3U) await loadM3u(CFG.portal.replace(/([?&])pasword=/, '$1password='));
@@ -805,7 +833,7 @@ async function refreshLists(){
     LOADED_AT = Date.now();
     if(screen === 'home') drawHome();
   }catch(e){}
-  REFRESHING = false;
+  REFRESHING = false; FRESH = false;
 }
 setInterval(() => { if(screen === 'home') refreshLists(); }, 30 * 60e3);
 window.onReturn = () => { refreshLists(); if(screen === 'live') zap(); if(screen === 'player' && PLAY){ const it = PLAY.it; const rs = resumeOf(it); stopVod(); openMovie(it); } };
@@ -863,10 +891,13 @@ async function start(){
     }
     else if(listy) await loadM3u(CFG.portal);
     else { await raw('login'); await loadLive(); await loadVodCats(); }
-    READY = true; LOADED_AT = Date.now();
-    screen = 'home'; row = -1; tab = 0; show();
+    READY = true;
+    // the kept lists were shown at once; older than 6 hours: new ones are asked for in the background
+    LOADED_AT = Date.now() - OLDEST;
+    if(OLDEST > 6 * 3600e3) setTimeout(refreshLists, 3000);
+    await loadHome().catch(() => {});   // the home screen appears whole: its rows are made first
     loadAccount();
-    loadHome().then(() => { if(screen === 'home'){ row = rowsData().length ? 0 : -1; drawHome(); } });
+    screen = 'home'; tab = 0; row = rowsData().length ? 0 : -1; show(); preload();
   }catch(e){
     openSetup();
     $('sst').textContent = e.message || 'تعذّر الاتصال';

@@ -196,6 +196,7 @@ public class MainActivity extends Activity {
                         b.append(y.toString());
                     }
                     out = b.append(']').toString(); ok = true;
+                    cachePut(url, out);
                 } catch (Exception e) { out = e.getMessage() == null ? "تعذّر الاتصال" : e.getMessage(); ok = false; }
                 js("window.__done(" + id + "," + ok + "," + JSONObject.quote(out) + ")");
             });
@@ -205,10 +206,33 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void get(final int id, final String url) {
             net.execute(() -> {
                 String out; boolean ok;
-                try { out = fetchText(url); ok = true; }
-                catch (Exception e) { out = e.getMessage() == null ? "تعذّر الاتصال" : e.getMessage(); ok = false; }
+                try {
+                    out = fetchText(url); ok = true;
+                    // sections and whole lists (M3U) are kept too
+                    if (url.contains("categories") || url.contains("get.php") || url.matches("(?i).*\\.m3u8?(\\?.*)?$")) cachePut(url, out);
+                } catch (Exception e) { out = e.getMessage() == null ? "تعذّر الاتصال" : e.getMessage(); ok = false; }
                 js("window.__done(" + id + "," + ok + "," + JSONObject.quote(out) + ")");
             });
+        }
+
+        /** the kept copy of a list ("" if none) and its age in ms (-1 if none) */
+        @JavascriptInterface public String cacheGet(String url) {
+            java.io.File f = cacheFile(url);
+            if (!f.isFile()) return "";
+            try (java.io.FileInputStream in = new java.io.FileInputStream(f)) {
+                java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[65536]; int n;
+                while ((n = in.read(buf)) > 0) b.write(buf, 0, n);
+                return b.toString("UTF-8");
+            } catch (Exception e) { return ""; }
+        }
+        @JavascriptInterface public long cacheAge(String url) {
+            java.io.File f = cacheFile(url);
+            return f.isFile() ? System.currentTimeMillis() - f.lastModified() : -1;
+        }
+        @JavascriptInterface public void cacheClear() {
+            java.io.File[] fs = new java.io.File(getFilesDir(), "lists").listFiles();
+            if (fs != null) for (java.io.File f : fs) f.delete();
         }
 
         @JavascriptInterface public void play(final int tile, final String url) {
@@ -276,6 +300,17 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface public void exit() { h.post(MainActivity.this::finish); }
+    }
+
+    // ---- the lists kept on the TV: titles, pictures, ratings and sections, so the screens are full at once
+    private java.io.File cacheFile(String url) {
+        java.io.File d = new java.io.File(getFilesDir(), "lists");
+        d.mkdirs();
+        return new java.io.File(d, Integer.toHexString(url.hashCode()) + "-" + url.length() + ".json");
+    }
+    private void cachePut(String url, String text) {
+        try (java.io.FileOutputStream o = new java.io.FileOutputStream(cacheFile(url))) { o.write(text.getBytes("UTF-8")); }
+        catch (Exception ignored) { }
     }
 
     private static String fetchText(String url) throws Exception {
