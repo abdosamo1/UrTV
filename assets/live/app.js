@@ -354,14 +354,14 @@ let HOMEV = 0, HOME_CAS = true;
 const badge = it => it.r ? `<div class="badge">★ ${ar(it.r.toFixed(1)).replace('.', '٫')}</div>` : '';
 function continueItems(){
   return Object.entries(RES()).map(([k, v]) => Object.assign({ key: k }, v))
-    .filter(v => v.pos > 60000 && (!v.dur || v.pos < v.dur - 90000)).sort((a, b) => b.at - a.at).slice(0, 12);
+    .filter(v => v.next || (v.pos > 60000 && (!v.dur || v.pos < v.dur - 90000)))   // a finished episode: the next one, from its start.sort((a, b) => b.at - a.at).slice(0, 12);
 }
 function rowsData(){
   const R = [];
   const cont = continueItems();
   if(cont.length) R.push({ h: 'تابع المشاهدة', kind: 'wide', items: cont.map((v, i) => ({
-    sk: skelCls(v), html: `${artTag(v, i + 3)}<div class="cap">${esc(v.name)}${v.ep ? ` — الحلقة ${ar(v.ep)}` : ''}<small>من ${ar(mmss(v.pos))}</small>`
-      + `<div class="bar"><i style="width:${v.dur ? Math.round(v.pos / v.dur * 100) : 30}%"></i></div></div>`,
+    sk: skelCls(v), html: `${artTag(v, i + 3)}<div class="cap">${esc(v.name)}${v.ep ? ` — الحلقة ${ar(v.ep)}` : ''}<small>${v.next ? 'الحلقة التالية · من البداية' : 'من ' + ar(mmss(v.pos))}</small>`
+      + `<div class="bar"><i style="width:${v.next ? 0 : v.dur ? Math.round(v.pos / v.dur * 100) : 30}%"></i></div></div>`,
     go: () => resumeItem(v) })) });
   const poster = (list, seed) => list.map((it, i) => ({
     sk: skelCls(it), html: `${artTag(it, i + seed)}${badge(it)}`
@@ -673,7 +673,7 @@ function saveProgress(force){
       const n = PLAY.seasons && nextEpisode(PLAY.seasons, PLAY.season, PLAY.ep);
       if(!n) return keepResume(PLAY.key, null);
       return keepResume(PLAY.key, { kind: 'series', id: PLAY.it.id, name: PLAY.it.name, img: PLAY.it.img || '', cmd: '',
-        pos: 0, dur: 0, at: Date.now(), ep: n.ep, season: n.season.id, seasonObj: n.season });
+        pos: 0, dur: 0, at: Date.now(), ep: n.ep, season: n.season.id, seasonObj: n.season, next: true });
     }
   } else if(done) return keepResume(PLAY.key, null);   // a finished film: off «تابع المشاهدة»
   keepResume(PLAY.key, { kind: PLAY.it.kind, id: PLAY.it.id, name: PLAY.it.name, img: PLAY.it.img || '', cmd: PLAY.it.cmd || '',
