@@ -366,6 +366,17 @@ public class MainActivity extends Activity {
             if (e.getAction() == KeyEvent.ACTION_DOWN) js("window.remote && remote('" + name + "')");
             return true;
         }
+        // a held key: its repeats are handed to the page here (the WebView let them stall after the first),
+        // and a held OK is told as one long OK
+        if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() > 0) {
+            String arrow = k == KeyEvent.KEYCODE_DPAD_UP ? "ArrowUp" : k == KeyEvent.KEYCODE_DPAD_DOWN ? "ArrowDown"
+                : k == KeyEvent.KEYCODE_DPAD_LEFT ? "ArrowLeft" : k == KeyEvent.KEYCODE_DPAD_RIGHT ? "ArrowRight" : null;
+            if (arrow != null) { js("window.remote && remote('" + arrow + "', true)"); return true; }
+            if (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER) {
+                if (e.getRepeatCount() == 1) js("window.remote && remote('LongOK', true)");
+                return true;
+            }
+        }
         if (k == KeyEvent.KEYCODE_BACK || k == KeyEvent.KEYCODE_ESCAPE) {
             if (e.getAction() == KeyEvent.ACTION_UP && web != null) {
                 web.evaluateJavascript("window.onBack ? onBack() : false", v -> { if (!"true".equals(v)) finish(); });

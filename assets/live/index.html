@@ -196,6 +196,13 @@
   .pbar .row2{display:flex;align-items:center;gap:1em;direction:ltr;font-family:'ThmanyahDisplay';font-size:1.2em}
   .pbar .bar{flex:1;height:.45em}
   .pbar .st2{direction:rtl;color:var(--dim);font-family:'Thmanyah';font-size:.95em;margin-top:.5em}
+  /* ---- an episode's buttons in the player */
+  .pbtns{display:flex;gap:1em;margin-top:.8em;direction:rtl}
+  .pbtns:empty{display:none}
+  .pbtns .b{padding:.45em 1.3em;border-radius:999px;font-size:1.1em;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.07)}
+  .pbtns .b.focus{border-color:var(--gold-lt);background:rgba(241,207,138,.22);transform:none}
+  #movie .pill .pg{display:block;height:.18em;margin-top:.25em;border-radius:1em;background:var(--gold-lt)}
+  #movie .last{color:var(--dim);font-size:1em;margin-top:.6em}
   /* ---- series: seasons and episodes */
   #movie .eps{margin-top:1.6em}
   #movie .eps .lineh{color:var(--gold-lt);font-size:1.1em;margin:.8em 0 .5em}
@@ -293,7 +300,8 @@
     <div class="pbar glass" id="pbar">
       <div class="t" id="ptitle"></div>
       <div class="row2"><span id="pcur">0:00</span><div class="bar"><i id="pfill" style="width:0"></i></div><span id="pdur">0:00</span></div>
-      <div class="st2">OK إيقاف/تشغيل · ◀▶ تقديم وترجيع</div>
+      <div class="pbtns" id="pbtns"></div>
+      <div class="st2" id="phint">OK إيقاف/تشغيل · ◀▶ تقديم وترجيع (اضغط مطولاً للأسرع)</div>
     </div>
   </section>
   <div class="loading" id="loading" style="display:none">جارٍ التحميل…</div>

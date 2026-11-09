@@ -399,7 +399,25 @@ async function loadCat(){
   if(!PAGES[key]) { drawBrowse(); await page(bKind, c.id); }
   if(screen === 'browse') drawBrowse();
 }
-let BWIN = '';   // the rows drawn now (section, first row, count): within them only the focus moves
+function drawRail(){
+  $('bkind').textContent = bKind;
+  $('sbtn').classList.toggle('focus', bfocus === 'search');
+  const cats = VOD_CATS[bKind];
+  const from = Math.max(0, Math.min(bcat - 6, cats.length - 12));
+  $('rail').innerHTML = cats.slice(from, from + 12).map((c, k) => { const i = from + k;
+    const P = PAGES[bKind + ':' + c.id];
+    return `<div class="c${i === bcat ? ' cur' : ''}${i === bcat && bfocus === 'rail' ? ' sel' : ''}"><span>${esc(c.name)}</span><small>${P && isFinite(P.total) ? ar(P.total) : ''}</small></div>`; }).join('');
+}
+let BWIN = '', CATT = 0;
+/** ▲▼ in the sections: the rail moves now, the section's posters only when the key rests (a held key runs on) */
+function moveCat(d){
+  const cats = VOD_CATS[bKind];
+  const n = Math.max(0, Math.min(cats.length - 1, bcat + d));
+  if(n === bcat) return;
+  bcat = n; bScroll = 0; bi = 0; BWIN = '';
+  drawRail();
+  clearTimeout(CATT); CATT = setTimeout(loadCat, 280);
+}   // the rows drawn now (section, first row, count): within them only the focus moves
 function drawBrowse(){
   const cats = VOD_CATS[bKind];
   if(bfocus === 'grid'){
@@ -413,12 +431,7 @@ function drawBrowse(){
       return;
     }
   }
-  $('bkind').textContent = bKind;
-  $('sbtn').classList.toggle('focus', bfocus === 'search');
-  const from = Math.max(0, Math.min(bcat - 6, cats.length - 12));
-  $('rail').innerHTML = cats.slice(from, from + 12).map((c, k) => { const i = from + k;
-    const P = PAGES[bKind + ':' + c.id];
-    return `<div class="c${i === bcat ? ' cur' : ''}${i === bcat && bfocus === 'rail' ? ' sel' : ''}"><span>${esc(c.name)}</span><small>${P && isFinite(P.total) ? ar(P.total) : ''}</small></div>`; }).join('');
+  drawRail();
   const items = curItems(), g = $('grid');
   const name = cats[bcat] ? cats[bcat].name : '';
   // only the rows near the focus are drawn: a section may hold thousands
@@ -485,15 +498,46 @@ function drawMovie(){
       eps = '<div class="lineh">المواسم</div><div class="pills">' + MOV.seasons.map((s, i) =>
         `<div class="pill glass${i === MOV.sIdx ? ' cur' : ''}${MOV.focus === 'seasons' && i === MOV.sIdx ? ' focus' : ''}">${esc(s.name) || 'الموسم ' + ar(i + 1)}</div>`).join('') + '</div>'
         + '<div class="lineh">الحلقات</div><div class="pills">' + S.eps.map((e, i) => {
-          const seen = RES()[`series:${it.id}`] && RES()[`series:${it.id}`].season === S.id && RES()[`series:${it.id}`].ep === e;
-          return `<div class="pill glass${seen ? ' cur' : ''}${MOV.focus === 'eps' && i === MOV.eIdx ? ' focus' : ''}">${ar(e)}</div>`; }).join('') + '</div>';
+          const r = RES()[`series:${it.id}`], m = EPS(it.id)[S.id + ':' + e] || {};
+          const last = r && r.season === S.id && r.ep === e;
+          const pct = m.dur && m.pos && !m.done ? Math.round(m.pos / m.dur * 100) : 0;
+          return `<div class="pill glass${last ? ' cur' : ''}${m.done ? ' seen' : ''}${MOV.focus === 'eps' && i === MOV.eIdx ? ' focus' : ''}">${ar(e)}${pct ? `<i class="pg" style="width:${pct}%"></i>` : ''}</div>`; }).join('') + '</div>';
+      const r = RES()[`series:${it.id}`];
+      if(r && r.ep){
+        const sn = (MOV.seasons.find(x => x.id === r.season) || {}).name || '';
+        eps += `<div class="last">آخر ما شاهدته: ${esc(sn)} · الحلقة ${ar(r.ep)}${r.pos ? ' · من ' + ar(mmss(r.pos)) : ''}</div>`;
+      }
     }
   }
   $('meps').innerHTML = eps;
 }
 
 // ---- playing a film or an episode
-let PLAY = null, pollT = 0, pbarT = 0;
+let PLAY = null, pollT = 0, pbarT = 0, PFOCUS = 'bar', PBTN = 0;
+// seeking: one press 10 seconds; held, the jumps grow (30 s, 1 min, 3 min, 5 min) and the target runs ahead of
+// the player, which seeks once the key rests
+const SEEK = { target: null, t0: 0, last: 0, tm: 0 };
+function seek(dir, repeat, s){
+  const now = Date.now();
+  if(SEEK.target == null || now - SEEK.last > 900){ SEEK.target = s.pos || 0; SEEK.t0 = now; }
+  const held = now - SEEK.t0;
+  const step = !repeat ? 10000 : held < 1500 ? 30000 : held < 4000 ? 60000 : held < 8000 ? 180000 : 300000;
+  SEEK.target = Math.max(0, Math.min((s.dur || Infinity) - 5000, SEEK.target + dir * step));
+  SEEK.last = now;
+  $('pcur').textContent = mmss(SEEK.target);
+  if(s.dur) $('pfill').style.width = (SEEK.target / s.dur * 100) + '%';
+  clearTimeout(SEEK.tm);
+  SEEK.tm = setTimeout(() => { Live && Live.seekTo(SEEK.target); SEEK.target = null; }, repeat ? 450 : 250);
+}
+/** a series' buttons in the player: the previous and the next episode */
+function drawPbtns(){
+  const box = $('pbtns'); if(!box) return;
+  if(!PLAY || PLAY.it.kind !== 'series' || !PLAY.seasons){ box.innerHTML = ''; if(PLAY) PLAY.btns = []; $('phint').textContent = 'OK إيقاف/تشغيل · ◀▶ تقديم وترجيع (اضغط مطولاً للأسرع)'; return; }
+  const n = nextEpisode(PLAY.seasons, PLAY.season, PLAY.ep), p = prevEpisode(PLAY.seasons, PLAY.season, PLAY.ep);
+  PLAY.btns = [n && Object.assign({ label: 'الحلقة التالية ⏭' }, n), p && Object.assign({ label: '⏮ الحلقة السابقة' }, p)].filter(Boolean);
+  box.innerHTML = PLAY.btns.map((b, i) => `<div class="b${PFOCUS === 'btns' && i === PBTN ? ' focus' : ''}">${b.label}</div>`).join('');
+  $('phint').textContent = 'OK إيقاف/تشغيل · ◀▶ تقديم وترجيع · ▼ الحلقات';
+}
 async function playVod(it, opts = {}){
   try{
     let u, key = it.kind + ':' + it.id, title = it.name;
@@ -507,7 +551,9 @@ async function playVod(it, opts = {}){
       const S = opts.season; u = await link('vod', S.cmd, '&series=' + opts.ep);
       title = `${it.name} — ${S.name || ''} · الحلقة ${ar(opts.ep)}`;
     } else u = await link('vod', it.cmd);
-    PLAY = { it, key, title, season: opts.season || null, ep: opts.ep || null, lastSave: 0 };
+    PLAY = { it, key, title, season: opts.season || null, ep: opts.ep || null, lastSave: 0,
+      seasons: opts.seasons || (MOV && MOV.item && MOV.item.id === it.id ? MOV.seasons : null) };
+    PFOCUS = 'bar'; PBTN = 0; drawPbtns();
     screen = 'player'; show();
     $('ptitle').textContent = title;
     if(Live) Live.playFrom(0, u, opts.from || 0);
@@ -515,26 +561,57 @@ async function playVod(it, opts = {}){
     clearInterval(pollT); pollT = setInterval(pollPlayer, 500);
   }catch(e){ toast('تعذّر تشغيل «' + it.name + '»'); }
 }
-function resumeItem(v){
+async function resumeItem(v){
   const it = { kind: v.kind, id: v.id, name: v.name, img: v.img, cmd: v.cmd };
-  if(v.kind === 'series') playVod(it, { season: v.seasonObj, ep: v.ep, from: v.pos });
+  if(v.kind === 'series'){
+    // the seasons too (kept a month), so the player has its episode buttons and the next episode
+    const seasons = XT ? await xDetails(it).catch(() => null) : null;
+    const so = seasons && seasons.find(x => x.id === v.season) || v.seasonObj;
+    return playVod(it, { season: so, ep: v.ep, from: v.pos, seasons });
+  }
   else playVod(it, { from: v.pos });
+}
+const EPS = id => store.get('eps:' + id, {});   // a series' episodes: 'season:ep' -> { pos, dur, done, at }
+function keepEpisode(id, season, ep, v){ const m = EPS(id); m[season + ':' + ep] = Object.assign(m[season + ':' + ep] || {}, v, { at: Date.now() }); store.set('eps:' + id, m); }
+function nextEpisode(seasons, season, ep){
+  const si = seasons.findIndex(x => x.id === season.id), S = seasons[si];
+  const i = S ? S.eps.indexOf(ep) : -1;
+  if(S && i >= 0 && i < S.eps.length - 1) return { season: S, ep: S.eps[i + 1] };
+  const N = seasons[si + 1]; return N && N.eps.length ? { season: N, ep: N.eps[0] } : null;
+}
+function prevEpisode(seasons, season, ep){
+  const si = seasons.findIndex(x => x.id === season.id), S = seasons[si];
+  const i = S ? S.eps.indexOf(ep) : -1;
+  if(S && i > 0) return { season: S, ep: S.eps[i - 1] };
+  const P = seasons[si - 1]; return P && P.eps.length ? { season: P, ep: P.eps[P.eps.length - 1] } : null;
 }
 function saveProgress(force){
   if(!PLAY || !Live) return;
   const s = JSON.parse(Live.state() || '{}');
-  if(!s.dur) return;
+  if(!s.pos) return;
   if(!force && Date.now() - PLAY.lastSave < 10000) return;
   PLAY.lastSave = Date.now();
-  if(s.pos > s.dur - 90000) return keepResume(PLAY.key, null);   // finished: off «تابع المشاهدة»
+  const done = s.dur && s.pos > s.dur - 90000;
+  if(PLAY.it.kind === 'series' && PLAY.season){
+    keepEpisode(PLAY.it.id, PLAY.season.id, PLAY.ep, { pos: s.pos, dur: s.dur, done });
+    if(done){   // finished: «تابع» points to the next episode, from its start
+      const n = PLAY.seasons && nextEpisode(PLAY.seasons, PLAY.season, PLAY.ep);
+      if(!n) return keepResume(PLAY.key, null);
+      return keepResume(PLAY.key, { kind: 'series', id: PLAY.it.id, name: PLAY.it.name, img: PLAY.it.img || '', cmd: '',
+        pos: 0, dur: 0, at: Date.now(), ep: n.ep, season: n.season.id, seasonObj: n.season });
+    }
+  } else if(done) return keepResume(PLAY.key, null);   // a finished film: off «تابع المشاهدة»
   keepResume(PLAY.key, { kind: PLAY.it.kind, id: PLAY.it.id, name: PLAY.it.name, img: PLAY.it.img || '', cmd: PLAY.it.cmd || '',
     pos: s.pos, dur: s.dur, at: Date.now(), ep: PLAY.ep, season: PLAY.season && PLAY.season.id, seasonObj: PLAY.season });
 }
 function pollPlayer(){
   if(screen !== 'player' || !Live) return;
   const s = JSON.parse(Live.state() || '{}');
-  $('pcur').textContent = mmss(s.pos || 0); $('pdur').textContent = mmss(s.dur || 0);
-  $('pfill').style.width = s.dur ? (s.pos / s.dur * 100) + '%' : '0';
+  $('pdur').textContent = mmss(s.dur || 0);
+  if(SEEK.target == null){   // while seeking the bar shows the target
+    $('pcur').textContent = mmss(s.pos || 0);
+    $('pfill').style.width = s.dur ? (s.pos / s.dur * 100) + '%' : '0';
+  }
   if(s.buffering) showPbar();
   saveProgress(false);
 }
@@ -542,11 +619,12 @@ function showPbar(){ const b = $('pbar'); b.classList.remove('hide'); clearTimeo
 function stopVod(){ saveProgress(true); clearInterval(pollT); Live && Live.stop(); PLAY = null; }
 window.onEnded = tile => {
   if(screen !== 'player' || !PLAY) return;
-  keepResume(PLAY.key, null);
+  if(PLAY.it.kind !== 'series') keepResume(PLAY.key, null);
   // a series: the next episode
   if(PLAY.it.kind === 'series' && PLAY.season){
-    const S = PLAY.season, i = S.eps.indexOf(PLAY.ep);
-    if(i >= 0 && i < S.eps.length - 1) return playVod(PLAY.it, { season: S, ep: S.eps[i + 1] });
+    keepEpisode(PLAY.it.id, PLAY.season.id, PLAY.ep, { done: true });
+    const n = PLAY.seasons && nextEpisode(PLAY.seasons, PLAY.season, PLAY.ep);
+    if(n) return playVod(PLAY.it, { season: n.season, ep: n.ep, seasons: PLAY.seasons });
   }
   stopVod(); screen = 'home'; show();
 };
@@ -669,8 +747,8 @@ function key(k, repeat){
       if(k === 'ArrowDown') bfocus = 'rail';
       else if(k === 'Escape'){ screen = 'home'; return show(); }
     } else if(bfocus === 'rail'){
-      if(k === 'ArrowDown'){ if(bcat < cats.length - 1){ bcat++; bScroll = 0; bi = 0; loadCat(); } }
-      else if(k === 'ArrowUp'){ if(bcat === 0) bfocus = 'search'; else { bcat--; bScroll = 0; bi = 0; loadCat(); } }
+      if(k === 'ArrowDown'){ moveCat(1); return; }
+      else if(k === 'ArrowUp'){ if(bcat === 0) bfocus = 'search'; else { moveCat(-1); return; } }
       else if((k === 'ArrowLeft' || k === 'Enter') && items.length){ bfocus = 'grid'; bi = 0; }
       else if(k === 'Escape'){ screen = 'home'; return show(); }
     } else {
@@ -716,8 +794,11 @@ function key(k, repeat){
         const rs = resumeOf(it), last = mbtn === MOV.btns - 1;
         if(last){ toggleFav(it); return drawMovie(); }
         if(it.kind === 'series'){
-          if(rs && rs.seasonObj) return playVod(it, { season: rs.seasonObj, ep: rs.ep, from: rs.pos });
-          if(S) return playVod(it, { season: MOV.seasons[0], ep: MOV.seasons[0].eps[0] });
+          if(rs && rs.seasonObj){
+            const so = (MOV.seasons || []).find(x => x.id === rs.season) || rs.seasonObj;
+            return playVod(it, { season: so, ep: rs.ep, from: rs.pos, seasons: MOV.seasons });
+          }
+          if(S) return playVod(it, { season: MOV.seasons[0], ep: MOV.seasons[0].eps[0], seasons: MOV.seasons });
           return;
         }
         return playVod(it, { from: mbtn === 0 && rs ? rs.pos : 0 });
@@ -733,17 +814,26 @@ function key(k, repeat){
       else if(k === 'ArrowUp') MOV.focus = 'seasons';
       else if(k === 'Enter'){
         const e = S.eps[MOV.eIdx], rs = resumeOf(it);
-        return playVod(it, { season: S, ep: e, from: rs && rs.season === S.id && rs.ep === e ? rs.pos : 0 });
+        const m = EPS(it.id)[S.id + ':' + e];
+        return playVod(it, { season: S, ep: e, from: m && !m.done ? m.pos || 0 : 0, seasons: MOV.seasons });
       }
     }
     drawMovie();
   } else if(screen === 'player'){
     const s = Live ? JSON.parse(Live.state() || '{}') : {};
-    const step = repeat ? 30000 : 10000;
+    if(k === 'Escape'){ const it = PLAY && PLAY.it; stopVod(); if(it){ openMovie(it); } else { screen = 'home'; show(); } return; }
+    const btns = PLAY && PLAY.btns || [];
+    if(PFOCUS === 'btns'){   // an episode's buttons: ◀▶ choose, OK goes, ▲ back to the timeline
+      if(k === 'ArrowLeft') PBTN = Math.min(btns.length - 1, PBTN + 1);
+      else if(k === 'ArrowRight') PBTN = Math.max(0, PBTN - 1);
+      else if(k === 'ArrowUp') PFOCUS = 'bar';
+      else if(k === 'Enter' && btns[PBTN]){ const b = btns[PBTN]; saveProgress(true); return playVod(PLAY.it, { season: b.season, ep: b.ep, seasons: PLAY.seasons }); }
+      drawPbtns(); showPbar(); return;
+    }
     if(k === 'Enter' || k === 'PlayPause'){ s.playing ? Live.pause() : Live.resume(); }
-    else if(k === 'ArrowRight' || k === 'Forward') Live && Live.seekTo((s.pos || 0) + step);    // the bar runs left to right
-    else if(k === 'ArrowLeft' || k === 'Rewind') Live && Live.seekTo((s.pos || 0) - step);
-    else if(k === 'Escape'){ const it = PLAY && PLAY.it; stopVod(); if(it){ openMovie(it); } else { screen = 'home'; show(); } return; }
+    else if(k === 'ArrowDown' && btns.length){ PFOCUS = 'btns'; PBTN = 0; drawPbtns(); }
+    else if(k === 'ArrowRight' || k === 'Forward') seek(1, repeat, s);    // the bar runs left to right
+    else if(k === 'ArrowLeft' || k === 'Rewind') seek(-1, repeat, s);
     showPbar();
   }
 }
@@ -781,7 +871,10 @@ document.addEventListener('keyup', e => {
   if(!LONG.armed) key('Enter', false);
   LONG.armed = false;
 }, true);
-window.remote = name => key(name, false);
+window.remote = (name, rep) => {
+  if(name === 'LongOK'){ clearTimeout(LONG.t); if(!LONG.armed){ LONG.armed = true; key('Enter', true); } return; }
+  key(name, !!rep);
+};
 window.onBack = () => {
   if(screen === 'home' && !$('setup').classList.contains('on')){ return false; }   // leave the app
   if(screen === 'setup'){ if(CFG.portal && READY){ screen = 'home'; show(); return true; } return false; }
