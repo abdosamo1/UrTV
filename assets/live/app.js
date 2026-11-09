@@ -259,10 +259,6 @@ async function loadHome(){
   HI_SERIES = se.items.filter(x => x.r >= 8).slice(0, 20);
   HI_MOVIES = mv.items.filter(x => x.r >= 8).slice(0, 20);
 }
-// the home screen's pictures fetched at once (the WebView keeps them in its cache for the next time)
-function preload(){
-  for(const it of RECENT.concat(HI_SERIES, HI_MOVIES).slice(0, 60)) if(it.img){ const im = new Image(); im.src = it.img; }
-}
 async function loadAccount(){
   if(M3U){ $('acct').textContent = 'قائمة قنوات'; return; }
   if(XT){
@@ -309,22 +305,30 @@ function artTag(it, i){
   return `<div class="art" data-img="${esc(it.img)}" style="background:${art(i, 200)}"></div>`;
 }
 const skelCls = it => it.img && !SEEN.has(it.img) ? ' skel' : '';
+const FLY = new Set();   // pictures on their way: a redrawn card waits for the same one
 function wantArt(el){
   if(el.dataset.st) return;
-  el.dataset.st = 'q'; IMQ.push({ el, u: el.dataset.img, gen: IMGEN }); pumpArt();
+  el.dataset.st = 'q';
+  if(FLY.has(el.dataset.img)) return;
+  IMQ.push({ el, u: el.dataset.img, gen: IMGEN }); pumpArt();
 }
 function pumpArt(){
   while(IMBUSY < 4 && IMQ.length){
     const j = IMQ.shift();
     if(j.gen !== IMGEN || !j.el.isConnected){ delete j.el.dataset.st; continue; }
-    IMBUSY++;
+    if(FLY.has(j.u) || SEEN.has(j.u)) continue;
+    IMBUSY++; FLY.add(j.u);
     gate().then(() => {
       const im = new Image();
       const fin = ok => {
-        IMBUSY--; SEEN.add(j.u);
-        if(ok) j.el.style.background = `url('${j.u.replace(/'/g, '%27')}') center/cover`;
-        j.el.removeAttribute('data-img');
-        const c = j.el.parentNode; if(c) c.classList.remove('skel');
+        IMBUSY--; SEEN.add(j.u); FLY.delete(j.u);
+        const els = new Set([j.el]);
+        document.querySelectorAll('.art[data-img]').forEach(a => { if(a.dataset.img === j.u) els.add(a); });
+        els.forEach(a => {
+          if(ok) a.style.background = `url('${j.u.replace(/'/g, '%27')}') center/cover`;
+          a.removeAttribute('data-img');
+          const c = a.parentNode; if(c) c.classList.remove('skel');
+        });
         pumpArt();
       };
       im.onload = () => fin(true); im.onerror = () => fin(false); im.src = j.u;
@@ -339,6 +343,14 @@ function artVisible(g, scroll){
     if(top + c.offsetHeight > 0 && top < h) wantArt(a);
   });
 }
+function artVisibleHome(){
+  const box = $('rows').getBoundingClientRect();
+  $('rows').querySelectorAll('.art[data-img]:not([data-st])').forEach(a => {
+    const c = a.parentNode.getBoundingClientRect();
+    if(c.bottom > box.top && c.top < box.bottom && c.right > box.left && c.left < box.right) wantArt(a);
+  });
+}
+let HOMEV = 0, HOME_CAS = true;
 const badge = it => it.r ? `<div class="badge">★ ${ar(it.r.toFixed(1)).replace('.', '٫')}</div>` : '';
 function continueItems(){
   return Object.entries(RES()).map(([k, v]) => Object.assign({ key: k }, v))
@@ -348,11 +360,11 @@ function rowsData(){
   const R = [];
   const cont = continueItems();
   if(cont.length) R.push({ h: 'تابع المشاهدة', kind: 'wide', items: cont.map((v, i) => ({
-    html: `<div class="art" style="${cardArt(v, i + 3)}"></div><div class="cap">${esc(v.name)}${v.ep ? ` — الحلقة ${ar(v.ep)}` : ''}<small>من ${ar(mmss(v.pos))}</small>`
+    sk: skelCls(v), html: `${artTag(v, i + 3)}<div class="cap">${esc(v.name)}${v.ep ? ` — الحلقة ${ar(v.ep)}` : ''}<small>من ${ar(mmss(v.pos))}</small>`
       + `<div class="bar"><i style="width:${v.dur ? Math.round(v.pos / v.dur * 100) : 30}%"></i></div></div>`,
     go: () => resumeItem(v) })) });
   const poster = (list, seed) => list.map((it, i) => ({
-    html: `<div class="art" style="${cardArt(it, i + seed)}"></div>${badge(it)}`
+    sk: skelCls(it), html: `${artTag(it, i + seed)}${badge(it)}`
       + (seed === 7 ? `<div class="kind">${it.kind === 'series' ? 'مسلسل' : 'فيلم'}</div>` : '')
       + `<div class="cap">${esc(it.name)}<small>${seed === 7 ? addedText(it.added) : ar(it.year)}</small></div>`,
     go: () => openMovie(it) }));
@@ -377,7 +389,10 @@ function drawHome(){
   if(row >= R.length) row = R.length - 1;
   if(row >= 0) col = Math.min(col, R[row].items.length - 1);
   $('rows').innerHTML = `<div class="rin" style="transform:translateY(${-VSHIFT}px)">` + R.map((r, ri) => `<div class="row"><h3>${r.h}</h3><div class="cards" style="transform:translateX(${SHIFT[ri] || 0}px)">${
-    r.items.map((it, ci) => `<div class="card ${r.kind} glass${ri === row && ci === col ? ' focus' : ''}">${it.html}</div>`).join('')}</div></div>`).join('') + '</div>';
+    r.items.map((it, ci) => `<div class="card ${r.kind} glass${it.sk || ''}${HOME_CAS && it.sk ? ' cas' : ''}${ri === row && ci === col ? ' focus' : ''}" style="--d:${Math.min(ri * 3 + ci, 14) * 45}ms">${it.html}</div>`).join('')}</div></div>`).join('') + '</div>';
+  HOME_CAS = false;   // the cascade once; later keys only move
+  // the pictures of the cards in sight: now, and again when the rows have slid
+  artVisibleHome(); clearTimeout(HOMEV); HOMEV = setTimeout(() => { if(screen === 'home') artVisibleHome(); }, 420);
   if(row < 0){ setV(0); return; }
   const rowsEl = $('rows'), cards = rowsEl.querySelectorAll('.cards')[row], card = cards && cards.children[col];
   if(!card) return;
@@ -473,7 +488,7 @@ function moveCat(d){
 function drawSkeleton(name){
   BWIN = '';
   $('grid').innerHTML = `<div class="in"><h3>${esc(name)}</h3>${Array.from({ length: 10 }, (_, k) =>
-    `<div class="card poster glass skel" style="--d:${k * 55}ms"><div class="cap sk"><i></i><i></i></div></div>`).join('')}</div>`;
+    `<div class="card poster glass skel cas" style="--d:${k * 55}ms"><div class="cap sk"><i></i><i></i></div></div>`).join('')}</div>`;
 }
 function drawBrowse(){
   const cats = VOD_CATS[bKind];
@@ -497,7 +512,7 @@ function drawBrowse(){
   const firstRow = Math.max(0, Math.floor(bi / COLS) - 3), start = firstRow * COLS, end = Math.min(items.length, start + COLS * 8);
   g.innerHTML = `<div class="in" style="transform:translateY(${-bScroll}px)"><h3>${esc(name)}</h3>${start ? `<div style="grid-column:1/-1;height:0"></div>` : ''}${
     items.slice(start, end).map((it, k) => { const i = start + k;
-      return `<div class="card poster glass${skelCls(it)}${bfocus === 'grid' && i === bi ? ' focus' : ''}" style="--d:${Math.min(k, 12) * 45}ms">${artTag(it, i)}${badge(it)}`
+      return `<div class="card poster glass${skelCls(it)}${skelCls(it) ? ' cas' : ''}${bfocus === 'grid' && i === bi ? ' focus' : ''}" style="--d:${Math.min(k, 12) * 45}ms">${artTag(it, i)}${badge(it)}`
         + `<div class="cap">${esc(it.name)}<small>${ar(it.year)}</small></div></div>`; }).join('')
     || '<div class="empty" style="grid-column:1/-1;color:var(--dim)">لا يوجد شيء في هذا القسم</div>'}</div>`;
   BWIN = bKind + ':' + bcat + ':' + start + ':' + items.length;
@@ -1029,7 +1044,7 @@ async function start(){
     setTimeout(() => refreshLists(false), 3000);   // only what is over its age
     await loadHome().catch(() => {});   // the home screen appears whole: its rows are made first
     loadAccount();
-    screen = 'home'; tab = 0; row = rowsData().length ? 0 : -1; show(); preload();
+    screen = 'home'; tab = 0; row = rowsData().length ? 0 : -1; show();
   }catch(e){
     openSetup();
     $('sst').textContent = e.message || 'تعذّر الاتصال';
