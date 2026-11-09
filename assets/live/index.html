@@ -138,6 +138,16 @@
   .grid .in{display:grid;grid-template-columns:repeat(5,1fr);grid-auto-rows:max-content;gap:1.2em;padding-bottom:3em;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
   .grid .card{width:auto;height:calc((69cqw - 4.8em) / 5 * 1.5)}
   .grid h3{grid-column:1/-1;margin:0;font-size:1.4em;color:var(--gold-lt);font-weight:500}
+  /* the skeleton: the cards come in one after another, a light runs over them until the picture arrives */
+  .grid .card.skel{animation:cascade .45s cubic-bezier(.2,.8,.2,1) backwards;animation-delay:var(--d,0ms)}
+  .card .art{transition:opacity .45s}
+  .card.skel .art{opacity:0}
+  .card.skel::before{content:'';position:absolute;inset:0;background:linear-gradient(100deg,rgba(255,255,255,0) 30%,rgba(255,255,255,.13) 50%,rgba(255,255,255,0) 70%) 0 0/260% 100%,rgba(255,255,255,.06);
+    animation:shim 1.5s linear infinite;animation-delay:var(--d,0ms)}
+  .cap.sk i{display:block;height:.75em;border-radius:.4em;background:rgba(255,255,255,.13);width:75%;margin-top:.35em}
+  .cap.sk i+i{width:40%;height:.6em}
+  @keyframes cascade{from{opacity:0;transform:translateY(1.2em) scale(.97)}}
+  @keyframes shim{from{background-position:130% 0,0 0}to{background-position:-130% 0,0 0}}
   /* ---- movie details */
   #movie .back{position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.2),rgba(0,0,0,.85) 60%)}
   #movie .poster{position:absolute;top:12%;left:6%;width:22%;aspect-ratio:2/3;border-radius:1.4em}

@@ -26,7 +26,17 @@ window.__done = (id, ok, text) => {
   if(!ok && /\((461|429|403|401|458)\)/.test(text)){ PAUSE_UNTIL = Date.now() + 10 * 60e3; store.set('pauseUntil', PAUSE_UNTIL); }
   ok ? p.res(text) : p.rej(new Error(text));
 };
-function raw(q){ return new Promise((res, rej) => { if(paused()) return rej(new Error(pauseMsg())); if(!Live) return rej(new Error('خارج التطبيق')); const id = ++SEQ; PEND[id] = { res, rej }; Live.call(id, q); }); }
+// a quiet counter of the requests (never shown): many in a short time and the next ones wait a little longer,
+// so the server never sees a burst that it would answer by cutting the connection
+const HITS = [];
+function gap(){
+  const now = Date.now(); while(HITS.length && now - HITS[0] > 10000) HITS.shift();
+  const n = HITS.length;
+  return n < 15 ? 0 : n < 30 ? 150 : n < 50 ? 400 : n < 80 ? 900 : 1800;
+}
+let GATE = Promise.resolve();
+function gate(){ const p = GATE.then(() => { const w = gap(); return w ? new Promise(r => setTimeout(r, w)) : null; }).then(() => { HITS.push(Date.now()); }); GATE = p; return p; }
+function raw(q){ return gate().then(() => new Promise((res, rej) => { if(paused()) return rej(new Error(pauseMsg())); if(!Live) return rej(new Error('خارج التطبيق')); const id = ++SEQ; PEND[id] = { res, rej }; Live.call(id, q); })); }
 const call = q => raw(q).then(t => { try{ return JSON.parse(t); }catch(e){ return null; } });
 const enc = encodeURIComponent;
 const abs = u => !u ? '' : /^https?:/.test(u) ? u : u.startsWith('/') ? CFG.root + u : CFG.root + '/stalker_portal/misc/logos/320/' + u;
@@ -49,9 +59,10 @@ function parseXtream(link){
     return { base: url.origin, u, p: pw };
   }catch(e){ return null; }
 }
-function rawGet(url){ return new Promise((res, rej) => { if(paused()) return rej(new Error(pauseMsg())); if(!Live) return rej(new Error('خارج التطبيق')); const id = ++SEQ; PEND[id] = { res, rej }; Live.get(id, url); }); }
+function rawGet(url){ return gate().then(() => new Promise((res, rej) => { if(paused()) return rej(new Error(pauseMsg())); if(!Live) return rej(new Error('خارج التطبيق')); const id = ++SEQ; PEND[id] = { res, rej }; Live.get(id, url); })); }
 // the long lists come trimmed by the app (only what the screens use)
-function rawSlim(url, fields){ return new Promise((res, rej) => { if(paused()) return rej(new Error(pauseMsg())); if(!Live || !Live.getSlim) return rawGet(url).then(res, rej); const id = ++SEQ; PEND[id] = { res, rej }; Live.getSlim(id, url, fields); }); }
+function rawSlim(url, fields){ if(!Live || !Live.getSlim) return rawGet(url);
+  return gate().then(() => new Promise((res, rej) => { if(paused()) return rej(new Error(pauseMsg())); const id = ++SEQ; PEND[id] = { res, rej }; Live.getSlim(id, url, fields); })); }
 // FRESH: ask the server (a refresh); otherwise the copy kept on the TV first, the server only without one
 let FRESH = false, OLDEST = 0;
 function kept(url){
@@ -289,6 +300,45 @@ let bKind = 'أفلام', bcat = 0, bfocus = 'rail', bi = 0, bScroll = 0;
 let MOV = null;   // the film or series open: { item, seasons, sIdx, eIdx, focus }
 
 function cardArt(it, i){ return it.img ? `background:url('${esc(it.img)}') center/cover,${art(i, 200)}` : `background:${art(i, 200)}`; }
+// ---- the posters of a section: only the cards on the screen are fetched, four at a time; until a picture
+// arrives its card shows the skeleton (the cards come in one after another, a light runs over them)
+const SEEN = new Set();   // fetched once: the WebView keeps them, so they show at once next time
+let IMQ = [], IMGEN = 0, IMBUSY = 0;
+function artTag(it, i){
+  if(!it.img || SEEN.has(it.img)) return `<div class="art" style="${cardArt(it, i)}"></div>`;
+  return `<div class="art" data-img="${esc(it.img)}" style="background:${art(i, 200)}"></div>`;
+}
+const skelCls = it => it.img && !SEEN.has(it.img) ? ' skel' : '';
+function wantArt(el){
+  if(el.dataset.st) return;
+  el.dataset.st = 'q'; IMQ.push({ el, u: el.dataset.img, gen: IMGEN }); pumpArt();
+}
+function pumpArt(){
+  while(IMBUSY < 4 && IMQ.length){
+    const j = IMQ.shift();
+    if(j.gen !== IMGEN || !j.el.isConnected){ delete j.el.dataset.st; continue; }
+    IMBUSY++;
+    gate().then(() => {
+      const im = new Image();
+      const fin = ok => {
+        IMBUSY--; SEEN.add(j.u);
+        if(ok) j.el.style.background = `url('${j.u.replace(/'/g, '%27')}') center/cover`;
+        j.el.removeAttribute('data-img');
+        const c = j.el.parentNode; if(c) c.classList.remove('skel');
+        pumpArt();
+      };
+      im.onload = () => fin(true); im.onerror = () => fin(false); im.src = j.u;
+    });
+  }
+}
+/** the cards of a grid inside its window (after its scroll), top first */
+function artVisible(g, scroll){
+  const h = g.clientHeight;
+  g.querySelectorAll('.art[data-img]').forEach(a => {
+    const c = a.parentNode, top = c.offsetTop - scroll;
+    if(top + c.offsetHeight > 0 && top < h) wantArt(a);
+  });
+}
 const badge = it => it.r ? `<div class="badge">★ ${ar(it.r.toFixed(1)).replace('.', '٫')}</div>` : '';
 function continueItems(){
   return Object.entries(RES()).map(([k, v]) => Object.assign({ key: k }, v))
@@ -391,7 +441,7 @@ function drawLive(flash){
 
 // ---- movies / series
 const COLS = 5;
-function openBrowse(kind){ screen = 'browse'; bKind = kind; bcat = 0; bfocus = 'rail'; bi = 0; bScroll = 0; show(); loadCat(); }
+function openBrowse(kind){ IMGEN++; screen = 'browse'; bKind = kind; bcat = 0; bfocus = 'rail'; bi = 0; bScroll = 0; show(); loadCat(); }
 function curItems(){ const c = VOD_CATS[bKind][bcat]; const P = c && PAGES[bKind + ':' + c.id]; return P ? P.items : []; }
 async function loadCat(){
   const c = VOD_CATS[bKind][bcat]; if(!c) return drawBrowse();
@@ -414,10 +464,17 @@ function moveCat(d){
   const cats = VOD_CATS[bKind];
   const n = Math.max(0, Math.min(cats.length - 1, bcat + d));
   if(n === bcat) return;
-  bcat = n; bScroll = 0; bi = 0; BWIN = '';
+  bcat = n; bScroll = 0; bi = 0; BWIN = ''; IMGEN++; IMQ = [];
   drawRail();
+  const c = cats[n], P = c && PAGES[bKind + ':' + c.id];
+  if(!P || !P.items.length || XT || M3U) drawSkeleton(c ? c.name : '');   // the skeleton at once, the section when the key rests
   clearTimeout(CATT); CATT = setTimeout(loadCat, 280);
 }   // the rows drawn now (section, first row, count): within them only the focus moves
+function drawSkeleton(name){
+  BWIN = '';
+  $('grid').innerHTML = `<div class="in"><h3>${esc(name)}</h3>${Array.from({ length: 10 }, (_, k) =>
+    `<div class="card poster glass skel" style="--d:${k * 55}ms"><div class="cap sk"><i></i><i></i></div></div>`).join('')}</div>`;
+}
 function drawBrowse(){
   const cats = VOD_CATS[bKind];
   if(bfocus === 'grid'){
@@ -434,15 +491,17 @@ function drawBrowse(){
   drawRail();
   const items = curItems(), g = $('grid');
   const name = cats[bcat] ? cats[bcat].name : '';
+  const c0 = cats[bcat], P0 = c0 && PAGES[bKind + ':' + c0.id];
+  if(!items.length && c0 && !XT && !M3U && (!P0 || P0.busy || P0.total === Infinity)) return drawSkeleton(name);
   // only the rows near the focus are drawn: a section may hold thousands
   const firstRow = Math.max(0, Math.floor(bi / COLS) - 3), start = firstRow * COLS, end = Math.min(items.length, start + COLS * 8);
   g.innerHTML = `<div class="in" style="transform:translateY(${-bScroll}px)"><h3>${esc(name)}</h3>${start ? `<div style="grid-column:1/-1;height:0"></div>` : ''}${
     items.slice(start, end).map((it, k) => { const i = start + k;
-      return `<div class="card poster glass${bfocus === 'grid' && i === bi ? ' focus' : ''}"><div class="art" style="${cardArt(it, i)}"></div>${badge(it)}`
+      return `<div class="card poster glass${skelCls(it)}${bfocus === 'grid' && i === bi ? ' focus' : ''}" style="--d:${Math.min(k, 12) * 45}ms">${artTag(it, i)}${badge(it)}`
         + `<div class="cap">${esc(it.name)}<small>${ar(it.year)}</small></div></div>`; }).join('')
-    || '<div class="empty" style="grid-column:1/-1;color:var(--dim)">جارٍ التحميل…</div>'}</div>`;
+    || '<div class="empty" style="grid-column:1/-1;color:var(--dim)">لا يوجد شيء في هذا القسم</div>'}</div>`;
   BWIN = bKind + ':' + bcat + ':' + start + ':' + items.length;
-  if(bfocus !== 'grid') { bScroll = 0; g.firstChild.style.transform = 'none'; BWIN = ''; return; }
+  if(bfocus !== 'grid') { bScroll = 0; g.firstChild.style.transform = 'none'; BWIN = ''; artVisible(g, 0); return; }
   scrollGrid();
 }
 function scrollGrid(){
@@ -453,6 +512,7 @@ function scrollGrid(){
   if(cb.bottom > gb.bottom - gb.height * .04) s2 += cb.bottom - gb.bottom + gb.height * .06;
   else if(cb.top < gb.top + gb.height * .02) s2 -= gb.top - cb.top + gb.height * .04;
   if(s2 !== bScroll){ bScroll = Math.max(0, s2); g.firstChild.style.transform = `translateY(${-bScroll}px)`; }
+  artVisible(g, bScroll);
   // near the end: the next page
   const c = cats[bcat], P = c && PAGES[bKind + ':' + c.id];
   if(P && !P.busy && P.items.length < P.total && bi >= items.length - COLS * 2)
