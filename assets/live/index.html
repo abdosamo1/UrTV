@@ -23,7 +23,8 @@
   /* the focus: the card's own edge turns gold (no second ring around it) */
   /* a poster is covered by its picture: no glass behind it (a blur under each of fifty cards made the lists heavy) */
   .card,.pill,#movie .btn{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.24);box-shadow:0 10px 26px rgba(0,0,0,.32)}
-  .focus{border-color:var(--gold-lt)!important;box-shadow:0 0 10px rgba(241,207,138,.3),0 14px 40px rgba(0,0,0,.4)!important;transform:scale(1.03)}
+  /* a thick gold ring with a glow and a clear lift: seen at a glance over any picture, bright or dark */
+  .focus{border-color:var(--gold-lt)!important;box-shadow:0 0 0 .2em var(--gold-lt),0 0 1.5em .2em rgba(241,207,138,.6),0 14px 40px rgba(0,0,0,.5)!important;transform:scale(1.05);z-index:2}
   /* ---- home */
   .top{position:absolute;top:4%;right:4%;left:4%;display:flex;align-items:center;justify-content:space-between}
   .brand{font-family:'ThmanyahDisplay';font-size:2.4em}

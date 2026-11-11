@@ -433,7 +433,8 @@ function drawTabsOnly(){
   if(sig === TABSIG) return;
   TABSIG = sig;
   $('prof').classList.toggle('focus', row === -2);
-  $('tabs').innerHTML = TABS.map((t, i) => `<div class="tab glass${i === tab ? ' sel' : ''}${row === -1 && i === tab ? ' focus' : ''}">${t}</div>`).join('');
+  // the filled tab is the screen shown («الرئيسية»); another tab is marked only while the cursor is on it
+  $('tabs').innerHTML = TABS.map((t, i) => `<div class="tab glass${i === 0 ? ' sel' : ''}${row === -1 && i === tab ? ' focus' : ''}">${t}</div>`).join('');
 }
 /** the rows are built once; a key only moves the gold edge and slides the rows (places from the layout, not
  *  from the screen: a held key no longer measures cards in the middle of their slide) */
