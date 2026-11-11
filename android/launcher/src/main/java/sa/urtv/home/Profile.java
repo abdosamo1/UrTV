@@ -22,6 +22,7 @@ import java.io.FileOutputStream;
  * round photo at the top right. The name comes over ADB (DockReceiver PROFILE); the photo through this provider:
  *   content write --uri content://sa.urtv.home.profile/photo < /data/local/tmp/urtv-photo
  * Only the shell may write (android.permission.DUMP, see the manifest). optimize/dock.sh profile does both.
+ * Apps signed with the same key may read it (تلفزيونك المباشر shows it beside its clock).
  */
 public class Profile extends ContentProvider {
     static String name(Context c) { return Dock.prefs(c).getString("ownerName", ""); }
@@ -73,8 +74,14 @@ public class Profile extends ContentProvider {
 
     @Override
     public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
-        if (!"/photo".equals(uri.getPath()) || !mode.contains("w")) throw new FileNotFoundException("write-only: /photo");
+        if (!"/photo".equals(uri.getPath())) throw new FileNotFoundException("only /photo");
         final Context c = getContext();
+        if (!mode.contains("w")) {   // read: the owner's other apps only (the same signing key), e.g. تلفزيونك المباشر's top bar
+            boolean ours = c.getPackageManager().checkSignatures(android.os.Process.myUid(), android.os.Binder.getCallingUid())
+                == android.content.pm.PackageManager.SIGNATURE_MATCH;
+            if (!ours || !photo(c).isFile()) throw new FileNotFoundException("no photo");
+            return ParcelFileDescriptor.open(photo(c), ParcelFileDescriptor.MODE_READ_ONLY);
+        }
         final File raw = new File(c.getFilesDir(), "avatar-new");
         try {
             return ParcelFileDescriptor.open(raw,

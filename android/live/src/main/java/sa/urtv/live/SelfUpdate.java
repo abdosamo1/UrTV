@@ -52,6 +52,14 @@ final class SelfUpdate {
 
     private static String say(Context c, String s) { sp(c).edit().putString("status", s).apply(); return s; }
 
+    /** Blocking (network): the version in the release (the N of 3.N), or -1 when it cannot be read. */
+    static long latest() {
+        try {
+            Matcher m = VERSION.matcher(new JSONObject(get(RELEASE)).optString("body", ""));
+            return m.find() ? Long.parseLong(m.group(1)) : -1;
+        } catch (Exception e) { return -1; }
+    }
+
     /**
      * Blocking (network). apk: this app's file in the release (urtv-screensaver.apk / urtv-home.apk).
      * busy: the app is on screen now; then a found update waits for the next check (unless forced).
