@@ -8,18 +8,29 @@ const HUES = [200, 25, 340, 150, 270, 45, 190, 0, 110, 300];
 const art = (i, a = 135) => `linear-gradient(${a}deg,hsl(${HUES[i % 10]} 45% 38%),hsl(${(HUES[i % 10] + 40) % 360} 50% 16%))`;
 const hash = s => { let h = 0; for(const c of String(s)) h = (h * 31 + c.charCodeAt(0)) | 0; return Math.abs(h); };
 const $ = id => document.getElementById(id);
+// what is kept belongs to the account in use (favourites, where films stopped…), except the accounts themselves:
+// the first account keeps the plain names (what was kept before there were accounts), the others a prefix
+let NS = '';
+const SHARED = new Set(['accounts', 'activeAcct', 'voiceLang']);
 const store = {
-  get(k, d){ try{ const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
+  key: k => SHARED.has(k) ? k : NS + k,
+  get(k, d){ try{ const v = localStorage.getItem(store.key(k)); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
   set(k, v){
     const t = JSON.stringify(v);
-    try{ localStorage.setItem(k, t); }
+    try{ localStorage.setItem(store.key(k), t); }
     catch(e){   // the storage is full: the kept details of films go (they are asked again), then once more
-      try{ Object.keys(localStorage).filter(x => x.startsWith('det:')).forEach(x => localStorage.removeItem(x)); localStorage.setItem(k, t); }catch(e2){}
+      try{ Object.keys(localStorage).filter(x => x.includes('det:')).forEach(x => localStorage.removeItem(x)); localStorage.setItem(store.key(k), t); }catch(e2){}
     }
   },
 };
 let CFG = {};
 try{ CFG = JSON.parse(Live ? Live.config() : '{}'); }catch(e){}
+// ---- the accounts: each a name and its link («urtv 1», «urtv 2»…); the app itself holds the link in use
+let ACCTS = store.get('accounts', []), ACTIVE = store.get('activeAcct', 0);
+if(!ACCTS.length && CFG.portal){ ACCTS = [{ id: 0, name: 'urtv 1', url: CFG.portal }]; ACTIVE = 0; store.set('accounts', ACCTS); store.set('activeAcct', 0); }
+const curAcct = () => ACCTS.find(a => a.id === ACTIVE) || null;
+if(curAcct() && CFG.portal && curAcct().url !== CFG.portal){ curAcct().url = CFG.portal; store.set('accounts', ACCTS); }
+NS = ACTIVE ? 'a' + ACTIVE + ':' : '';
 
 // ---- the portal: Live.call(id, query) answers window.__done(id, ok, text)
 let SEQ = 0; const PEND = {};
@@ -974,8 +985,16 @@ function show(keep){
 const EXIT = { on: false, sel: 0, msg: '', busy: false, latest: 0, mine: 0 };
 const newer = () => EXIT.latest > EXIT.mine && EXIT.mine > 0;
 function lookForUpdate(){ if(Live && Live.checkUpdate) Live.checkUpdate(); }
+/** a popup comes in (it grows a little as it clears) and goes out the same way, quicker */
+function pop(el, on){
+  clearTimeout(el._t);
+  if(on){ el.classList.remove('out'); el.classList.add('on'); return; }
+  if(!el.classList.contains('on')) return;
+  el.classList.add('out');
+  el._t = setTimeout(() => el.classList.remove('on', 'out'), 160);
+}
 function drawExit(){
-  $('exit').classList.toggle('on', EXIT.on);
+  pop($('exit'), EXIT.on);
   if(!EXIT.on) return;
   $('xtitle').textContent = newer() ? 'تحديث التطبيق والخروج؟' : 'متأكد أنك تريد الخروج من التطبيق؟';
   $('xmsg').textContent = EXIT.msg || (newer() ? 'يوجد إصدار جديد ٣٫' + ar(EXIT.latest) + ' (الحالي ٣٫' + ar(EXIT.mine) + ')' : '');
@@ -1010,8 +1029,98 @@ window.onUpdate = text => {
   drawExit();
 };
 
+// ---- the accounts: a popup over the home screen. A card for each account and «+» for another link; a card
+// opens, inside the same popup, this TV's MAC and the field for the link
+const ACCT = { on: false, view: 'list', sel: 0, edit: null, focus: 'url', btn: 0, sure: false };
+const USER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8.5" r="3.6" fill="rgba(241,207,138,.22)"/><path d="M4.8 19.5c1.2-3.4 4-5.2 7.2-5.2s6 1.8 7.2 5.2"/></svg>';
+function openAcct(edit, msg){
+  Object.assign(ACCT, { on: true, view: 'list', sel: Math.max(0, ACCTS.findIndex(a => a.id === ACTIVE)) });
+  pop($('apop'), true);
+  if(edit) editAcct(edit, msg); else drawAcct();
+}
+function closeAcct(){ ACCT.on = false; pop($('apop'), false); $('tv').focus(); }
+function newAcct(){
+  const n = ACCTS.reduce((m, a) => Math.max(m, +(String(a.name).match(/(\d+)\s*$/) || [0, 0])[1]), 0) + 1;
+  return { id: null, name: 'urtv ' + n, url: '' };
+}
+function drawAcct(){
+  ACCT.view = 'list';
+  $('atitle').textContent = 'الحسابات';
+  const cards = ACCTS.concat([{ add: true }]);
+  ACCT.sel = Math.max(0, Math.min(ACCT.sel, cards.length - 1));
+  $('abody').innerHTML = '<div class="accts">' + cards.map((a, i) => a.add
+    ? `<div class="acard add${i === ACCT.sel ? ' focus' : ''}"><div class="ava plus">+</div><b>إضافة حساب</b><small>برابط آخر</small></div>`
+    : `<div class="acard${a.id === ACTIVE ? ' cur' : ''}${i === ACCT.sel ? ' focus' : ''}"><div class="ava">${USER}</div><b>${esc(a.name)}</b><small>${a.id === ACTIVE ? 'الحساب الحالي' : 'اضغط للتبديل إليه'}</small></div>`).join('') + '</div>';
+}
+function editAcct(a, msg){
+  Object.assign(ACCT, { view: 'edit', edit: a, focus: 'url', btn: 0, sure: false });
+  $('atitle').textContent = a.name;
+  $('abody').innerHTML = `<div class="lbl">عنوان الماك (MAC) لهذا الجهاز</div><div class="mac">${esc(CFG.mac || '')}</div>`
+    + `<div class="lbl">رابط البوابة أو رابط الاشتراك من المزوّد</div>`
+    + `<input id="aurl" placeholder="http://portal.example:8080/c/" autocomplete="off" autocapitalize="off" spellcheck="false">`
+    + `<div class="btns" id="abtns"></div><div class="st" id="ast"></div><div class="ver">الإصدار ${ar(CFG.version || '')}</div>`;
+  $('aurl').value = a.url || '';
+  $('ast').textContent = msg || '';
+  acctBtns();
+  setTimeout(() => { if(ACCT.on && ACCT.view === 'edit' && ACCT.focus === 'url') $('aurl').focus(); }, 80);
+}
+function acctBtns(){
+  const B = ['اتصال'].concat(ACCT.edit.id != null ? [ACCT.sure ? 'تأكيد الحذف؟' : 'حذف الحساب'] : []);
+  ACCT.btn = Math.min(ACCT.btn, B.length - 1);
+  $('abtns').innerHTML = B.map((t, i) => `<div class="btn${i === 0 ? ' main' : ''}${ACCT.focus === 'btns' && i === ACCT.btn ? ' focus' : ''}">${t}</div>`).join('');
+  return B.length;
+}
+/** the link is kept under its account and handed to the app, which starts again on it */
+function connectAcct(){
+  const a = ACCT.edit, url = $('aurl').value.trim();
+  if(!url){ $('ast').textContent = 'أدخل رابط البوابة أو رابط الاشتراك أولاً'; return; }
+  if(a.id == null){ a.id = ACCTS.reduce((m, x) => Math.max(m, x.id), -1) + 1; ACCTS.push({ id: a.id, name: a.name, url }); }
+  else ACCTS.find(x => x.id === a.id).url = url;
+  useAcct(a.id);
+}
+function useAcct(id){
+  const a = ACCTS.find(x => x.id === id);
+  store.set('accounts', ACCTS); store.set('activeAcct', a ? a.id : 0);
+  if($('ast')) $('ast').textContent = 'جارٍ الاتصال…';
+  if(Live) Live.setPortal(a ? a.url : '');
+  setTimeout(() => location.reload(), 150);   // the app's screens start again, on that account
+}
+function dropAcct(){
+  const id = ACCT.edit.id;
+  ACCTS = ACCTS.filter(x => x.id !== id);
+  const pre = id ? 'a' + id + ':' : null;   // what was kept for it goes too
+  try{ if(pre) Object.keys(localStorage).filter(k => k.startsWith(pre)).forEach(k => localStorage.removeItem(k)); }catch(e){}
+  store.set('accounts', ACCTS);
+  if(id === ACTIVE) return useAcct(ACCTS.length ? ACCTS[0].id : -1);
+  drawAcct();
+}
+function acctKey(k){
+  if(ACCT.view === 'list'){
+    const n = ACCTS.length + 1;
+    if(k === 'Escape'){ if(READY) closeAcct(); return; }
+    if(k === 'ArrowLeft') ACCT.sel = Math.min(n - 1, ACCT.sel + 1);
+    else if(k === 'ArrowRight') ACCT.sel = Math.max(0, ACCT.sel - 1);
+    else if(k === 'Enter') return editAcct(ACCT.sel < ACCTS.length ? Object.assign({}, ACCTS[ACCT.sel]) : newAcct());
+    return drawAcct();
+  }
+  if(k === 'Escape') return drawAcct();
+  if(ACCT.focus !== 'btns') return;
+  const n = acctBtns();
+  if(k === 'ArrowUp'){ ACCT.focus = 'url'; ACCT.sure = false; acctBtns(); return $('aurl').focus(); }
+  if(k === 'ArrowLeft') ACCT.btn = Math.min(n - 1, ACCT.btn + 1);
+  else if(k === 'ArrowRight') ACCT.btn = Math.max(0, ACCT.btn - 1);
+  else if(k === 'Enter'){
+    if(ACCT.btn === 0) return connectAcct();
+    if(ACCT.sure) return dropAcct();
+    ACCT.sure = true;   // asked once more before an account is taken off
+  }
+  if(k !== 'Enter') ACCT.sure = false;
+  acctBtns();
+}
+
 function key(k, repeat){
   if(EXIT.on) return exitKey(k);
+  if(ACCT.on) return acctKey(k);
   if(screen === 'home'){
     const R = homeRows();
     if(row === -2 && (k === 'ArrowLeft' || k === 'ArrowRight')) return drawHome();   // the profile stands alone
@@ -1024,9 +1133,9 @@ function key(k, repeat){
       if(!repeat) return x.go();
       toggleFav(x.it);
     }
-    else if(k === 'Enter' && row === -2) return openSetup();
+    else if(k === 'Enter' && row === -2) return openAcct();
     else if(k === 'Enter' && row === -1){
-      if(repeat && TABS[tab] === 'الرئيسية'){ openSetup(); return; }   // a long OK on «الرئيسية»: the activation screen
+      if(repeat && TABS[tab] === 'الرئيسية'){ openAcct(); return; }   // a long OK on «الرئيسية»: the activation screen
       if(TABS[tab] === 'أفلام' || TABS[tab] === 'مسلسلات') return openBrowse(TABS[tab]);
       if(TABS[tab] === 'المفضلة'){ screen = 'favs'; return show(); }
       if(TABS[tab] === 'مباشر') return openLive(lastChannel());
@@ -1194,6 +1303,13 @@ function openList(){ listOpen = true; listIdle(); catsOpen = false; const c = AL
 const LONG = { done: false };
 document.addEventListener('keydown', e => {
   const t = e.target;
+  if(ACCT.on && t && t.id === 'aurl'){   // typing the link: ▼ or OK goes to the buttons under it
+    if(e.key === 'ArrowDown' || e.key === 'Enter'){
+      e.preventDefault(); if(e.key === 'Enter') LONG.skip = true;
+      t.blur(); $('tv').focus(); ACCT.focus = 'btns'; acctBtns();
+    }
+    return;
+  }
   if(screen === 'setup') return setupKey(e);
   if(t && (t.id === 'q' || t.id === 'mic' || t.id === 'lang')){
     if(t.id === 'q' && e.key === 'ArrowDown' && SRES.length){ e.preventDefault(); t.blur(); $('tv').focus(); SSEL = 0; moveFocus($('sres'), 0); }
@@ -1217,6 +1333,7 @@ document.addEventListener('keydown', e => {
 }, true);
 document.addEventListener('keyup', e => {
   if(screen === 'setup' || e.key !== 'Enter') return;
+  if(LONG.skip){ LONG.skip = false; return; }   // the OK that left the link's field is not also a press on the button
   const t = e.target; if(t && (t.id === 'q' || t.id === 'mic' || t.id === 'lang')) return;
   clearTimeout(LONG.t);
   if(!LONG.armed) key('Enter', false);
@@ -1229,6 +1346,7 @@ window.remote = (name, rep) => {
 let HOME_AT = 0;   // when a screen last gave way to the home screen
 window.onBack = () => {
   if(EXIT.on){ closeExit(); return true; }
+  if(ACCT.on){ if(ACCT.view === 'list' && !READY) return false; acctKey('Escape'); return true; }
   if(screen === 'home' && !$('setup').classList.contains('on')){   // leaving is asked first
     if(Date.now() - HOME_AT > 900) openExit();   // not by the same Back that just came back to the home screen
     return true;
@@ -1315,7 +1433,7 @@ function myPhoto(){
 // ---- start
 function tick(){ const d = new Date(), h = d.getHours() % 12 || 12; $('clk').textContent = `${ar(String(h).padStart(2, '0'))}:${ar(String(d.getMinutes()).padStart(2, '0'))} ${d.getHours() < 12 ? 'ص' : 'م'}`; }
 async function start(){
-  if(!CFG.portal){ return openSetup(); }
+  if(!CFG.portal){ screen = 'home'; show(); return openAcct(curAcct() ? Object.assign({}, curAcct()) : newAcct()); }
   $('loading').style.display = 'flex';
   try{
     XT = parseXtream(CFG.portal); M3U = false;
@@ -1338,8 +1456,8 @@ async function start(){
     loadAccount();
     screen = 'home'; tab = 0; HOME = null; row = homeRows().length ? 0 : -1; show();
   }catch(e){
-    openSetup();
-    $('sst').textContent = e.message || 'تعذّر الاتصال';
+    screen = 'home'; show();
+    openAcct(curAcct() ? Object.assign({}, curAcct()) : newAcct(), e.message || 'تعذّر الاتصال');
   }
   $('loading').style.display = 'none';
 }
