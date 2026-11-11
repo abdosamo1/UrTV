@@ -91,6 +91,8 @@ public class IdleWatch extends AccessibilityService {
         h.postDelayed(tick, TICK_MS);
         try {   // the system's broadcast: Android 13+ wants it said that it comes from outside
             android.content.IntentFilter f = new android.content.IntentFilter("android.media.VOLUME_CHANGED_ACTION");
+            // تلفزيونك المباشر's screens are one page (no focus moves between views): it says each key itself
+            f.addAction("sa.urtv.screensaver.ACTIVE");
             if (android.os.Build.VERSION.SDK_INT >= 33) registerReceiver(volume, f, Context.RECEIVER_EXPORTED);
             else registerReceiver(volume, f);
         }

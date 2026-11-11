@@ -3,21 +3,30 @@ package sa.urtv.live;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.Outline;
+import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.speech.RecognizerIntent;
 import android.view.KeyEvent;
+import android.view.PixelCopy;
+import android.view.SurfaceView;
 import android.view.View;
+import android.view.ViewOutlineProvider;
 import android.view.WindowManager;
+import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 
 import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
@@ -46,7 +55,7 @@ public class MainActivity extends Activity {
     private final Handler h = new Handler(Looper.getMainLooper());
     private final ExecutorService net = Executors.newFixedThreadPool(3);
     private WebView web;
-    private FrameLayout videos;
+    private FrameLayout videos, frosts;
     private final List<ExoPlayer> players = new ArrayList<>();
     private final List<PlayerView> views = new ArrayList<>();
     private int layout = 1, focused = 0;
@@ -62,6 +71,8 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(Color.BLACK);
         videos = new FrameLayout(this);
         root.addView(videos, new FrameLayout.LayoutParams(-1, -1));
+        frosts = new FrameLayout(this);   // between the video and the page: the blurred picture under a panel
+        root.addView(frosts, new FrameLayout.LayoutParams(-1, -1));
         web = new WebView(this);
         web.setBackgroundColor(Color.TRANSPARENT);
         WebSettings s = web.getSettings();
@@ -154,6 +165,146 @@ public class MainActivity extends Activity {
             players.get(i).clearMediaItems();
             views.get(i).setVisibility(View.GONE);
         }
+        for (ImageView v : frostViews) { v.setVisibility(View.GONE); v.setImageDrawable(null); }
+    }
+
+    // ---- the glass over the video. The page's panels (the channels' list, the player's bar) lie over the video,
+    // which the page cannot see, so its own blur shows nothing through them. Here the part of the picture under
+    // each panel is copied small a few times a second, softened, and shown enlarged between the video and the
+    // page: with the panel's tint over it, frosted glass. Nothing is shown when the picture cannot be copied.
+    private final List<ImageView> frostViews = new ArrayList<>();
+    private final List<float[]> frostRects = new ArrayList<>();   // x, y, w, h, corner: parts of the screen's size
+    private int frostBusy;
+    private final Runnable frostTick = new Runnable() {
+        @Override public void run() {
+            if (frostRects.isEmpty()) return;
+            frostNow();
+            h.postDelayed(this, 200);
+        }
+    };
+
+    private void setFrost(String spec) {
+        frostRects.clear();
+        if (spec != null && !spec.isEmpty()) {
+            for (String part : spec.split(";")) {
+                String[] n = part.split(",");
+                if (n.length < 5 || frostRects.size() >= 3) continue;
+                try {
+                    float[] f = new float[5];
+                    for (int i = 0; i < 5; i++) f[i] = Float.parseFloat(n[i]);
+                    frostRects.add(f);
+                } catch (Exception ignored) { }
+            }
+        }
+        h.removeCallbacks(frostTick);
+        int w = frosts.getWidth(), ht = frosts.getHeight();
+        while (frostViews.size() < frostRects.size()) {
+            ImageView v = new ImageView(this);
+            v.setScaleType(ImageView.ScaleType.FIT_XY);
+            v.setVisibility(View.GONE);
+            v.setFocusable(false);
+            frosts.addView(v, new FrameLayout.LayoutParams(1, 1));
+            frostViews.add(v);
+        }
+        for (int i = 0; i < frostViews.size(); i++) {
+            ImageView v = frostViews.get(i);
+            if (i >= frostRects.size() || w == 0) { v.setVisibility(View.GONE); v.setImageDrawable(null); continue; }
+            float[] f = frostRects.get(i);
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) v.getLayoutParams();
+            lp.gravity = android.view.Gravity.TOP | android.view.Gravity.LEFT;
+            lp.leftMargin = Math.round(f[0] * w); lp.topMargin = Math.round(f[1] * ht);
+            lp.width = Math.max(1, Math.round(f[2] * w)); lp.height = Math.max(1, Math.round(f[3] * ht));
+            v.setLayoutParams(lp);
+            final float corner = f[4] * w;
+            v.setOutlineProvider(new ViewOutlineProvider() {
+                @Override public void getOutline(View view, Outline o) { o.setRoundRect(0, 0, view.getWidth(), view.getHeight(), corner); }
+            });
+            v.setClipToOutline(true);
+        }
+        if (!frostRects.isEmpty()) h.postDelayed(frostTick, 120);
+    }
+
+    private void frostNow() {
+        if (frostBusy > 0 || layout != 1 || views.isEmpty() || views.get(0).getVisibility() != View.VISIBLE) return;
+        View sv = views.get(0).getVideoSurfaceView();
+        if (!(sv instanceof SurfaceView) || sv.getWidth() == 0 || !((SurfaceView) sv).getHolder().getSurface().isValid()) return;
+        int[] at = new int[2], base = new int[2];
+        sv.getLocationInWindow(at); frosts.getLocationInWindow(base);
+        int w = frosts.getWidth(), ht = frosts.getHeight();
+        for (int i = 0; i < frostRects.size() && i < frostViews.size(); i++) {
+            final float[] f = frostRects.get(i);
+            final ImageView v = frostViews.get(i);
+            // the panel's place inside the video's own view (a picture narrower than the screen has bars beside it)
+            Rect src = new Rect(Math.round(f[0] * w) + base[0] - at[0], Math.round(f[1] * ht) + base[1] - at[1], 0, 0);
+            src.right = src.left + Math.round(f[2] * w); src.bottom = src.top + Math.round(f[3] * ht);
+            if (!src.intersect(0, 0, sv.getWidth(), sv.getHeight()) || src.width() < 16 || src.height() < 16) { v.setVisibility(View.GONE); continue; }
+            Bitmap made = null;
+            try { made = Bitmap.createBitmap(Math.max(8, src.width() / 24), Math.max(8, src.height() / 24), Bitmap.Config.ARGB_8888); }
+            catch (Throwable ignored) { }
+            if (made == null) continue;
+            final Bitmap small = made;
+            frostBusy++;
+            try {
+                PixelCopy.request((SurfaceView) sv, src, small, new PixelCopy.OnPixelCopyFinishedListener() {
+                    @Override public void onPixelCopyFinished(int result) {
+                        frostBusy = Math.max(0, frostBusy - 1);
+                        if (result != PixelCopy.SUCCESS || !frostRects.contains(f)) return;
+                        soften(small);
+                        v.setImageBitmap(small);
+                        if (v.getVisibility() != View.VISIBLE) {
+                            v.setAlpha(0f); v.setVisibility(View.VISIBLE);
+                            v.animate().alpha(1f).setStartDelay(120).setDuration(260).start();
+                        }
+                    }
+                }, h);
+            } catch (Throwable t) { frostBusy = Math.max(0, frostBusy - 1); }
+        }
+    }
+
+    /** a small picture softened in place: two passes of a mean over its neighbours, along rows then columns */
+    private static void soften(Bitmap b) {
+        int w = b.getWidth(), ht = b.getHeight(), r = 2;
+        int[] px = new int[w * ht], out = new int[w * ht];
+        b.getPixels(px, 0, w, 0, 0, w, ht);
+        for (int pass = 0; pass < 2; pass++) {
+            for (int y = 0; y < ht; y++) for (int x = 0; x < w; x++) {
+                int sr = 0, sg = 0, sb = 0, n = 0;
+                for (int k = -r; k <= r; k++) {
+                    int xx = x + k; if (xx < 0 || xx >= w) continue;
+                    int c = px[y * w + xx]; sr += (c >> 16) & 255; sg += (c >> 8) & 255; sb += c & 255; n++;
+                }
+                out[y * w + x] = 0xFF000000 | ((sr / n) << 16) | ((sg / n) << 8) | (sb / n);
+            }
+            for (int y = 0; y < ht; y++) for (int x = 0; x < w; x++) {
+                int sr = 0, sg = 0, sb = 0, n = 0;
+                for (int k = -r; k <= r; k++) {
+                    int yy = y + k; if (yy < 0 || yy >= ht) continue;
+                    int c = out[yy * w + x]; sr += (c >> 16) & 255; sg += (c >> 8) & 255; sb += c & 255; n++;
+                }
+                px[y * w + x] = 0xFF000000 | ((sr / n) << 16) | ((sg / n) << 8) | (sb / n);
+            }
+        }
+        b.setPixels(px, 0, w, 0, 0, w, ht);
+    }
+
+    // ---- a key in the app is someone using the TV. The screens are one page: no focus moves between views, so
+    // the screensaver's watch (IdleWatch, which sees focus and clicks through accessibility events) saw nothing
+    // and came up while the lists were being browsed. Now each key says so, at most once every two seconds.
+    private long lastActive;
+    private void active() {
+        long now = android.os.SystemClock.uptimeMillis();
+        if (now - lastActive < 2000) return;
+        lastActive = now;
+        try { sendBroadcast(new Intent("sa.urtv.screensaver.ACTIVE").setPackage("sa.urtv.screensaver")); } catch (Exception ignored) { }
+        try {
+            AccessibilityManager am = (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
+            if (am == null || !am.isEnabled()) return;
+            AccessibilityEvent ev = AccessibilityEvent.obtain(AccessibilityEvent.TYPE_VIEW_SELECTED);
+            ev.setPackageName(getPackageName());
+            ev.setClassName(MainActivity.class.getName());
+            ev.setEnabled(true);
+            am.sendAccessibilityEvent(ev);
+        } catch (Exception ignored) { }
     }
 
     /** what the page can ask (from its own thread: the players are touched on the main one) */
@@ -261,6 +412,9 @@ public class MainActivity extends Activity {
             });
         }
 
+        /** the panels now over the video ("x,y,w,h,corner;…" in parts of the screen; "" for none): glass under them */
+        @JavascriptInterface public void frost(final String spec) { h.post(() -> setFrost(spec)); }
+
         @JavascriptInterface public void focus(final int tile) { h.post(() -> { focused = tile; volumes(); }); }
         @JavascriptInterface public void stop() { h.post(MainActivity.this::stopAll); }
         @JavascriptInterface public void pause() { h.post(() -> { if (!players.isEmpty()) players.get(0).pause(); }); }
@@ -352,6 +506,7 @@ public class MainActivity extends Activity {
     @Override
     public boolean dispatchKeyEvent(KeyEvent e) {
         int k = e.getKeyCode();
+        if (e.getAction() == KeyEvent.ACTION_DOWN) active();
         String name = null;
         switch (k) {
             case KeyEvent.KEYCODE_CHANNEL_UP: name = "ChannelUp"; break;
@@ -417,6 +572,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         for (ExoPlayer p : players) p.release();
         players.clear();
+        h.removeCallbacksAndMessages(null);
         if (web != null) { web.destroy(); web = null; }
         net.shutdownNow();
         super.onDestroy();
