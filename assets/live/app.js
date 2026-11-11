@@ -10,7 +10,13 @@ const hash = s => { let h = 0; for(const c of String(s)) h = (h * 31 + c.charCod
 const $ = id => document.getElementById(id);
 const store = {
   get(k, d){ try{ const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
-  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
+  set(k, v){
+    const t = JSON.stringify(v);
+    try{ localStorage.setItem(k, t); }
+    catch(e){   // the storage is full: the kept details of films go (they are asked again), then once more
+      try{ Object.keys(localStorage).filter(x => x.startsWith('det:')).forEach(x => localStorage.removeItem(x)); localStorage.setItem(k, t); }catch(e2){}
+    }
+  },
 };
 let CFG = {};
 try{ CFG = JSON.parse(Live ? Live.config() : '{}'); }catch(e){}
@@ -76,7 +82,6 @@ const xlist = (q, fields) => { const k = kept(xapi(q)); return k ? Promise.resol
 const xcats = q => { const k = kept(xapi(q)); return k ? Promise.resolve(k) : rawGet(xapi(q)).then(t => { try{ return JSON.parse(t); }catch(e){ return []; } }); };
 const xget = q => rawGet(`${XT.base}/player_api.php?username=${enc(XT.u)}&password=${enc(XT.p)}${q}`).then(t => { try{ return JSON.parse(t); }catch(e){ return null; } });
 const xurl = (kind, id, ext) => `${XT.base}/${kind}/${enc(XT.u)}/${enc(XT.p)}/${id}.${ext || 'ts'}`;
-const unix = t => { const n = +t; return n ? new Date(n * 1000).toISOString().replace('T', ' ').slice(0, 19) : String(t || ''); };
 const b64 = t => { try{ return decodeURIComponent(escape(atob(t))); }catch(e){ return t || ''; } };
 let XACCOUNT = null;
 async function xLogin(force){
@@ -92,29 +97,44 @@ async function xLogin(force){
 }
 async function xLoadLive(){
   const cats = await xcats('&action=get_live_categories') || [], st = await xlist('&action=get_live_streams', 'num,name,stream_id,stream_icon,category_id') || [];
-  ALL = st.map((x, i) => ({ id: String(x.stream_id), n: x.name, num: +x.num || i + 1, cmd: xurl('live', x.stream_id, 'ts'), logo: x.stream_icon || '', g: String(x.category_id) }))
-    .sort((a, b) => a.num - b.num);
-  CATS = cats.map(c => ({ id: String(c.category_id), name: c.category_name, ch: ALL.filter(x => x.g === String(c.category_id)) })).filter(c => c.ch.length);
-  ALL.forEach(c => { c.ci = CATS.findIndex(x => x.id === c.g); });
+  setLive(st.map((x, i) => ({ id: String(x.stream_id), n: x.name || '', num: +x.num || i + 1, cmd: xurl('live', x.stream_id, 'ts'), logo: x.stream_icon || '', g: String(x.category_id) }))
+    .sort((a, b) => a.num - b.num), cats.map(c => ({ id: String(c.category_id), name: c.category_name })));
+}
+/** the channels and their sections, grouped in one pass (a list may hold tens of thousands) */
+function setLive(ch, cats){
+  ALL = ch;
+  const by = new Map();
+  for(const c of ALL){ let l = by.get(c.g); if(!l) by.set(c.g, l = []); l.push(c); }
+  CATS = cats.map(c => ({ id: c.id, name: c.name, ch: by.get(c.id) || [] })).filter(c => c.ch.length);
+  const at = new Map(CATS.map((c, i) => [c.id, i]));
+  ALL.forEach((c, i) => { c.i = i; c.ci = at.has(c.g) ? at.get(c.g) : -1; });
+}
+/** items by their section, in the order given */
+function groupBy(items){
+  const by = new Map();
+  for(const it of items){ let l = by.get(it.cat); if(!l) by.set(it.cat, l = []); l.push(it); }
+  return by;
 }
 let XVOD = [], XSER = [];
 function xItem(x, kind){
   const r = parseFloat(x.rating); 
   return { kind, id: String(kind === 'series' ? x.series_id : x.stream_id), name: x.name || '', img: x.stream_icon || x.cover || '',
     r: r > 0 && r <= 10 ? r : null, year: String(x.year || x.releaseDate || x.release_date || '').slice(0, 4),
-    desc: x.plot || '', time: 0, added: unix(kind === 'series' ? x.last_modified : x.added), genres: x.genre || '',
+    desc: x.plot || '', time: 0, added: +(kind === 'series' ? x.last_modified : x.added) || 0, genres: x.genre || '',
     cmd: kind === 'series' ? '' : xurl('movie', x.stream_id, x.container_extension || 'mp4'), cat: String(x.category_id) };
 }
 async function xLoadVod(){
   const [vc, sc, v, se] = await Promise.all([xcats('&action=get_vod_categories'), xcats('&action=get_series_categories'),
     xlist('&action=get_vod_streams', 'stream_id,name,stream_icon,rating,year,added,category_id,container_extension'),
     xlist('&action=get_series', 'series_id,name,cover,rating,year,releaseDate,last_modified,category_id')]);
-  XVOD = (v || []).map(x => xItem(x, 'vod')); XSER = (se || []).map(x => xItem(x, 'series'));
+  // sorted once, newest first (the dates are numbers); the sections keep that order
+  const byNew = (a, b) => b.added - a.added;
+  XVOD = (v || []).map(x => xItem(x, 'vod')).sort(byNew); XSER = (se || []).map(x => xItem(x, 'series')).sort(byNew);
   const fill = (kind, cats, items) => {
-    VOD_CATS[kind] = (cats || []).map(c => ({ id: String(c.category_id), name: c.category_name })).filter(c => items.some(i => i.cat === c.id));
-    const byNew = (a, b) => String(b.added).localeCompare(String(a.added));
-    PAGES[kind + ':*'] = { items: items.slice().sort(byNew), page: 1, total: items.length, busy: false };
-    for(const c of VOD_CATS[kind]){ const it = items.filter(i => i.cat === c.id).sort(byNew); PAGES[kind + ':' + c.id] = { items: it, page: 1, total: it.length, busy: false }; }
+    const by = groupBy(items);
+    VOD_CATS[kind] = (cats || []).map(c => ({ id: String(c.category_id), name: c.category_name })).filter(c => by.has(c.id));
+    PAGES[kind + ':*'] = { items, page: 1, total: items.length, busy: false };
+    for(const c of VOD_CATS[kind]){ const it = by.get(c.id); PAGES[kind + ':' + c.id] = { items: it, page: 1, total: it.length, busy: false }; }
   };
   fill('أفلام', vc, XVOD); fill('مسلسلات', sc, XSER);
 }
@@ -169,15 +189,14 @@ function parseM3u(text){
       meta = null;
     }
   }
-  const groups = list => { const g = []; for(const x of list) if(!g.includes(x.group)) g.push(x.group); return g; };
-  ALL = ch.map((x, i) => ({ id: 'm' + i, n: x.name, num: i + 1, cmd: x.url, logo: x.logo, g: x.group }));
-  CATS = groups(ALL.map(c => ({ group: c.g }))).map(g => ({ id: g, name: g, ch: ALL.filter(c => c.g === g) }));
-  ALL.forEach(c => { c.ci = CATS.findIndex(x => x.id === c.g); });
+  const groups = list => Array.from(new Set(list.map(x => x.group)));
+  setLive(ch.map((x, i) => ({ id: 'm' + i, n: x.name, num: i + 1, cmd: x.url, logo: x.logo, g: x.group })), groups(ch).map(g => ({ id: g, name: g })));
   const fill = (kind, list, k) => {
     const items = list.map((x, i) => ({ kind: 'vod', id: k + i, name: x.name, img: x.logo, r: null, year: '', desc: '', time: 0, added: '', genres: '', cmd: x.url, cat: x.group }));
+    const by = groupBy(items);
     VOD_CATS[kind] = groups(list).map(g => ({ id: g, name: g }));
     PAGES[kind + ':*'] = { items, page: 1, total: items.length };
-    for(const c of VOD_CATS[kind]){ const it = items.filter(i => i.cat === c.id); PAGES[kind + ':' + c.id] = { items: it, page: 1, total: it.length }; }
+    for(const c of VOD_CATS[kind]){ const it = by.get(c.id) || []; PAGES[kind + ':' + c.id] = { items: it, page: 1, total: it.length }; }
   };
   fill('أفلام', vod, 'mv'); fill('مسلسلات', ser, 'ms');
   if(!ALL.length && !vod.length && !ser.length) throw new Error('القائمة فارغة أو الرابط لا يعطي قائمة قنوات');
@@ -198,6 +217,8 @@ const VOD_CATS = { 'أفلام': [], 'مسلسلات': [] };
 const VTYPE = { 'أفلام': 'vod', 'مسلسلات': 'series' };
 const PAGES = {};                            // 'vod:catId' -> { items, page, total, busy }
 let RECENT = [], HI_SERIES = [], HI_MOVIES = [];
+/** the first n of a list that pass (the list is not walked to its end) */
+function firstN(list, ok, n){ const out = []; for(const x of list){ if(ok(x)){ out.push(x); if(out.length >= n) break; } } return out; }
 const listOf = j => !j ? [] : Array.isArray(j) ? j : Array.isArray(j.data) ? j.data : [];
 const rating = x => { const r = parseFloat(x.rating_imdb || x.rating_kinopoisk || x.rating || ''); return r > 0 && r <= 10 ? r : null; };
 function vItem(x, kind){
@@ -217,11 +238,10 @@ async function loadLive(){
       }
     }
   }
-  ALL = ch.map(x => ({ id: String(x.id), n: x.name, num: +x.number || 0, cmd: x.cmd, logo: abs(x.logo), g: String(x.tv_genre_id) }))
+  const list = ch.map(x => ({ id: String(x.id), n: x.name || '', num: +x.number || 0, cmd: x.cmd, logo: abs(x.logo), g: String(x.tv_genre_id) }))
     .sort((a, b) => a.num - b.num);
-  ALL.forEach((c, i) => { if(!c.num) c.num = i + 1; });
-  CATS = g.map(x => ({ id: String(x.id), name: x.title, ch: ALL.filter(c => c.g === String(x.id)) })).filter(c => c.ch.length);
-  ALL.forEach(c => { c.ci = CATS.findIndex(x => x.id === c.g); });
+  list.forEach((c, i) => { if(!c.num) c.num = i + 1; });
+  setLive(list, g.map(x => ({ id: String(x.id), name: x.title })));
 }
 async function loadVodCats(){
   for(const kind of ['أفلام', 'مسلسلات']){
@@ -246,15 +266,15 @@ async function page(kind, catId){
 async function loadHome(){
   if(M3U){ RECENT = []; HI_SERIES = []; HI_MOVIES = []; return; }   // a plain list has no dates or ratings
   if(XT){
-    const byNew = (a, b) => String(b.added).localeCompare(String(a.added));
-    RECENT = XVOD.slice().sort(byNew).slice(0, 15).concat(XSER.slice().sort(byNew).slice(0, 15)).sort(byNew).slice(0, 10);
-    HI_SERIES = XSER.slice().sort(byNew).filter(x => x.r >= 8).slice(0, 20);
-    HI_MOVIES = XVOD.slice().sort(byNew).filter(x => x.r >= 8).slice(0, 20);
+    // both lists are already newest first: only their heads are looked at
+    RECENT = XVOD.slice(0, 15).concat(XSER.slice(0, 15)).sort((a, b) => b.added - a.added).slice(0, 10);
+    HI_SERIES = firstN(XSER, x => x.r >= 8, 20);
+    HI_MOVIES = firstN(XVOD, x => x.r >= 8, 20);
     return;
   }
   const mv = await page('أفلام', '*'), se = await page('مسلسلات', '*');
   await page('أفلام', '*'); await page('مسلسلات', '*');   // two pages each: enough highly rated ones
-  const byAdded = (a, b) => String(b.added).localeCompare(String(a.added));
+  const byAdded = (a, b) => a.added < b.added ? 1 : a.added > b.added ? -1 : 0;
   RECENT = mv.items.slice(0, 15).concat(se.items.slice(0, 15)).sort(byAdded).slice(0, 10);
   HI_SERIES = se.items.filter(x => x.r >= 8).slice(0, 20);
   HI_MOVIES = mv.items.filter(x => x.r >= 8).slice(0, 20);
@@ -272,15 +292,24 @@ async function loadAccount(){
 }
 
 // ---- kept on this TV: where films stopped, favourites, the last channel
-const RES = () => store.get('resume', {});
-function keepResume(key, v){ const r = RES(); if(v) r[key] = v; else delete r[key]; store.set('resume', r); }
-const FAVS = () => store.get('favs', []);
-const isFav = (kind, id) => FAVS().some(f => f.kind === kind && f.id === id);
+let RESM = null, FAVL = null, FAVK = null;
+const RES = () => RESM || (RESM = store.get('resume', {}));
+function keepResume(key, v){ const r = RES(); if(v) r[key] = v; else delete r[key]; store.set('resume', r); HOME = null; }
+const FAVS = () => FAVL || (FAVL = store.get('favs', []));
+const favKeys = () => FAVK || (FAVK = new Set(FAVS().map(f => f.kind + ':' + f.id)));
+const isFav = (kind, id) => favKeys().has(kind + ':' + id);
 function toggleFav(it){
-  let f = FAVS(); const at = f.findIndex(x => x.kind === it.kind && x.id === it.id);
+  if(!it || !it.kind) return;
+  const f = FAVS(), at = f.findIndex(x => x.kind === it.kind && x.id === it.id);
   if(at >= 0) f.splice(at, 1); else f.unshift({ kind: it.kind, id: it.id, name: it.name, img: it.img || it.logo || '', cmd: it.cmd || '', r: it.r || null, year: it.year || '' });
-  store.set('favs', f);
+  store.set('favs', f); FAVK = null; HOME = null;
   toast(at >= 0 ? 'أُزيل من المفضلة' : 'أُضيف إلى المفضلة');
+}
+const favMark = it => isFav(it.kind, it.id) ? '<b class="fv">★</b> ' : '';
+/** the favourite films (or series) of a kind: the first section of its screen */
+function favItems(kind){
+  return FAVS().filter(f => f.kind === VTYPE[kind] ? !M3U || String(f.id).startsWith(kind === 'أفلام' ? 'mv' : 'ms')
+    : M3U && f.kind === 'vod' && kind === 'مسلسلات' && String(f.id).startsWith('ms'));
 }
 const mmss = ms => { const s = Math.max(0, Math.round(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
   return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
@@ -338,6 +367,8 @@ function pumpArt(){
 /** the cards of a grid inside its window (after its scroll), top first */
 function artVisible(g, scroll){
   const h = g.clientHeight;
+  for(const j of IMQ) delete j.el.dataset.st;   // what waited is asked again only if still in sight
+  IMQ = [];
   g.querySelectorAll('.art[data-img]').forEach(a => {
     const c = a.parentNode, top = c.offsetTop - scroll;
     if(top + c.offsetHeight > 0 && top < h) wantArt(a);
@@ -351,62 +382,85 @@ function artVisibleHome(){
   });
 }
 let HOMEV = 0, HOME_CAS = true;
+let HOME = null, HOME_DRAWN = null;   // the rows as made, and the ones on the screen now
 const badge = it => it.r ? `<div class="badge">★ ${ar(it.r.toFixed(1)).replace('.', '٫')}</div>` : '';
 function continueItems(){
   return Object.entries(RES()).map(([k, v]) => Object.assign({ key: k }, v))
-    .filter(v => v.next || (v.pos > 60000 && (!v.dur || v.pos < v.dur - 90000)))   // a finished episode: the next one, from its start.sort((a, b) => b.at - a.at).slice(0, 12);
+    .filter(v => v.next || (v.pos > 60000 && (!v.dur || v.pos < v.dur - 90000)))   // a finished episode: the next one, from its start
+    .sort((a, b) => b.at - a.at).slice(0, 12);
 }
 function rowsData(){
   const R = [];
   const cont = continueItems();
   if(cont.length) R.push({ h: 'تابع المشاهدة', kind: 'wide', items: cont.map((v, i) => ({
-    sk: skelCls(v), html: `${artTag(v, i + 3)}<div class="cap">${esc(v.name)}${v.ep ? ` — الحلقة ${ar(v.ep)}` : ''}<small>${v.next ? 'الحلقة التالية · من البداية' : 'من ' + ar(mmss(v.pos))}</small>`
+    sk: skelCls(v), html: `${artTag(v, i + 3)}<div class="cap">${favMark(v)}${esc(v.name)}${v.ep ? ` — الحلقة ${ar(v.ep)}` : ''}<small>${v.next ? 'الحلقة التالية · من البداية' : 'من ' + ar(mmss(v.pos))}</small>`
       + `<div class="bar"><i style="width:${v.next ? 0 : v.dur ? Math.round(v.pos / v.dur * 100) : 30}%"></i></div></div>`,
-    go: () => resumeItem(v) })) });
+    it: v, go: () => resumeItem(v) })) });
   const poster = (list, seed) => list.map((it, i) => ({
     sk: skelCls(it), html: `${artTag(it, i + seed)}${badge(it)}`
       + (seed === 7 ? `<div class="kind">${it.kind === 'series' ? 'مسلسل' : 'فيلم'}</div>` : '')
-      + `<div class="cap">${esc(it.name)}<small>${seed === 7 ? addedText(it.added) : ar(it.year)}</small></div>`,
-    go: () => openMovie(it) }));
+      + `<div class="cap">${favMark(it)}${esc(it.name)}<small>${seed === 7 ? addedText(it.added) : ar(it.year)}</small></div>`,
+    it, go: () => openMovie(it) }));
   if(RECENT.length) R.push({ h: 'أُضيف حديثاً', kind: 'poster', items: poster(RECENT, 7) });
   if(HI_SERIES.length) R.push({ h: 'مسلسلات جديدة بتقييمات عالية', kind: 'poster', items: poster(HI_SERIES, 1) });
   if(HI_MOVIES.length) R.push({ h: 'أفلام جديدة بتقييمات عالية', kind: 'poster', items: poster(HI_MOVIES, 5) });
   return R;
 }
+const homeRows = () => HOME || (HOME = rowsData());
 function addedText(a){
-  const d = new Date(String(a).replace(' ', 'T')); if(isNaN(d)) return '';
+  if(!a) return '';
+  const d = typeof a === 'number' ? new Date(a * 1000) : new Date(String(a).replace(' ', 'T')); if(isNaN(d)) return '';
   const days = Math.floor((Date.now() - d) / 864e5);
   return days <= 0 ? 'اليوم' : days === 1 ? 'أمس' : days === 2 ? 'منذ يومين' : days <= 10 ? 'منذ ' + ar(days) + ' أيام' : 'منذ ' + ar(days) + ' يوماً';
 }
 let VSHIFT = 0;
-function setV(v){ VSHIFT = Math.max(0, v); const r = document.querySelector('#rows .rin'); if(r) r.style.transform = `translateY(${-VSHIFT}px)`; }
-const SHIFT = {};
-function drawHome(){
+function setV(v){ v = Math.max(0, v); if(v === VSHIFT) return; VSHIFT = v; const r = document.querySelector('#rows .rin'); if(r) r.style.transform = `translateY(${-VSHIFT}px)`; }
+const SHIFT = {};   // each row's slide, by its title
+let TABSIG = '';
+function drawTabsOnly(){
+  const sig = tab + ':' + Math.min(row, 0);
+  if(sig === TABSIG) return;
+  TABSIG = sig;
   $('prof').classList.toggle('focus', row === -2);
   $('tabs').innerHTML = TABS.map((t, i) => `<div class="tab glass${i === tab ? ' sel' : ''}${row === -1 && i === tab ? ' focus' : ''}">${t}</div>`).join('');
-  const R = rowsData();
-  if(!R.length){ $('rows').innerHTML = '<div class="empty">لا توجد عناوين بعد.</div>'; if(row >= 0) row = -1; return drawTabsOnly(); }
-  if(row >= R.length) row = R.length - 1;
-  if(row >= 0) col = Math.min(col, R[row].items.length - 1);
-  $('rows').innerHTML = `<div class="rin" style="transform:translateY(${-VSHIFT}px)">` + R.map((r, ri) => `<div class="row"><h3>${r.h}</h3><div class="cards" style="transform:translateX(${SHIFT[ri] || 0}px)">${
-    r.items.map((it, ci) => `<div class="card ${r.kind} glass${it.sk || ''}${HOME_CAS && it.sk ? ' cas' : ''}${ri === row && ci === col ? ' focus' : ''}" style="--d:${Math.min(ri * 3 + ci, 14) * 45}ms">${it.html}</div>`).join('')}</div></div>`).join('') + '</div>';
-  HOME_CAS = false;   // the cascade once; later keys only move
-  // the pictures of the cards in sight: now, and again when the rows have slid
-  artVisibleHome(); clearTimeout(HOMEV); HOMEV = setTimeout(() => { if(screen === 'home') artVisibleHome(); }, 420);
-  if(row < 0){ setV(0); return; }
-  const rowsEl = $('rows'), cards = rowsEl.querySelectorAll('.cards')[row], card = cards && cards.children[col];
-  if(!card) return;
-  { const rb = rowsEl.getBoundingClientRect(), fr = cards.parentElement.getBoundingClientRect();
-    if(fr.bottom > rb.bottom - rb.height * .03) setV(VSHIFT + fr.bottom - rb.bottom + rb.height * .06);
-    else if(fr.top < rb.top) setV(VSHIFT - (rb.top - fr.top)); }
-  const box = rowsEl.getBoundingClientRect(), c = card.getBoundingClientRect(), pad = box.width * .04;
-  let shift = SHIFT[row] || 0;
-  if(c.left < box.left + pad) shift += (box.left + pad) - c.left;
-  else if(c.right > box.right - pad) shift -= c.right - (box.right - pad);
-  if(shift < 0) shift = 0;
-  if(shift !== (SHIFT[row] || 0)){ SHIFT[row] = shift; cards.style.transform = `translateX(${shift}px)`; }
 }
-function drawTabsOnly(){ $('prof').classList.toggle('focus', row === -2); $('tabs').innerHTML = TABS.map((t, i) => `<div class="tab glass${i === tab ? ' sel' : ''}${row === -1 && i === tab ? ' focus' : ''}">${t}</div>`).join(''); }
+/** the rows are built once; a key only moves the gold edge and slides the rows (places from the layout, not
+ *  from the screen: a held key no longer measures cards in the middle of their slide) */
+function drawHome(){
+  const R = homeRows(), rowsEl = $('rows');
+  if(!R.length){
+    if(HOME_DRAWN !== R){ HOME_DRAWN = R; VSHIFT = 0; rowsEl.innerHTML = '<div class="empty">لا توجد عناوين بعد.</div>'; }
+    if(row >= 0) row = -1;
+    return drawTabsOnly();
+  }
+  if(row >= R.length) row = R.length - 1;
+  if(row >= 0) col = Math.max(0, Math.min(col, R[row].items.length - 1));
+  drawTabsOnly();
+  if(HOME_DRAWN !== R){
+    HOME_DRAWN = R;
+    rowsEl.innerHTML = `<div class="rin" style="transform:translateY(${-VSHIFT}px)">` + R.map((r, ri) => `<div class="row"><h3>${r.h}</h3><div class="cards" style="transform:translateX(${SHIFT[r.h] || 0}px)">${
+      r.items.map((it, ci) => `<div class="card ${r.kind}${it.sk || ''}${HOME_CAS && it.sk ? ' cas' : ''}" style="--d:${Math.min(ri * 3 + ci, 14) * 45}ms">${it.html}</div>`).join('')}</div></div>`).join('') + '</div>';
+    HOME_CAS = false;   // the cascade once; later keys only move
+  }
+  const rin = rowsEl.firstChild, old = rin.querySelector('.card.focus');
+  const rowEl = row >= 0 ? rin.children[row] : null, cards = rowEl && rowEl.lastChild, card = cards && cards.children[col];
+  if(old && old !== card) old.classList.remove('focus');
+  if(card){
+    card.classList.add('focus');
+    const H = rowsEl.clientHeight, top = rowEl.offsetTop, bot = top + rowEl.offsetHeight;
+    if(row === 0) setV(0);
+    else if(bot - VSHIFT > H * .97) setV(bot - H * .94);
+    else if(top < VSHIFT) setV(top);
+    const W = rowsEl.clientWidth, pad = W * .04, k = R[row].h, left = card.offsetLeft;
+    let shift = SHIFT[k] || 0;
+    if(left + shift < pad) shift = pad - left;
+    else if(left + card.offsetWidth + shift > W - pad) shift = W - pad - left - card.offsetWidth;
+    if(shift < 0) shift = 0;
+    if(shift !== (SHIFT[k] || 0)){ SHIFT[k] = shift; cards.style.transform = `translateX(${shift}px)`; }
+  } else setV(0);
+  // the pictures of the cards in sight, once the rows have slid (a held key asks for none on its way)
+  clearTimeout(HOMEV); HOMEV = setTimeout(() => { if(screen === 'home') artVisibleHome(); }, card && old ? 380 : 30);
+}
 
 // ---- live
 function lastChannel(){ const id = store.get('lastChannel', null); const i = ALL.findIndex(c => c.id === id); return i >= 0 ? i : 0; }
@@ -433,122 +487,201 @@ function drawLive(flash){
   $('inum').textContent = ar(c.num);
   $('inm').textContent = c.n;
   const info = $('info');
-  if(flash){ info.classList.remove('hide'); clearTimeout(infoT); infoT = setTimeout(() => info.classList.add('hide'), 3500); }
+  if(flash){ info.classList.remove('hide'); clearTimeout(infoT); infoT = setTimeout(() => { info.classList.add('hide'); frostSoon(); }, 3500); }
   if(listOpen){ clearTimeout(infoT); info.classList.add('hide'); }
-  const list = $('list');
-  list.classList.toggle('hide', !listOpen);
-  if(listOpen){
-    const cat = CATS[lcat] || { name: '', ch: [] }, chans = cat.ch;
-    $('lcat').textContent = cat.name;
-    list.classList.toggle('wide', catsOpen);
-    $('lcats').innerHTML = CATS.map((c2, i) =>
-      `<div class="c${i === csel && catsOpen ? ' sel' : ''}${i === lcat ? ' cur' : ''}"><span>${esc(c2.name)}</span><small>${ar(c2.ch.length)}</small></div>`).join('');
-    // a window of the list around the chosen one (sections may hold hundreds)
-    const from = Math.max(0, Math.min(lsel - 4, chans.length - 10));
-    $('items').innerHTML = chans.slice(from, from + 10).map((x, k) => { const i = from + k;
-      return `<div class="it${i === lsel && !catsOpen ? ' sel' : ''}${ALL.indexOf(x) === cur ? ' cur' : ''}"><span class="n">${ar(x.num)}</span>`
-        + (x.logo ? `<img class="chanlogo" src="${esc(x.logo)}" onerror="this.remove()">` : '')
-        + `<span>${esc(x.n)}${isFav('live', x.id) ? ' <small style="display:inline;color:var(--gold-lt)">★</small>' : ''}</span></div>`; }).join('');
-    const cs = $('lcats'), sel = cs.querySelector('.sel, .cur');
-    if(sel) sel.scrollIntoView({ block: 'nearest' });
-  }
+  $('list').classList.toggle('hide', !listOpen);
+  if(listOpen) drawList();
+  frostSoon();
 }
+/** one class on one child of a box */
+function mark(box, cls, el){
+  const o = box.querySelector(':scope > .' + cls);
+  if(o && o !== el) o.classList.remove(cls);
+  if(el) el.classList.add(cls);
+}
+/** a row brought into its box's sight (the box alone scrolls, never the page) */
+function reveal(box, el){
+  if(!el) return;
+  const top = el.offsetTop, bot = top + el.offsetHeight, pad = el.offsetHeight * .5;
+  if(top - pad < box.scrollTop) box.scrollTop = Math.max(0, top - pad);
+  else if(bot + pad > box.scrollTop + box.clientHeight) box.scrollTop = bot + pad - box.clientHeight;
+}
+/** how many rows of a box fit in it (measured from its first row) */
+function fitRows(box, now){
+  const f = box.firstElementChild; if(!f || !f.offsetHeight || !box.clientHeight) return now;
+  const cs = getComputedStyle(box), gap = parseFloat(cs.rowGap) || 0;
+  const inner = box.clientHeight - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0);
+  return Math.max(3, Math.floor((inner + gap) / (f.offsetHeight + gap)));
+}
+let LROWS = 8, LWIN = '', LCATS_OF = null;
+/** the channels' list: the sections are built once, the channels only when their window moves; a key between
+ *  them moves two classes */
+function drawList(){
+  const cat = CATS[lcat] || { name: '', ch: [] }, chans = cat.ch;
+  $('lcat').textContent = cat.name;
+  $('list').classList.toggle('wide', catsOpen);
+  const cs = $('lcats');
+  if(LCATS_OF !== CATS){
+    LCATS_OF = CATS;
+    cs.innerHTML = CATS.map(c2 => `<div class="c"><span>${esc(c2.name)}</span><small>${ar(c2.ch.length)}</small></div>`).join('');
+  }
+  mark(cs, 'cur', cs.children[lcat]);
+  mark(cs, 'sel', catsOpen ? cs.children[csel] : null);
+  reveal(cs, cs.children[catsOpen ? csel : lcat]);   // the section under the key, wherever it is in the list
+  // a window of the list around the chosen one (sections may hold hundreds): as many as fit
+  const box = $('items');
+  const from = Math.max(0, Math.min(lsel - (LROWS >> 1), chans.length - LROWS));
+  const win = lcat + ':' + from + ':' + LROWS + ':' + chans.length;
+  if(win !== LWIN){
+    LWIN = win;
+    box.innerHTML = chans.slice(from, from + LROWS).map(x => `<div class="it"><span class="n">${ar(x.num)}</span>`
+      + (x.logo ? `<img class="chanlogo" src="${esc(x.logo)}" onerror="this.remove()">` : '')
+      + `<span class="nm">${esc(x.n)}${isFav('live', x.id) ? ' <small style="display:inline;color:var(--gold-lt)">★</small>' : ''}</span></div>`).join('');
+    const n = fitRows(box, LROWS);
+    if(n !== LROWS){ LROWS = n; return drawList(); }
+  }
+  const on = ALL[cur], ci = on ? chans.indexOf(on) : -1;
+  mark(box, 'cur', ci >= from ? box.children[ci - from] : null);
+  mark(box, 'sel', catsOpen ? null : box.children[lsel - from]);
+}
+// ---- the glass over the video: the picture under a panel, blurred by the app (the page cannot see the video)
+let frostT = 0, FROST = '';
+function syncFrost(){
+  if(!Live || !Live.frost) return;
+  const W = innerWidth, H = innerHeight, out = [];
+  const add = el => { if(el.classList.contains('hide') || !el.offsetWidth) return;
+    out.push([el.offsetLeft / W, el.offsetTop / H, el.offsetWidth / W, el.offsetHeight / H, (parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0) / W].map(n => n.toFixed(4)).join()); };
+  if(screen === 'live'){ add($('list')); add($('info')); }
+  else if(screen === 'player') add($('pbar'));
+  const s = out.join(';');
+  if(s !== FROST){ FROST = s; Live.frost(s); }
+}
+function frostSoon(){ syncFrost(); clearTimeout(frostT); frostT = setTimeout(syncFrost, 420); }   // again when the panel has its width
 
 // ---- movies / series
-const COLS = 5;
-function openBrowse(kind){ IMGEN++; screen = 'browse'; bKind = kind; bcat = 0; bfocus = 'rail'; bi = 0; bScroll = 0; show(); loadCat(); }
-function curItems(){ const c = VOD_CATS[bKind][bcat]; const P = c && PAGES[bKind + ':' + c.id]; return P ? P.items : []; }
+const COLS = 5, WROWS = 10;
+const FAVCAT = { id: '★', name: '★ المفضلة', fav: true };   // the first section: this kind's favourites
+const bCats = () => [FAVCAT].concat(VOD_CATS[bKind]);
+const pageOf = c => !c ? null : c.fav ? { items: favItems(bKind), total: favItems(bKind).length, busy: false } : PAGES[bKind + ':' + c.id];
+function openBrowse(kind){
+  IMGEN++; screen = 'browse'; bKind = kind; bfocus = 'rail'; bi = 0; bScroll = 0; GW = '';
+  bcat = favItems(kind).length || !VOD_CATS[kind].length ? 0 : 1;   // the favourites first when there are some
+  show(); loadCat();
+}
+function curItems(){ const P = pageOf(bCats()[bcat]); return P ? P.items : []; }
 async function loadCat(){
-  const c = VOD_CATS[bKind][bcat]; if(!c) return drawBrowse();
-  const key = bKind + ':' + c.id;
-  if(!PAGES[key]) { drawBrowse(); await page(bKind, c.id); }
+  const c = bCats()[bcat]; if(!c) return drawBrowse();
+  if(!c.fav && !PAGES[bKind + ':' + c.id]){ drawBrowse(); await page(bKind, c.id); }
   if(screen === 'browse') drawBrowse();
 }
+let RROWS = 10;
 function drawRail(){
   $('bkind').textContent = bKind;
   $('sbtn').classList.toggle('focus', bfocus === 'search');
-  const cats = VOD_CATS[bKind];
-  const from = Math.max(0, Math.min(bcat - 6, cats.length - 12));
-  $('rail').innerHTML = cats.slice(from, from + 12).map((c, k) => { const i = from + k;
-    const P = PAGES[bKind + ':' + c.id];
+  const cats = bCats(), box = $('rail');
+  // a window around the chosen section, as many rows as the rail holds: the last sections stay in sight
+  const from = Math.max(0, Math.min(bcat - (RROWS >> 1), cats.length - RROWS));
+  box.innerHTML = cats.slice(from, from + RROWS).map((c, k) => { const i = from + k;
+    const P = pageOf(c);
     return `<div class="c${i === bcat ? ' cur' : ''}${i === bcat && bfocus === 'rail' ? ' sel' : ''}"><span>${esc(c.name)}</span><small>${P && isFinite(P.total) ? ar(P.total) : ''}</small></div>`; }).join('');
+  const n = fitRows(box, RROWS);
+  if(n !== RROWS){ RROWS = n; drawRail(); }
 }
-let BWIN = '', CATT = 0;
+let GW = '', GW0 = 0, GROW = 0, GGAP = 0, CATT = 0, ARTT = 0;
 /** ▲▼ in the sections: the rail moves now, the section's posters only when the key rests (a held key runs on) */
 function moveCat(d){
-  const cats = VOD_CATS[bKind];
+  const cats = bCats();
   const n = Math.max(0, Math.min(cats.length - 1, bcat + d));
   if(n === bcat) return;
-  bcat = n; bScroll = 0; bi = 0; BWIN = ''; IMGEN++; IMQ = [];
+  bcat = n; bScroll = 0; bi = 0; GW = ''; IMGEN++; IMQ = [];
   drawRail();
-  const c = cats[n], P = c && PAGES[bKind + ':' + c.id];
+  const c = cats[n], P = pageOf(c);
   if(!P || !P.items.length || XT || M3U) drawSkeleton(c ? c.name : '');   // the skeleton at once, the section when the key rests
   clearTimeout(CATT); CATT = setTimeout(loadCat, 280);
-}   // the rows drawn now (section, first row, count): within them only the focus moves
+}
 function drawSkeleton(name){
-  BWIN = '';
+  GW = '';
   $('grid').innerHTML = `<div class="in"><h3>${esc(name)}</h3>${Array.from({ length: 10 }, (_, k) =>
-    `<div class="card poster glass skel cas" style="--d:${k * 55}ms"><div class="cap sk"><i></i><i></i></div></div>`).join('')}</div>`;
+    `<div class="card poster skel cas" style="--d:${k * 55}ms"><div class="cap sk"><i></i><i></i></div></div>`).join('')}</div>`;
+}
+/** ten rows of a section from row w0; the rows above are one empty block of their height, so every card keeps
+ *  its place whichever window is drawn (a section may hold thousands) */
+function paintGrid(items, name, w0, cas){
+  const g = $('grid'), start = w0 * COLS, end = Math.min(items.length, start + WROWS * COLS);
+  const empty = bCats()[bcat] && bCats()[bcat].fav ? 'لا مفضلة بعد: اضغط مطولاً على OK فوق أي عنوان لإضافته هنا' : 'لا يوجد شيء في هذا القسم';
+  let h = '';
+  for(let i = start; i < end; i++){ const it = items[i], sk = skelCls(it);
+    h += `<div class="card poster${sk}${sk && cas ? ' cas' : ''}${bfocus === 'grid' && i === bi ? ' focus' : ''}" style="--d:${Math.min(i - start, 12) * 45}ms">${artTag(it, i)}${badge(it)}`
+      + `<div class="cap">${favMark(it)}${esc(it.name)}<small>${ar(it.year || '')}</small></div></div>`; }
+  g.innerHTML = `<div class="in" style="transform:translateY(${-bScroll}px)"><h3>${esc(name)}</h3>${
+    w0 ? `<div style="grid-column:1/-1;height:${Math.max(0, w0 * GROW - GGAP)}px"></div>` : ''}${
+    h || `<div class="empty" style="grid-column:1/-1;color:var(--dim)">${empty}</div>`}</div>`;
+  GW0 = w0;
+  if(!GROW){ const c = g.querySelector('.card');
+    if(c && c.offsetHeight){ GGAP = parseFloat(getComputedStyle(c.parentNode).rowGap) || 0; GROW = c.offsetHeight + GGAP; } }
 }
 function drawBrowse(){
-  const cats = VOD_CATS[bKind];
-  if(bfocus === 'grid'){
-    const its = curItems(), first = Math.max(0, Math.floor(bi / COLS) - 3) * COLS;
-    if(BWIN === bKind + ':' + bcat + ':' + first + ':' + its.length){
-      const g = $('grid'), cards = g.querySelectorAll('.card');
-      cards.forEach((c, k) => c.classList.toggle('focus', first + k === bi));
-      $('sbtn').classList.remove('focus');
-      const rail = $('rail').querySelector('.sel'); if(rail) rail.classList.remove('sel');
-      scrollGrid();
-      return;
-    }
-  }
+  const cats = bCats(), c0 = cats[bcat], items = curItems(), g = $('grid');
+  const name = c0 ? c0.name : '', r = Math.floor(bi / COLS), sig = bKind + ':' + bcat + ':' + items.length;
   drawRail();
-  const items = curItems(), g = $('grid');
-  const name = cats[bcat] ? cats[bcat].name : '';
-  const c0 = cats[bcat], P0 = c0 && PAGES[bKind + ':' + c0.id];
-  if(!items.length && c0 && !XT && !M3U && (!P0 || P0.busy || P0.total === Infinity)) return drawSkeleton(name);
-  // only the rows near the focus are drawn: a section may hold thousands
-  const firstRow = Math.max(0, Math.floor(bi / COLS) - 3), start = firstRow * COLS, end = Math.min(items.length, start + COLS * 8);
-  g.innerHTML = `<div class="in" style="transform:translateY(${-bScroll}px)"><h3>${esc(name)}</h3>${start ? `<div style="grid-column:1/-1;height:0"></div>` : ''}${
-    items.slice(start, end).map((it, k) => { const i = start + k;
-      return `<div class="card poster glass${skelCls(it)}${skelCls(it) ? ' cas' : ''}${bfocus === 'grid' && i === bi ? ' focus' : ''}" style="--d:${Math.min(k, 12) * 45}ms">${artTag(it, i)}${badge(it)}`
-        + `<div class="cap">${esc(it.name)}<small>${ar(it.year)}</small></div></div>`; }).join('')
-    || '<div class="empty" style="grid-column:1/-1;color:var(--dim)">لا يوجد شيء في هذا القسم</div>'}</div>`;
-  BWIN = bKind + ':' + bcat + ':' + start + ':' + items.length;
-  if(bfocus !== 'grid') { bScroll = 0; g.firstChild.style.transform = 'none'; BWIN = ''; artVisible(g, 0); return; }
+  // inside the rows already drawn only the gold edge moves
+  if(bfocus === 'grid' && GW === sig && (GW0 === 0 || r - 2 >= GW0) && (r + 2 < GW0 + WROWS || (GW0 + WROWS) * COLS >= items.length)){
+    const old = g.querySelector('.card.focus'), card = g.querySelectorAll('.card')[bi - GW0 * COLS];
+    if(old && old !== card) old.classList.remove('focus');
+    if(card) card.classList.add('focus');
+    return scrollGrid();
+  }
+  const P0 = pageOf(c0);
+  if(!items.length && c0 && !c0.fav && !XT && !M3U && (!P0 || P0.busy || P0.total === Infinity)) return drawSkeleton(name);
+  const fresh = GW !== sig;
+  let w0 = bfocus === 'grid' ? Math.max(0, r - 4) : 0;
+  if(bfocus !== 'grid') bScroll = 0;
+  if(w0 && !GROW){ paintGrid(items, name, 0, false); if(!GROW) w0 = 0; }   // a row's height is measured first
+  paintGrid(items, name, w0, fresh);
+  GW = sig;
+  if(bfocus !== 'grid') return artVisible(g, 0);
   scrollGrid();
 }
 function scrollGrid(){
-  const g = $('grid'), cats = VOD_CATS[bKind], items = curItems();
+  const g = $('grid'), items = curItems();
   const card = g.querySelector('.card.focus'); if(!card) return;
-  const gb = g.getBoundingClientRect(), cb = card.getBoundingClientRect();
+  const H = g.clientHeight, top = card.offsetTop, bot = top + card.offsetHeight;
   let s2 = bScroll;
-  if(cb.bottom > gb.bottom - gb.height * .04) s2 += cb.bottom - gb.bottom + gb.height * .06;
-  else if(cb.top < gb.top + gb.height * .02) s2 -= gb.top - cb.top + gb.height * .04;
-  if(s2 !== bScroll){ bScroll = Math.max(0, s2); g.firstChild.style.transform = `translateY(${-bScroll}px)`; }
-  artVisible(g, bScroll);
+  if(bi < COLS) s2 = 0;
+  else if(bot - s2 > H * .96) s2 = bot - H * .94;
+  else if(top - s2 < H * .02) s2 = top - H * .04;
+  s2 = Math.max(0, s2);
+  if(s2 !== bScroll){ bScroll = s2; g.firstChild.style.transform = `translateY(${-bScroll}px)`; }
+  // the pictures when the key rests: a held key runs past rows without asking for theirs
+  clearTimeout(ARTT); ARTT = setTimeout(() => { if(screen === 'browse') artVisible(g, bScroll); }, 110);
   // near the end: the next page
-  const c = cats[bcat], P = c && PAGES[bKind + ':' + c.id];
-  if(P && !P.busy && P.items.length < P.total && bi >= items.length - COLS * 2)
+  const c = bCats()[bcat], P = c && !c.fav && PAGES[bKind + ':' + c.id];
+  if(P && !P.busy && P.items.length < P.total && bi >= items.length - COLS * 4)
     page(bKind, c.id).then(() => { if(screen === 'browse') drawBrowse(); });
 }
 
 // ---- a film or a series
 async function openMovie(it){
-  screen = 'movie'; MOV = { item: it, seasons: null, sIdx: 0, eIdx: 0, focus: 'btns' }; mbtn = 0; show();
+  // Back returns to the screen it was opened from (the section, the search, the favourites), at the same card
+  const back = screen === 'movie' || screen === 'player' ? (MOV && MOV.item && MOV.item.id === it.id && MOV.back) || 'home' : screen;
+  const M = MOV = { item: it, seasons: null, sIdx: 0, eIdx: 0, focus: 'btns', back };
+  screen = 'movie'; mbtn = 0; show();
   if(M3U) return;
   if(XT){
     const seasons = await xDetails(it).catch(() => []);
-    if(it.kind === 'series') MOV.seasons = seasons || [];
-    if(screen === 'movie' && MOV.item === it) drawMovie();
-    return;
-  }
-  if(it.kind === 'series'){
+    if(it.kind === 'series') M.seasons = seasons || [];
+  } else if(it.kind === 'series'){
     const j = await call(`type=series&action=get_ordered_list&movie_id=${enc(it.id)}&season_id=0&episode_id=0&p=1`).catch(() => null);
-    MOV.seasons = listOf(j).map(s => ({ id: s.id, name: s.name, cmd: s.cmd, eps: (s.series || []).map(Number) })).filter(s => s.eps.length);
-    if(screen === 'movie') drawMovie();
-  }
+    M.seasons = listOf(j).map(s => ({ id: s.id, name: s.name, cmd: s.cmd, eps: (s.series || []).map(Number) })).filter(s => s.eps.length);
+  } else return;
+  lastSeen(M);
+  if(screen === 'movie' && MOV === M) drawMovie();
+}
+/** a series opens on the season of the last episode watched, that episode chosen */
+function lastSeen(M){
+  const r = resumeOf(M.item); if(!r || !M.seasons) return;
+  const si = M.seasons.findIndex(x => String(x.id) === String(r.season)); if(si < 0) return;
+  M.sIdx = si; M.eIdx = Math.max(0, M.seasons[si].eps.indexOf(r.ep));
 }
 function resumeOf(it){ return RES()[it.kind + ':' + it.id]; }
 function drawMovie(){
@@ -563,20 +696,21 @@ function drawMovie(){
     : [rs ? `▶ تابع<small>من ${ar(mmss(rs.pos))}</small>` : '▶ تشغيل', '↺ من البداية', isFav(it.kind, it.id) ? '★ بالمفضلة' : '☆ للمفضلة'];
   if(!rs && it.kind !== 'series') B.splice(1, 1);
   MOV.btns = B.length;
-  $('mbtns').innerHTML = B.map((b, i) => `<div class="btn glass${i === 0 ? ' main' : ''}${MOV.focus === 'btns' && i === mbtn ? ' focus' : ''}">${b}</div>`).join('');
+  $('mbtns').innerHTML = B.map((b, i) => `<div class="btn${i === 0 ? ' main' : ''}${MOV.focus === 'btns' && i === mbtn ? ' focus' : ''}">${b}</div>`).join('');
   let eps = '';
   if(it.kind === 'series'){
     if(!MOV.seasons) eps = '<div class="lineh">جارٍ تحميل الحلقات…</div>';
     else if(!MOV.seasons.length) eps = '<div class="lineh">لا توجد حلقات</div>';
     else {
-      const S = MOV.seasons[MOV.sIdx];
+      const S = MOV.seasons[MOV.sIdx], r0 = resumeOf(it), seen = EPS(it.id);
       eps = '<div class="lineh">المواسم</div><div class="pills">' + MOV.seasons.map((s, i) =>
-        `<div class="pill glass${i === MOV.sIdx ? ' cur' : ''}${MOV.focus === 'seasons' && i === MOV.sIdx ? ' focus' : ''}">${esc(s.name) || 'الموسم ' + ar(i + 1)}</div>`).join('') + '</div>'
+        `<div class="pill${i === MOV.sIdx ? ' cur' : ''}${MOV.focus === 'seasons' && i === MOV.sIdx ? ' focus' : ''}">${esc(s.name) || 'الموسم ' + ar(i + 1)}</div>`).join('') + '</div>'
         + '<div class="lineh">الحلقات</div><div class="pills">' + S.eps.map((e, i) => {
-          const r = RES()[`series:${it.id}`], m = EPS(it.id)[S.id + ':' + e] || {};
-          const last = r && r.season === S.id && r.ep === e;
-          const pct = m.dur && m.pos && !m.done ? Math.round(m.pos / m.dur * 100) : 0;
-          return `<div class="pill glass${last ? ' cur' : ''}${m.done ? ' seen' : ''}${MOV.focus === 'eps' && i === MOV.eIdx ? ' focus' : ''}">${ar(e)}${pct ? `<i class="pg" style="width:${pct}%"></i>` : ''}</div>`; }).join('') + '</div>';
+          const m = seen[S.id + ':' + e] || {};
+          const last = r0 && String(r0.season) === String(S.id) && r0.ep === e;
+          // a part watched: a ring around the number, as far as it went
+          const pct = m.dur && m.pos && !m.done ? Math.max(4, Math.min(96, Math.round(m.pos / m.dur * 100))) : 0;
+          return `<div class="pill ep${pct ? ' part' : ''}${last ? ' cur' : ''}${m.done ? ' seen' : ''}${MOV.focus === 'eps' && i === MOV.eIdx ? ' focus' : ''}"${pct ? ` style="--p:${pct}"` : ''}><span>${ar(e)}</span></div>`; }).join('') + '</div>';
       const r = RES()[`series:${it.id}`];
       if(r && r.ep){
         const sn = (MOV.seasons.find(x => x.id === r.season) || {}).name || '';
@@ -585,6 +719,8 @@ function drawMovie(){
     }
   }
   $('meps').innerHTML = eps;
+  // a long season: the chosen pill is brought into sight
+  $('meps').querySelectorAll('.pills').forEach(b => reveal(b, b.querySelector('.focus') || b.querySelector('.cur')));
 }
 
 // ---- playing a film or an episode
@@ -604,14 +740,28 @@ function seek(dir, repeat, s){
   clearTimeout(SEEK.tm);
   SEEK.tm = setTimeout(() => { Live && Live.seekTo(SEEK.target); SEEK.target = null; }, repeat ? 450 : 250);
 }
-/** a series' buttons in the player: the previous and the next episode */
+const ICON = {
+  play: '<svg viewBox="0 0 24 24"><path d="M8 5.2v13.6a1 1 0 0 0 1.5.9l11-6.8a1 1 0 0 0 0-1.8l-11-6.8A1 1 0 0 0 8 5.2z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24"><rect x="6" y="4.5" width="4.4" height="15" rx="1.2"/><rect x="13.6" y="4.5" width="4.4" height="15" rx="1.2"/></svg>',
+  next: '<svg viewBox="0 0 24 24"><path d="M5 5.6v12.8a1 1 0 0 0 1.6.8l9-6.4a1 1 0 0 0 0-1.6l-9-6.4A1 1 0 0 0 5 5.6z"/><rect x="17" y="4.5" width="2.8" height="15" rx="1.1"/></svg>',
+  prev: '<svg viewBox="0 0 24 24"><path d="M19 5.6v12.8a1 1 0 0 1-1.6.8l-9-6.4a1 1 0 0 1 0-1.6l9-6.4a1 1 0 0 1 1.6.8z"/><rect x="4.2" y="4.5" width="2.8" height="15" rx="1.1"/></svg>',
+};
+let PPLAYING = null;
+/** under the timeline: stop/play, and for a series the previous and the next episode beside it (signs only) */
 function drawPbtns(){
-  const box = $('pbtns'); if(!box) return;
-  if(!PLAY || PLAY.it.kind !== 'series' || !PLAY.seasons){ box.innerHTML = ''; if(PLAY) PLAY.btns = []; $('phint').textContent = 'OK إيقاف/تشغيل · ◀▶ تقديم وترجيع (اضغط مطولاً للأسرع)'; return; }
-  const n = nextEpisode(PLAY.seasons, PLAY.season, PLAY.ep), p = prevEpisode(PLAY.seasons, PLAY.season, PLAY.ep);
-  PLAY.btns = [n && Object.assign({ label: 'الحلقة التالية ⏭' }, n), p && Object.assign({ label: '⏮ الحلقة السابقة' }, p)].filter(Boolean);
-  box.innerHTML = PLAY.btns.map((b, i) => `<div class="b${PFOCUS === 'btns' && i === PBTN ? ' focus' : ''}">${b.label}</div>`).join('');
-  $('phint').textContent = 'OK إيقاف/تشغيل · ◀▶ تقديم وترجيع · ▼ الحلقات';
+  const box = $('pbtns'); if(!box || !PLAY) return;
+  const series = PLAY.it.kind === 'series' && PLAY.seasons && PLAY.season;
+  const n = series && nextEpisode(PLAY.seasons, PLAY.season, PLAY.ep), p = series && prevEpisode(PLAY.seasons, PLAY.season, PLAY.ep);
+  PLAY.btns = [p && Object.assign({ act: 'prev' }, p), { act: 'pp' }, n && Object.assign({ act: 'next' }, n)].filter(Boolean);
+  box.innerHTML = PLAY.btns.map((b, i) => `<div class="b ${b.act}${PFOCUS === 'btns' && i === PBTN ? ' focus' : ''}">${ICON[b.act === 'pp' ? (PPLAYING === false ? 'play' : 'pause') : b.act]}</div>`).join('');
+  $('phint').textContent = series ? '' : 'OK إيقاف/تشغيل · ◀▶ تقديم وترجيع (اضغط مطولاً للأسرع)';
+}
+let PPAT = 0;
+function playPause(s){
+  if(!Live) return;
+  const playing = PPLAYING != null ? PPLAYING : !!s.playing;
+  playing ? Live.pause() : Live.resume();
+  PPLAYING = !playing; PPAT = Date.now(); drawPbtns();
 }
 async function playVod(it, opts = {}){
   try{
@@ -628,7 +778,7 @@ async function playVod(it, opts = {}){
     } else u = await link('vod', it.cmd);
     PLAY = { it, key, title, season: opts.season || null, ep: opts.ep || null, lastSave: 0,
       seasons: opts.seasons || (MOV && MOV.item && MOV.item.id === it.id ? MOV.seasons : null) };
-    PFOCUS = 'bar'; PBTN = 0; drawPbtns();
+    PFOCUS = 'bar'; PBTN = 0; PPLAYING = null; drawPbtns();
     screen = 'player'; show();
     $('ptitle').textContent = title;
     if(Live) Live.playFrom(0, u, opts.from || 0);
@@ -687,10 +837,17 @@ function pollPlayer(){
     $('pcur').textContent = mmss(s.pos || 0);
     $('pfill').style.width = s.dur ? (s.pos / s.dur * 100) + '%' : '0';
   }
-  if(s.buffering) showPbar();
+  const on = !!s.playing || !!s.buffering;   // the sign follows the player (a pause from the remote's own key too)
+  if(PPLAYING !== on && s.pos != null && Date.now() - PPAT > 1500){ PPLAYING = on; drawPbtns(); }
+  if(s.buffering || PPLAYING === false) showPbar();   // paused: the bar stays
   saveProgress(false);
 }
-function showPbar(){ const b = $('pbar'); b.classList.remove('hide'); clearTimeout(pbarT); pbarT = setTimeout(() => b.classList.add('hide'), 4000); }
+function showPbar(){
+  const b = $('pbar'), was = b.classList.contains('hide');
+  b.classList.remove('hide'); clearTimeout(pbarT);
+  pbarT = setTimeout(() => { b.classList.add('hide'); if(PFOCUS === 'btns'){ PFOCUS = 'bar'; drawPbtns(); } frostSoon(); }, 4000);
+  if(was) frostSoon();
+}
 function stopVod(){ saveProgress(true); clearInterval(pollT); Live && Live.stop(); PLAY = null; }
 window.onEnded = tile => {
   if(screen !== 'player' || !PLAY) return;
@@ -714,10 +871,10 @@ function drawFavs(){
   const f = FAVS(), body = $('favbody');
   if(!f.length){
     body.innerHTML = `<div class="notice glass"><div class="ic">☆</div><h2>لم تتم إضافة شيء إلى المفضلة حتى الآن</h2>`
-      + `<p>لإضافة فيلم أو مسلسل اختر «☆ للمفضلة» من صفحته، ولإضافة قناة اضغط مطولاً على OK فوقها في قائمة القنوات.</p></div>`;
+      + `<p>اضغط مطولاً على OK فوق أي فيلم أو مسلسل أو قناة لإضافته إلى المفضلة، والضغط المطول مرة أخرى يزيله.</p></div>`;
     return;
   }
-  body.innerHTML = `<div class="sres">${f.map((x, i) => `<div class="card poster glass${i === FSEL ? ' focus' : ''}"><div class="art" style="${cardArt(x, i)}"></div>`
+  body.innerHTML = `<div class="sres">${f.map((x, i) => `<div class="card poster${i === FSEL ? ' focus' : ''}"><div class="art" style="${cardArt(x, i)}"></div>`
     + `${x.kind === 'live' ? '<div class="kind">قناة</div>' : ''}<div class="cap">${esc(x.name)}</div></div>`).join('')}</div>`;
 }
 let FSEL = 0, SSEL = -1, SRES = [], searchT = 0, LAST_IDS = '';
@@ -726,14 +883,14 @@ function drawSearch(){
   if(q.length < 2){ SRES = []; $('sres').innerHTML = '<div class="none">اكتب حرفين أو أكثر، أو استخدم البحث الصوتي من جهاز التحكم</div>'; return; }
   clearTimeout(searchT);
   searchT = setTimeout(async () => {
-    const chans = ALL.filter(c => c.n.toLowerCase().includes(q.toLowerCase())).slice(0, 6).map(c => ({ kind: 'live', id: c.id, name: c.n, img: c.logo, ch: c }));
+    const chans = firstN(ALL, c => c.n.toLowerCase().includes(q.toLowerCase()), 6).map(c => ({ kind: 'live', id: c.id, name: c.n, img: c.logo, ch: c }));
     let found;
     if(M3U){
       const lq = q.toLowerCase(), all = (PAGES['أفلام:*'] || { items: [] }).items.concat((PAGES['مسلسلات:*'] || { items: [] }).items);
-      found = all.filter(x => x.name.toLowerCase().includes(lq)).slice(0, 24);
+      found = firstN(all, x => x.name.toLowerCase().includes(lq), 24);
     } else if(XT){
       const lq = q.toLowerCase();
-      found = XVOD.filter(x => x.name.toLowerCase().includes(lq)).slice(0, 12).concat(XSER.filter(x => x.name.toLowerCase().includes(lq)).slice(0, 12));
+      found = firstN(XVOD, x => x.name.toLowerCase().includes(lq), 12).concat(firstN(XSER, x => x.name.toLowerCase().includes(lq), 12));
     } else {
       const [v, s] = await Promise.all(['vod', 'series'].map(t => call(`type=${t}&action=get_ordered_list&search=${enc(q)}&category=*&genre=*&p=1&sortby=added`).catch(() => null)));
       found = listOf(v).map(x => vItem(x, 'vod')).concat(listOf(s).map(x => vItem(x, 'series')));
@@ -753,35 +910,41 @@ function moveFocus(box, i){
 }
 function drawSearchRes(q){
   $('sres').innerHTML = !SRES.length ? '<div class="none">لا توجد نتائج لـ «' + esc(q || $('q').value.trim()) + '»</div>'
-    : SRES.map((x, i) => `<div class="card poster glass${i === SSEL ? ' focus' : ''}"><div class="art" style="${cardArt(x, i + 3)}"></div>${badge(x)}`
+    : SRES.map((x, i) => `<div class="card poster${i === SSEL ? ' focus' : ''}"><div class="art" style="${cardArt(x, i + 3)}"></div>${badge(x)}`
       + `<div class="cap">${esc(x.name)}<small>${x.kind === 'live' ? 'قناة' : x.kind === 'series' ? 'مسلسل' : 'فيلم'}</small></div></div>`).join('');
 }
-function openResult(x){ if(x.kind === 'live') openLive(ALL.indexOf(x.ch || ALL.find(c => c.id === x.id))); else openMovie(x); }
+function openResult(x){ if(x.kind === 'live'){ const c = x.ch || ALL.find(c2 => c2.id === x.id); if(c) openLive(c.i); } else openMovie(x); }
 
 // ---- the screens' switch
-function show(){
+function show(keep){
   ['setup', 'home', 'live', 'movie', 'browse', 'favs', 'search', 'player'].forEach(s => $(s).classList.toggle('on', s === screen));
   $('tv').classList.toggle('video', screen === 'live' || screen === 'player');
   if(screen !== 'live' && screen !== 'player' && Live) Live.stop();
-  if(screen === 'home') drawHome();
-  if(screen === 'browse') drawBrowse();
-  if(screen === 'favs'){ FSEL = 0; drawFavs(); }
+  if(screen === 'home'){ HOME = null; drawHome(); }
+  if(screen === 'browse'){ if(keep) GW = ''; drawBrowse(); }
+  if(screen === 'favs'){ if(!keep) FSEL = 0; FSEL = Math.max(0, Math.min(FSEL, FAVS().length - 1)); drawFavs(); }
   if(screen === 'movie') drawMovie();
-  if(screen === 'search'){ const q = $('q'); q.value = ''; drawSearch(); setTimeout(() => q.focus(), 50); }
+  if(screen === 'search' && !keep){ const q = $('q'); q.value = ''; LAST_IDS = ''; drawSearch(); setTimeout(() => q.focus(), 50); }
+  if(screen === 'search' && keep && SSEL < 0) setTimeout(() => $('q').focus(), 50);
   if(screen === 'live') drawLive(false);
-  if(screen !== 'search' && screen !== 'setup') $('tv').focus();
+  if((screen !== 'search' || (keep && SSEL >= 0)) && screen !== 'setup') $('tv').focus();
+  frostSoon();
 }
 
 // ======================================================================== the remote
 function key(k, repeat){
   if(screen === 'home'){
-    const R = rowsData();
+    const R = homeRows();
     if(row === -2 && (k === 'ArrowLeft' || k === 'ArrowRight')) return drawHome();   // the profile stands alone
-    if(k === 'ArrowDown'){ if(row < R.length - 1){ row++; if(row >= 0) col = Math.min(col, R[row].items.length - 1); } }
-    else if(k === 'ArrowUp'){ if(row > -2){ row--; if(row >= 0) col = Math.min(col, R[row].items.length - 1); } }   // above the tabs: the profile
+    if(k === 'ArrowDown'){ if(row < R.length - 1){ row++; col = 0; } }   // another row: from its first card
+    else if(k === 'ArrowUp'){ if(row > -2){ row--; col = 0; } }   // above the tabs: the profile
     else if(k === 'ArrowLeft'){ if(row === -1) tab = Math.min(TABS.length - 1, tab + 1); else col = Math.min(R[row].items.length - 1, col + 1); }
     else if(k === 'ArrowRight'){ if(row === -1) tab = Math.max(0, tab - 1); else col = Math.max(0, col - 1); }
-    else if(k === 'Enter' && row >= 0) return R[row].items[col].go();
+    else if(k === 'Enter' && row >= 0){   // a long OK: to the favourites (or off them)
+      const x = R[row].items[col];
+      if(!repeat) return x.go();
+      toggleFav(x.it);
+    }
     else if(k === 'Enter' && row === -2) return openSetup();
     else if(k === 'Enter' && row === -1){
       if(repeat && TABS[tab] === 'الرئيسية'){ openSetup(); return; }   // a long OK on «الرئيسية»: the activation screen
@@ -801,22 +964,23 @@ function key(k, repeat){
       if(catsOpen){
         if(k === 'ArrowDown') csel = Math.min(CATS.length - 1, csel + 1);
         else if(k === 'ArrowUp') csel = Math.max(0, csel - 1);
-        else if(k === 'Enter' || k === 'ArrowLeft'){ lcat = csel; lsel = 0; catsOpen = false; }
+        else if(k === 'Enter' || k === 'ArrowLeft'){ if(lcat !== csel){ lcat = csel; lsel = 0; } catsOpen = false; }
         else if(k === 'Escape') catsOpen = false;
       }
       else if(k === 'ArrowDown') lsel = Math.min(chans.length - 1, lsel + 1);
       else if(k === 'ArrowUp') lsel = Math.max(0, lsel - 1);
       else if(k === 'ArrowRight'){ catsOpen = true; csel = lcat; }
-      else if(k === 'Enter' && repeat){ const c = chans[lsel]; if(c && !LONG.done){ LONG.done = true; toggleFav({ kind: 'live', id: c.id, name: c.n, img: c.logo }); } }
+      else if(k === 'Enter' && repeat){ const c = chans[lsel]; if(c && !LONG.done){ LONG.done = true; toggleFav({ kind: 'live', id: c.id, name: c.n, img: c.logo }); LWIN = ''; } }
       else if(k === 'Enter'){
-        cur = ALL.indexOf(chans[lsel]); listOpen = false;
+        if(!chans[lsel]) return;
+        cur = chans[lsel].i; listOpen = false;
         return zap();
       }
       else if(k === 'Escape'){ listOpen = false; }
       drawLive(false);
     }
   } else if(screen === 'browse'){
-    const cats = VOD_CATS[bKind], items = curItems();
+    const items = curItems();
     if(bfocus === 'search'){
       if(k === 'Enter'){ screen = 'search'; return show(); }
       if(k === 'ArrowDown') bfocus = 'rail';
@@ -829,8 +993,14 @@ function key(k, repeat){
     } else {
       if(k === 'ArrowLeft'){ if(bi % COLS < COLS - 1 && bi < items.length - 1) bi++; }
       else if(k === 'ArrowRight'){ if(bi % COLS === 0) bfocus = 'rail'; else bi--; }
-      else if(k === 'ArrowDown') bi = Math.min(items.length - 1, bi + COLS);
-      else if(k === 'ArrowUp'){ if(bi < COLS){ bfocus = 'search'; } else bi -= COLS; }
+      // another row: its first card (the one beside the sections)
+      else if(k === 'ArrowDown'){ const n = (Math.floor(bi / COLS) + 1) * COLS; if(n < items.length) bi = n; }
+      else if(k === 'ArrowUp'){ if(bi < COLS){ bfocus = 'search'; } else bi = (Math.floor(bi / COLS) - 1) * COLS; }
+      else if(k === 'Enter' && repeat && items[bi]){   // a long OK: to the favourites (or off them)
+        toggleFav(items[bi]); GW = '';
+        const left = curItems().length;
+        if(!left) bfocus = 'rail'; else bi = Math.min(bi, left - 1);
+      }
       else if(k === 'Enter' && items[bi]) return openMovie(items[bi]);
       else if(k === 'Escape') bfocus = 'rail';
     }
@@ -840,8 +1010,9 @@ function key(k, repeat){
     if(k === 'Escape'){ screen = 'home'; return show(); }
     if(k === 'ArrowLeft') FSEL = Math.min(f.length - 1, FSEL + 1);
     else if(k === 'ArrowRight') FSEL = Math.max(0, FSEL - 1);
-    else if(k === 'ArrowDown') FSEL = Math.min(f.length - 1, FSEL + 6);
-    else if(k === 'ArrowUp') FSEL = Math.max(0, FSEL - 6);
+    else if(k === 'ArrowDown'){ const n = (Math.floor(FSEL / 6) + 1) * 6; if(n < f.length) FSEL = n; }
+    else if(k === 'ArrowUp') FSEL = Math.max(0, (Math.floor(FSEL / 6) - 1) * 6);
+    else if(k === 'Enter' && repeat && f[FSEL]){ toggleFav(f[FSEL]); FSEL = Math.max(0, Math.min(FSEL, FAVS().length - 1)); return drawFavs(); }
     else if(k === 'Enter' && f[FSEL]){
       const x = f[FSEL];
       if(x.kind === 'live'){ const i = ALL.findIndex(c => c.id === x.id); if(i >= 0) return openLive(i); return toast('القناة لم تعد موجودة'); }
@@ -853,14 +1024,15 @@ function key(k, repeat){
     if(SSEL >= 0){
       if(k === 'ArrowLeft') SSEL = Math.min(SRES.length - 1, SSEL + 1);
       else if(k === 'ArrowRight') SSEL = Math.max(0, SSEL - 1);
-      else if(k === 'ArrowDown') SSEL = Math.min(SRES.length - 1, SSEL + 6);
-      else if(k === 'ArrowUp'){ if(SSEL < 6){ SSEL = -1; moveFocus($('sres'), -1); $('q').focus(); return; } else SSEL -= 6; }
+      else if(k === 'ArrowDown'){ const n = (Math.floor(SSEL / 6) + 1) * 6; if(n < SRES.length) SSEL = n; }
+      else if(k === 'ArrowUp'){ if(SSEL < 6){ SSEL = -1; moveFocus($('sres'), -1); $('q').focus(); return; } else SSEL = (Math.floor(SSEL / 6) - 1) * 6; }
+      else if(k === 'Enter' && repeat && SRES[SSEL]){ const x = SRES[SSEL]; return toggleFav(x.kind === 'live' ? { kind: 'live', id: x.id, name: x.name, img: x.img } : x); }
       else if(k === 'Enter' && SRES[SSEL]) return openResult(SRES[SSEL]);
       if(SSEL >= 0) moveFocus($('sres'), SSEL);
     }
   } else if(screen === 'movie'){
     const it = MOV.item, S = MOV.seasons && MOV.seasons[MOV.sIdx];
-    if(k === 'Escape'){ screen = 'home'; return show(); }
+    if(k === 'Escape'){ screen = MOV.back || 'home'; return show(true); }
     if(MOV.focus === 'btns'){
       if(k === 'ArrowLeft') mbtn = Math.min(MOV.btns - 1, mbtn + 1);
       else if(k === 'ArrowRight') mbtn = Math.max(0, mbtn - 1);
@@ -882,7 +1054,11 @@ function key(k, repeat){
       if(k === 'ArrowLeft') { MOV.sIdx = Math.min(MOV.seasons.length - 1, MOV.sIdx + 1); MOV.eIdx = 0; }
       else if(k === 'ArrowRight') { MOV.sIdx = Math.max(0, MOV.sIdx - 1); MOV.eIdx = 0; }
       else if(k === 'ArrowUp') MOV.focus = 'btns';
-      else if(k === 'ArrowDown' || k === 'Enter') MOV.focus = 'eps';
+      else if(k === 'ArrowDown' || k === 'Enter'){   // into the episodes: on the last one watched when this is its season
+        MOV.focus = 'eps';
+        const m = { item: it, seasons: MOV.seasons, sIdx: -1, eIdx: 0 }; lastSeen(m);
+        if(MOV.eIdx === 0 && m.sIdx === MOV.sIdx) MOV.eIdx = m.eIdx;
+      }
     } else if(MOV.focus === 'eps'){
       if(k === 'ArrowLeft') MOV.eIdx = Math.min(S.eps.length - 1, MOV.eIdx + 1);
       else if(k === 'ArrowRight') MOV.eIdx = Math.max(0, MOV.eIdx - 1);
@@ -898,15 +1074,20 @@ function key(k, repeat){
     const s = Live ? JSON.parse(Live.state() || '{}') : {};
     if(k === 'Escape'){ const it = PLAY && PLAY.it; stopVod(); if(it){ openMovie(it); } else { screen = 'home'; show(); } return; }
     const btns = PLAY && PLAY.btns || [];
-    if(PFOCUS === 'btns'){   // an episode's buttons: ◀▶ choose, OK goes, ▲ back to the timeline
-      if(k === 'ArrowLeft') PBTN = Math.min(btns.length - 1, PBTN + 1);
-      else if(k === 'ArrowRight') PBTN = Math.max(0, PBTN - 1);
+    if(k === 'PlayPause'){ playPause(s); return showPbar(); }
+    if(PFOCUS === 'btns'){   // the buttons (they stand left to right, like the timeline): ◀▶ choose, OK goes, ▲ back to the timeline
+      if(k === 'ArrowRight') PBTN = Math.min(btns.length - 1, PBTN + 1);
+      else if(k === 'ArrowLeft') PBTN = Math.max(0, PBTN - 1);
       else if(k === 'ArrowUp') PFOCUS = 'bar';
-      else if(k === 'Enter' && btns[PBTN]){ const b = btns[PBTN]; saveProgress(true); return playVod(PLAY.it, { season: b.season, ep: b.ep, seasons: PLAY.seasons }); }
+      else if(k === 'Enter' && btns[PBTN]){
+        const b = btns[PBTN];
+        if(b.act === 'pp'){ playPause(s); return showPbar(); }
+        saveProgress(true); return playVod(PLAY.it, { season: b.season, ep: b.ep, seasons: PLAY.seasons });
+      }
       drawPbtns(); showPbar(); return;
     }
-    if(k === 'Enter' || k === 'PlayPause'){ s.playing ? Live.pause() : Live.resume(); }
-    else if(k === 'ArrowDown' && btns.length){ PFOCUS = 'btns'; PBTN = 0; drawPbtns(); }
+    if(k === 'Enter') playPause(s);
+    else if(k === 'ArrowDown' && btns.length){ PFOCUS = 'btns'; PBTN = Math.max(0, btns.findIndex(b => b.act === 'pp')); drawPbtns(); }
     else if(k === 'ArrowRight' || k === 'Forward') seek(1, repeat, s);    // the bar runs left to right
     else if(k === 'ArrowLeft' || k === 'Rewind') seek(-1, repeat, s);
     showPbar();
@@ -977,8 +1158,8 @@ async function refreshLists(night){
     else if(M3U) await loadM3u(CFG.portal.replace(/([?&])pasword=/, '$1password='));
     else { for(const k of Object.keys(PAGES)) delete PAGES[k]; if(d.live) await loadLive(); await loadVodCats(); }
     await loadHome();
-    LOADED_AT = Date.now();
-    if(screen === 'home') drawHome();
+    LOADED_AT = Date.now(); LCATS_OF = null; LWIN = ''; GW = '';
+    if(screen === 'home'){ HOME = null; drawHome(); }
   }catch(e){}
   REFRESHING = false; FRESH = false;
 }
@@ -1044,7 +1225,7 @@ async function start(){
     setTimeout(() => refreshLists(false), 3000);   // only what is over its age
     await loadHome().catch(() => {});   // the home screen appears whole: its rows are made first
     loadAccount();
-    screen = 'home'; tab = 0; row = rowsData().length ? 0 : -1; show();
+    screen = 'home'; tab = 0; HOME = null; row = homeRows().length ? 0 : -1; show();
   }catch(e){
     openSetup();
     $('sst').textContent = e.message || 'تعذّر الاتصال';

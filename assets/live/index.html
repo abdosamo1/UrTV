@@ -21,6 +21,8 @@
   .screen{position:absolute;inset:0;display:none;font-size:1.1cqw}
   .screen.on{display:block}
   /* the focus: the card's own edge turns gold (no second ring around it) */
+  /* a poster is covered by its picture: no glass behind it (a blur under each of fifty cards made the lists heavy) */
+  .card,.pill,#movie .btn{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.24);box-shadow:0 10px 26px rgba(0,0,0,.32)}
   .focus{border-color:var(--gold-lt)!important;box-shadow:0 0 10px rgba(241,207,138,.3),0 14px 40px rgba(0,0,0,.4)!important;transform:scale(1.03)}
   /* ---- home */
   .top{position:absolute;top:4%;right:4%;left:4%;display:flex;align-items:center;justify-content:space-between}
@@ -35,9 +37,10 @@
   .cards{padding:0 4cqw}
   .row h3{margin:0 0 1.1em;font-size:1.3em;color:var(--gold-lt);font-weight:500}
   .row{margin-bottom:2.8em}
-  .rin{transition:transform .35s cubic-bezier(.2,.8,.2,1)}
-  .cards{display:flex;gap:1.8em;transition:transform .3s cubic-bezier(.2,.8,.2,1)}
+  .rin{position:relative;transition:transform .35s cubic-bezier(.2,.8,.2,1);will-change:transform}
+  .cards{position:relative;display:flex;gap:1.8em;transition:transform .3s cubic-bezier(.2,.8,.2,1);will-change:transform}
   .card{flex:0 0 auto;border-radius:1.1em;overflow:hidden;position:relative;transition:transform .2s}
+  .card .fv,.list .fv{color:var(--gold-lt);font-weight:500}
   .card.wide{width:16em;height:9.2em}
   .card.poster{width:9em;height:13em}
   .card.chan{width:11em;height:6.6em;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:.3em}
@@ -87,20 +90,22 @@
   .list{flex-direction:row!important;gap:1em;transition:width .35s cubic-bezier(.2,.8,.2,1),opacity .3s,transform .35s cubic-bezier(.2,.9,.25,1.1)!important}
   .list.wide{width:56%}
   .list .chans{flex:1;display:flex;flex-direction:column;min-width:0}
-  .list .cats{width:0;overflow:hidden;display:flex;flex-direction:column;gap:.35em;transition:width .35s cubic-bezier(.2,.8,.2,1),opacity .3s;opacity:0}
+  .list .cats{position:relative;width:0;overflow:hidden;display:flex;flex-direction:column;gap:.35em;transition:width .35s cubic-bezier(.2,.8,.2,1),opacity .3s;opacity:0}
   .list.wide .cats{width:36%;opacity:1;border-left:1px solid rgba(255,255,255,.14);padding-left:1em}
-  .list .cats .c{padding:.6em .9em;border-radius:.9em;font-size:1.15em;display:flex;justify-content:space-between;white-space:nowrap}
+  .list .cats .c{flex:0 0 auto;padding:.6em .9em;border-radius:.9em;font-size:1.15em;display:flex;justify-content:space-between;gap:.6em;white-space:nowrap}
+  .list .cats .c span{overflow:hidden;text-overflow:ellipsis;min-width:0}
   .list .cats .c small{color:var(--dim)}
   .list .cats .c.cur{color:var(--gold-lt)}
-  .list .cats .c.sel{background:rgba(255,255,255,.16);outline:1px solid rgba(241,207,138,.6)}
+  /* the chosen row: its edge is drawn inside it (an outline around it was cut by the list's own edge) */
+  .list .cats .c.sel,.list .it.sel,.rail .c.sel{background:rgba(255,255,255,.16);box-shadow:inset 0 0 0 1px rgba(241,207,138,.75)}
   .list.wide .chans{opacity:.55}
   .list .cat{display:flex;align-items:center;justify-content:space-between;font-size:1.3em;padding:.2em .3em .8em;color:var(--gold-lt)}
   .list .cat .hint{font-size:.7em;color:var(--dim)}
   .list .items{flex:1;overflow:hidden;display:flex;flex-direction:column;gap:.45em}
-  .list .it{display:flex;align-items:center;gap:.9em;padding:.65em .9em;border-radius:.9em;font-size:1.15em;transition:background .15s}
+  .list .it{flex:0 0 auto;display:flex;align-items:center;gap:.9em;padding:.65em .9em;border-radius:.9em;font-size:1.15em;min-height:3.5em;transition:background .15s}
+  .list .it .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .list .it .n{font-family:'ThmanyahDisplay';color:var(--dim);min-width:2em;text-align:center}
   .list .it.cur .n{color:var(--gold-lt)}
-  .list .it.sel{background:rgba(255,255,255,.16);outline:1px solid rgba(241,207,138,.6)}
   .list .it small{display:block;color:var(--dim);font-size:.78em}
   .sbtn{padding:.55em 1.4em;border-radius:999px;font-size:1.25em;transition:transform .2s}
   /* ---- the notice in the middle (an empty favourites list) */
@@ -130,12 +135,12 @@
   #browse .shade{position:absolute;inset:0;background:linear-gradient(270deg,rgba(0,0,0,.55),rgba(0,0,0,.75))}
   .btop{position:absolute;top:4%;right:4%;left:4%;display:flex;align-items:center;justify-content:space-between}
   .rail{position:absolute;top:15%;bottom:5%;right:3%;width:22%;border-radius:1.6em;padding:1em;display:flex;flex-direction:column;gap:.35em;overflow:hidden}
-  .rail .c{padding:.7em 1em;border-radius:.9em;font-size:1.2em;display:flex;justify-content:space-between;transition:background .15s}
+  .rail .c{flex:0 0 auto;padding:.7em 1em;border-radius:.9em;font-size:1.2em;display:flex;justify-content:space-between;gap:.6em;transition:background .15s}
+  .rail .c span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
   .rail .c small{color:var(--dim)}
   .rail .c.cur{color:var(--gold-lt)}
-  .rail .c.sel{background:rgba(255,255,255,.16);outline:1px solid rgba(241,207,138,.6)}
   .grid{position:absolute;top:15%;bottom:0;right:28%;left:3%;overflow:hidden}
-  .grid .in{display:grid;grid-template-columns:repeat(5,1fr);grid-auto-rows:max-content;gap:1.2em;padding-bottom:3em;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+  .grid .in{position:relative;will-change:transform;display:grid;grid-template-columns:repeat(5,1fr);grid-auto-rows:max-content;gap:1.2em;padding:.5em .7em 3em;transition:transform .35s cubic-bezier(.2,.8,.2,1)}
   .grid .card{width:auto;height:calc((69cqw - 4.8em) / 5 * 1.5)}
   .grid h3{grid-column:1/-1;margin:0;font-size:1.4em;color:var(--gold-lt);font-weight:500}
   /* the skeleton: the cards come in one after another, a light runs over them until the picture arrives */
@@ -173,7 +178,10 @@
   .prof svg{width:58%;height:58%}
   /* ---- on the device: the video is under the page */
   /* over a bright picture the glass needs a dark base to stay readable */
-  .list,.info,.pbar,.picker,.tile .lbl{background-color:rgba(10,12,11,.62)!important}
+  /* the app puts the video's own picture, blurred, under each panel (Live.frost): with this tint and the
+     light on its edge it reads as frosted glass, not as a clear sheet over the picture */
+  .list,.info,.pbar,.picker,.tile .lbl{background:linear-gradient(165deg,rgba(255,255,255,.2),rgba(255,255,255,.05) 38%,rgba(255,255,255,.02) 70%,rgba(255,255,255,.1)),rgba(14,16,15,.6)!important;
+    border-color:rgba(255,255,255,.3);backdrop-filter:none;-webkit-backdrop-filter:none}
   .tv.video{background:none!important}
   .tv.video::before{display:none}
   #live .video{background:none!important;animation:none}
@@ -207,19 +215,32 @@
   .pbar .bar{flex:1;height:.45em}
   .pbar .st2{direction:rtl;color:var(--dim);font-family:'Thmanyah';font-size:.95em;margin-top:.5em}
   /* ---- an episode's buttons in the player */
-  .pbtns{display:flex;gap:1em;margin-top:.8em;direction:rtl}
+  .pbtns{display:flex;gap:1.4em;margin-top:.7em;direction:ltr;justify-content:center;align-items:center}
   .pbtns:empty{display:none}
-  .pbtns .b{padding:.45em 1.3em;border-radius:999px;font-size:1.1em;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.07)}
-  .pbtns .b.focus{border-color:var(--gold-lt);background:rgba(241,207,138,.22);transform:none}
-  #movie .pill .pg{display:block;height:.18em;margin-top:.25em;border-radius:1em;background:var(--gold-lt)}
+  .pbtns .b{width:3em;height:3em;border-radius:50%;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.07);transition:transform .15s}
+  .pbtns .b.pp{width:3.7em;height:3.7em;background:rgba(255,255,255,.13)}
+  .pbtns .b svg{width:46%;height:46%;fill:var(--txt)}
+  .pbtns .b.focus{border-color:var(--gold-lt);background:rgba(241,207,138,.28);transform:scale(1.08)}
+  .pbtns .b.focus svg{fill:var(--gold-lt)}
+  .pbar .st2:empty{display:none}
   #movie .last{color:var(--dim);font-size:1em;margin-top:.6em}
   /* ---- series: seasons and episodes */
   #movie .eps{margin-top:1.6em}
   #movie .eps .lineh{color:var(--gold-lt);font-size:1.1em;margin:.8em 0 .5em}
-  #movie .pills{display:flex;gap:.6em;flex-wrap:wrap;max-height:7.5em;overflow:hidden}
-  #movie .pill{padding:.45em 1em;border-radius:999px;font-size:1.05em}
-  #movie .pill.cur{border-color:rgba(241,207,138,.7)}
-  #movie .pill.seen{opacity:.6}
+  #movie .pills{display:flex;gap:.6em;flex-wrap:wrap;max-height:11.6em;overflow:hidden}
+  #movie .pills{position:relative;padding:.35em .3em}
+  #movie .pill{padding:.45em 1em;border-radius:999px;font-size:1.05em;transition:transform .15s}
+  /* the season open now, the episode last watched: filled with gold, not only edged */
+  #movie .pill.cur{border-color:var(--gold-lt);background:rgba(241,207,138,.34);color:var(--gold-lt);box-shadow:0 0 0 1px rgba(241,207,138,.55),0 8px 20px rgba(0,0,0,.35)}
+  #movie .pill.ep{width:2.9em;height:2.9em;padding:0;display:flex;align-items:center;justify-content:center;position:relative}
+  #movie .pill.ep span{position:relative}
+  #movie .pill.ep.seen{color:var(--dim);background:rgba(255,255,255,.03)}
+  /* an episode watched in part: a ring around its number, as far as it went */
+  #movie .pill.ep.part{border-color:transparent;box-shadow:none;
+    background:radial-gradient(closest-side,#1d1b17 calc(100% - .3em),transparent calc(100% - .3em + 1px)),conic-gradient(var(--gold-lt) calc(var(--p) * 1%),rgba(255,255,255,.2) 0)}
+  #movie .pill.ep.part.cur{color:var(--gold-lt)}
+  #movie .pill.focus{background-color:rgba(241,207,138,.2)}
+  #movie .pill.ep.part.focus{box-shadow:0 0 0 2px var(--gold-lt),0 0 12px rgba(241,207,138,.45)!important}
   /* ---- loading, messages */
   .toast{position:absolute;left:50%;top:6%;transform:translate(-50%,-30%);opacity:0;border-radius:999px;padding:.7em 1.6em;font-size:1.3em;
     transition:opacity .3s,transform .3s;z-index:9;pointer-events:none}
@@ -259,7 +280,6 @@
     <div class="info glass hide" id="info">
       <div class="num" id="inum"></div>
       <div><div class="nm" id="inm"></div></div>
-      <div class="hint">▲▼ القناة · OK القائمة</div>
     </div>
     <div class="list glass hide" id="list">
       <div class="cats" id="lcats"></div>
