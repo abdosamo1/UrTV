@@ -1029,6 +1029,7 @@ function key(k, repeat){
       else if(k === 'Escape'){ screen = 'home'; show(); }
     } else {
       const chans = (CATS[lcat] || { ch: [] }).ch;
+      setTimeout(listIdle, 0);   // after this key has done its work (it may close the list itself)
       if(catsOpen){
         if(k === 'ArrowDown' || k === 'ArrowUp'){
           const n = Math.max(0, Math.min(CATS.length - 1, csel + (k === 'ArrowDown' ? 1 : -1)));
@@ -1170,7 +1171,13 @@ function key(k, repeat){
     showPbar();
   }
 }
-function openList(){ listOpen = true; catsOpen = false; const c = ALL[cur]; lcat = c && c.ci >= 0 ? c.ci : Math.min(2, CATS.length - 1); lsel = Math.max(0, (CATS[lcat] || { ch: [] }).ch.indexOf(c)); LFROM = lsel - (LROWS >> 1); drawLive(false); }
+/** the channels' list closes by itself five seconds after the last key */
+let LIDLE = 0;
+function listIdle(){
+  clearTimeout(LIDLE);
+  if(listOpen) LIDLE = setTimeout(() => { if(screen !== 'live' || !listOpen) return; clearTimeout(LCT); listOpen = false; catsOpen = false; drawLive(false); }, 5000);
+}
+function openList(){ listOpen = true; listIdle(); catsOpen = false; const c = ALL[cur]; lcat = c && c.ci >= 0 ? c.ci : Math.min(2, CATS.length - 1); lsel = Math.max(0, (CATS[lcat] || { ch: [] }).ch.indexOf(c)); LFROM = lsel - (LROWS >> 1); drawLive(false); }
 
 // a long OK (the key held): favourites for a channel, the activation screen from «الرئيسية»
 const LONG = { done: false };
