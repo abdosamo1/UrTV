@@ -16,6 +16,7 @@
 
     <queries>
         <intent><action android:name="android.speech.RecognitionService" /></intent>
+        <provider android:authorities="sa.urtv.home.profile" />   <!-- the owner's photo from the home screen app -->
     </queries>
 
     <!-- portals are mostly plain http -->

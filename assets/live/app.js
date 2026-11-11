@@ -342,12 +342,14 @@ function wantArt(el){
   IMQ.push({ el, u: el.dataset.img, gen: IMGEN }); pumpArt();
 }
 function pumpArt(){
-  while(IMBUSY < 4 && IMQ.length){
+  const store = Live && Live.hasImg;   // the app keeps every picture, made small: then more at once
+  while(IMBUSY < (store ? 8 : 4) && IMQ.length){
     const j = IMQ.shift();
     if(j.gen !== IMGEN || !j.el.isConnected){ delete j.el.dataset.st; continue; }
     if(FLY.has(j.u) || SEEN.has(j.u)) continue;
     IMBUSY++; FLY.add(j.u);
-    gate().then(() => {
+    // a picture already on the TV asks no server: it does not wait in the requests' line
+    (store && Live.hasImg(j.u) ? Promise.resolve() : gate()).then(() => {
       const im = new Image();
       const fin = ok => {
         IMBUSY--; SEEN.add(j.u); FLY.delete(j.u);
@@ -513,7 +515,14 @@ function fitRows(box, now){
   const inner = box.clientHeight - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0);
   return Math.max(3, Math.floor((inner + gap) / (f.offsetHeight + gap)));
 }
-let LROWS = 8, LWIN = '', LCATS_OF = null;
+let LROWS = 8, LFROM = 0, LWIN = '', LCATS_OF = null, LCT = 0;
+/** ▲▼ in the sections: the edge moves now; the section's channels show beside it when the key rests */
+function moveCats(){
+  const cs = $('lcats');
+  mark(cs, 'sel', cs.children[csel]); reveal(cs, cs.children[csel]);
+  clearTimeout(LCT);
+  LCT = setTimeout(() => { if(!listOpen || !catsOpen || lcat === csel) return; lcat = csel; lsel = 0; LFROM = 0; drawList(); }, 130);
+}
 /** the channels' list: the sections are built once, the channels only when their window moves; a key between
  *  them moves two classes */
 function drawList(){
@@ -530,7 +539,8 @@ function drawList(){
   reveal(cs, cs.children[catsOpen ? csel : lcat]);   // the section under the key, wherever it is in the list
   // a window of the list around the chosen one (sections may hold hundreds): as many as fit
   const box = $('items');
-  const from = Math.max(0, Math.min(lsel - (LROWS >> 1), chans.length - LROWS));
+  if(lsel < LFROM) LFROM = lsel; else if(lsel > LFROM + LROWS - 1) LFROM = lsel - LROWS + 1;
+  const from = LFROM = Math.max(0, Math.min(LFROM, chans.length - LROWS));
   const win = lcat + ':' + from + ':' + LROWS + ':' + chans.length;
   if(win !== LWIN){
     LWIN = win;
@@ -564,7 +574,7 @@ const FAVCAT = { id: '★', name: '★ المفضلة', fav: true };   // the fi
 const bCats = () => [FAVCAT].concat(VOD_CATS[bKind]);
 const pageOf = c => !c ? null : c.fav ? { items: favItems(bKind), total: favItems(bKind).length, busy: false } : PAGES[bKind + ':' + c.id];
 function openBrowse(kind){
-  IMGEN++; screen = 'browse'; bKind = kind; bfocus = 'rail'; bi = 0; bScroll = 0; GW = '';
+  IMGEN++; screen = 'browse'; bKind = kind; bfocus = 'rail'; bi = 0; bScroll = 0; GW = ''; RFROM = 0;
   bcat = favItems(kind).length || !VOD_CATS[kind].length ? 0 : 1;   // the favourites first when there are some
   show(); loadCat();
 }
@@ -574,13 +584,14 @@ async function loadCat(){
   if(!c.fav && !PAGES[bKind + ':' + c.id]){ drawBrowse(); await page(bKind, c.id); }
   if(screen === 'browse') drawBrowse();
 }
-let RROWS = 10;
+let RROWS = 10, RFROM = 0;
 function drawRail(){
   $('bkind').textContent = bKind;
   $('sbtn').classList.toggle('focus', bfocus === 'search');
   const cats = bCats(), box = $('rail');
-  // a window around the chosen section, as many rows as the rail holds: the last sections stay in sight
-  const from = Math.max(0, Math.min(bcat - (RROWS >> 1), cats.length - RROWS));
+  // as many rows as the rail holds; the cursor walks to its edge and only then the sections move under it
+  if(bcat < RFROM) RFROM = bcat; else if(bcat > RFROM + RROWS - 1) RFROM = bcat - RROWS + 1;
+  const from = RFROM = Math.max(0, Math.min(RFROM, cats.length - RROWS));
   box.innerHTML = cats.slice(from, from + RROWS).map((c, k) => { const i = from + k;
     const P = pageOf(c);
     return `<div class="c${i === bcat ? ' cur' : ''}${i === bcat && bfocus === 'rail' ? ' sel' : ''}"><span>${esc(c.name)}</span><small>${P && isFinite(P.total) ? ar(P.total) : ''}</small></div>`; }).join('');
@@ -710,7 +721,9 @@ function drawMovie(){
           const last = r0 && String(r0.season) === String(S.id) && r0.ep === e;
           // a part watched: a ring around the number, as far as it went
           const pct = m.dur && m.pos && !m.done ? Math.max(4, Math.min(96, Math.round(m.pos / m.dur * 100))) : 0;
-          return `<div class="pill ep${pct ? ' part' : ''}${last ? ' cur' : ''}${m.done ? ' seen' : ''}${MOV.focus === 'eps' && i === MOV.eIdx ? ' focus' : ''}"${pct ? ` style="--p:${pct}"` : ''}><span>${ar(e)}</span></div>`; }).join('') + '</div>';
+          return `<div class="pill ep${pct ? ' part' : ''}${last ? ' cur' : ''}${m.done ? ' seen' : ''}${MOV.focus === 'eps' && i === MOV.eIdx ? ' focus' : ''}">`
+            + (pct ? `<svg class="ring" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18"/><circle class="on" cx="20" cy="20" r="18" pathLength="100" stroke-dasharray="${pct} 100" transform="rotate(-90 20 20)"/></svg>` : '')
+            + `<span>${ar(e)}</span></div>`; }).join('') + '</div>';
       const r = RES()[`series:${it.id}`];
       if(r && r.ep){
         const sn = (MOV.seasons.find(x => x.id === r.season) || {}).name || '';
@@ -778,7 +791,7 @@ async function playVod(it, opts = {}){
     } else u = await link('vod', it.cmd);
     PLAY = { it, key, title, season: opts.season || null, ep: opts.ep || null, lastSave: 0,
       seasons: opts.seasons || (MOV && MOV.item && MOV.item.id === it.id ? MOV.seasons : null) };
-    PFOCUS = 'bar'; PBTN = 0; PPLAYING = null; drawPbtns();
+    PFOCUS = 'bar'; PBTN = 0; PPLAYING = null; PHIDE = false; drawPbtns();
     screen = 'player'; show();
     $('ptitle').textContent = title;
     if(Live) Live.playFrom(0, u, opts.from || 0);
@@ -839,11 +852,13 @@ function pollPlayer(){
   }
   const on = !!s.playing || !!s.buffering;   // the sign follows the player (a pause from the remote's own key too)
   if(PPLAYING !== on && s.pos != null && Date.now() - PPAT > 1500){ PPLAYING = on; drawPbtns(); }
-  if(s.buffering || PPLAYING === false) showPbar();   // paused: the bar stays
+  if((s.buffering || PPLAYING === false) && !PHIDE) showPbar();   // paused: the bar stays, unless Back sent it away
   saveProgress(false);
 }
+let PHIDE = false;
 function showPbar(){
   const b = $('pbar'), was = b.classList.contains('hide');
+  PHIDE = false;
   b.classList.remove('hide'); clearTimeout(pbarT);
   pbarT = setTimeout(() => { b.classList.add('hide'); if(PFOCUS === 'btns'){ PFOCUS = 'bar'; drawPbtns(); } frostSoon(); }, 4000);
   if(was) frostSoon();
@@ -932,7 +947,54 @@ function show(keep){
 }
 
 // ======================================================================== the remote
+// ---- leaving: «الخروج من التطبيق؟»; «تحديث التطبيق» there looks for a newer version and offers it
+const EXIT = { on: false, mode: 'ask', sel: 0, msg: '', busy: false, latest: 0 };
+function exitBtns(){
+  return EXIT.mode === 'update' ? [['up', 'حدّث التطبيق وأغلقه'], ['stay', 'لا، أبقى في التطبيق']]
+    : [['yes', 'نعم، خروج'], ['stay', 'لا'], ['check', 'تحديث التطبيق']];
+}
+function drawExit(){
+  $('exit').classList.toggle('on', EXIT.on);
+  if(!EXIT.on) return;
+  $('xtitle').textContent = EXIT.mode === 'update' ? 'يوجد إصدار جديد ٣٫' + ar(EXIT.latest) : 'الخروج من التطبيق؟';
+  $('xmsg').textContent = EXIT.msg;
+  $('xbtns').innerHTML = exitBtns().map((b, i) => `<div class="btn${b[0] === 'yes' || b[0] === 'up' ? ' main' : ''}${i === EXIT.sel && !EXIT.busy ? ' focus' : ''}">${b[1]}</div>`).join('');
+}
+function openExit(){ Object.assign(EXIT, { on: true, mode: 'ask', sel: 0, msg: '', busy: false }); drawExit(); }
+function closeExit(){ EXIT.on = false; EXIT.busy = false; drawExit(); }
+function exitKey(k){
+  if(k === 'Escape') return closeExit();
+  if(EXIT.busy) return;
+  const B = exitBtns();
+  if(k === 'ArrowLeft') EXIT.sel = Math.min(B.length - 1, EXIT.sel + 1);
+  else if(k === 'ArrowRight') EXIT.sel = Math.max(0, EXIT.sel - 1);
+  else if(k === 'Enter'){
+    const act = B[EXIT.sel][0];
+    if(act === 'stay') return closeExit();
+    if(act === 'yes'){ if(Live && Live.exit) Live.exit(); return closeExit(); }
+    if(!Live || !Live.checkUpdate){ EXIT.msg = 'التحديث من هنا يحتاج الإصدار الأحدث من التطبيق'; return drawExit(); }
+    EXIT.busy = true;
+    if(act === 'check'){ EXIT.msg = 'جارٍ البحث عن إصدار جديد…'; Live.checkUpdate(); }
+    else { EXIT.msg = 'جارٍ تنزيل الإصدار الجديد… يُغلق التطبيق عند تثبيته'; Live.update(); }
+    clearTimeout(EXIT.t); EXIT.t = setTimeout(() => { if(EXIT.busy){ EXIT.busy = false; EXIT.msg = 'تعذّر الوصول إلى التحديث، تحقق من الاتصال'; drawExit(); } }, 90000);
+  }
+  drawExit();
+}
+window.onUpdateInfo = (latest, mine) => {
+  if(!EXIT.on) return;
+  EXIT.busy = false;
+  if(latest > mine) Object.assign(EXIT, { mode: 'update', latest, sel: 0, msg: 'الإصدار الحالي ٣٫' + ar(mine) });
+  else EXIT.msg = latest < 0 ? 'تعذّر البحث عن إصدار جديد، تحقق من الاتصال' : 'التطبيق محدّث (٣٫' + ar(mine) + ')';
+  drawExit();
+};
+window.onUpdate = text => {
+  if(!EXIT.on) return toast(text);
+  EXIT.busy = false; EXIT.msg = text; drawExit();
+  if(/^جارٍ تثبيت/.test(text)) setTimeout(() => { if(Live && Live.exit) Live.exit(); }, 2500);   // closed: the new version installs
+};
+
 function key(k, repeat){
+  if(EXIT.on) return exitKey(k);
   if(screen === 'home'){
     const R = homeRows();
     if(row === -2 && (k === 'ArrowLeft' || k === 'ArrowRight')) return drawHome();   // the profile stands alone
@@ -962,9 +1024,13 @@ function key(k, repeat){
     } else {
       const chans = (CATS[lcat] || { ch: [] }).ch;
       if(catsOpen){
-        if(k === 'ArrowDown') csel = Math.min(CATS.length - 1, csel + 1);
-        else if(k === 'ArrowUp') csel = Math.max(0, csel - 1);
-        else if(k === 'Enter' || k === 'ArrowLeft'){ if(lcat !== csel){ lcat = csel; lsel = 0; } catsOpen = false; }
+        if(k === 'ArrowDown' || k === 'ArrowUp'){
+          const n = Math.max(0, Math.min(CATS.length - 1, csel + (k === 'ArrowDown' ? 1 : -1)));
+          if(n !== csel){ csel = n; moveCats(); }
+          return;
+        }
+        clearTimeout(LCT);
+        if(k === 'Enter' || k === 'ArrowLeft'){ if(lcat !== csel){ lcat = csel; lsel = 0; LFROM = 0; } catsOpen = false; }
         else if(k === 'Escape') catsOpen = false;
       }
       else if(k === 'ArrowDown') lsel = Math.min(chans.length - 1, lsel + 1);
@@ -1072,7 +1138,11 @@ function key(k, repeat){
     drawMovie();
   } else if(screen === 'player'){
     const s = Live ? JSON.parse(Live.state() || '{}') : {};
-    if(k === 'Escape'){ const it = PLAY && PLAY.it; stopVod(); if(it){ openMovie(it); } else { screen = 'home'; show(); } return; }
+    if(k === 'Escape'){
+      const bar = $('pbar');
+      if(!bar.classList.contains('hide')){ bar.classList.add('hide'); clearTimeout(pbarT); PHIDE = true; if(PFOCUS === 'btns'){ PFOCUS = 'bar'; drawPbtns(); } return frostSoon(); }
+      const it = PLAY && PLAY.it; stopVod(); if(it){ openMovie(it); } else { screen = 'home'; show(); } return;
+    }
     const btns = PLAY && PLAY.btns || [];
     if(k === 'PlayPause'){ playPause(s); return showPbar(); }
     if(PFOCUS === 'btns'){   // the buttons (they stand left to right, like the timeline): ◀▶ choose, OK goes, ▲ back to the timeline
@@ -1093,7 +1163,7 @@ function key(k, repeat){
     showPbar();
   }
 }
-function openList(){ listOpen = true; catsOpen = false; const c = ALL[cur]; lcat = Math.max(0, c ? c.ci : 0); lsel = Math.max(0, (CATS[lcat] || { ch: [] }).ch.indexOf(c)); drawLive(false); }
+function openList(){ listOpen = true; catsOpen = false; const c = ALL[cur]; lcat = Math.max(0, c ? c.ci : 0); lsel = Math.max(0, (CATS[lcat] || { ch: [] }).ch.indexOf(c)); LFROM = lsel - (LROWS >> 1); drawLive(false); }
 
 // a long OK (the key held): favourites for a channel, the activation screen from «الرئيسية»
 const LONG = { done: false };
@@ -1132,7 +1202,8 @@ window.remote = (name, rep) => {
   key(name, !!rep);
 };
 window.onBack = () => {
-  if(screen === 'home' && !$('setup').classList.contains('on')){ return false; }   // leave the app
+  if(EXIT.on){ closeExit(); return true; }
+  if(screen === 'home' && !$('setup').classList.contains('on')){ openExit(); return true; }   // leaving is asked first
   if(screen === 'setup'){ if(CFG.portal && READY){ screen = 'home'; show(); return true; } return false; }
   if(screen === 'search' && SSEL >= 0){ SSEL = -1; moveFocus($('sres'), -1); $('q').focus(); return true; }
   key('Escape', false);
@@ -1236,6 +1307,12 @@ async function start(){
   const bgs = ['9hWJs7iblh8', 'LAj90eAXOZA', 'XDtzu1D2P8c', 'f5ZB0LHwi0s'];
   $('tv').style.setProperty('--bg', `url(backgrounds/${bgs[Math.floor(Math.random() * bgs.length)]}.jpg)`);
   tick(); setInterval(tick, 10000);
+  if(Live && Live.frost) $('tv').classList.add('frosty');   // the app puts the glass under the panels: they come at once
+  if(Live && Live.hasImg){   // the owner's photo from the home screen, when there is one
+    const im = new Image();
+    im.onload = () => { im.className = 'me'; $('prof').appendChild(im); $('prof').classList.add('has'); };
+    im.src = 'https://urtv.local/avatar.png';
+  }
   $('smac').textContent = CFG.mac || '';
   start();
 })();

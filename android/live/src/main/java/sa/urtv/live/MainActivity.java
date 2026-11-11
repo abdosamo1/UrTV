@@ -22,6 +22,8 @@ import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -92,7 +94,13 @@ public class MainActivity extends Activity {
                 h.post(MainActivity.this::recreate);
                 return true;
             }
+            // every picture the page asks for (posters, logos) goes through the TV's own store
+            @Override public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
+                try { return "GET".equalsIgnoreCase(r.getMethod()) ? picture(r.getUrl()) : null; }
+                catch (Throwable t) { return null; }
+            }
         });
+        new Thread(this::trimPictures).start();
         web.addJavascriptInterface(new Bridge(), "Live");
         root.addView(web, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
@@ -179,7 +187,7 @@ public class MainActivity extends Activity {
         @Override public void run() {
             if (frostRects.isEmpty()) return;
             frostNow();
-            h.postDelayed(this, 200);
+            h.postDelayed(this, 250);
         }
     };
 
@@ -208,7 +216,12 @@ public class MainActivity extends Activity {
         }
         for (int i = 0; i < frostViews.size(); i++) {
             ImageView v = frostViews.get(i);
-            if (i >= frostRects.size() || w == 0) { v.setVisibility(View.GONE); v.setImageDrawable(null); continue; }
+            if (i >= frostRects.size() || w == 0) {   // the panel fades out: so does its glass
+                if (v.getVisibility() == View.VISIBLE) v.animate().alpha(0f).setStartDelay(0).setDuration(120).withEndAction(() -> { v.setVisibility(View.GONE); v.setImageDrawable(null); }).start();
+                continue;
+            }
+            v.animate().cancel();
+            if (v.getVisibility() == View.VISIBLE) v.setAlpha(1f);
             float[] f = frostRects.get(i);
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) v.getLayoutParams();
             lp.gravity = android.view.Gravity.TOP | android.view.Gravity.LEFT;
@@ -221,7 +234,7 @@ public class MainActivity extends Activity {
             });
             v.setClipToOutline(true);
         }
-        if (!frostRects.isEmpty()) h.postDelayed(frostTick, 120);
+        if (!frostRects.isEmpty()) h.post(frostTick);   // at once: the glass is there as the panel comes
     }
 
     private void frostNow() {
@@ -251,10 +264,7 @@ public class MainActivity extends Activity {
                         if (result != PixelCopy.SUCCESS || !frostRects.contains(f)) return;
                         soften(small);
                         v.setImageBitmap(small);
-                        if (v.getVisibility() != View.VISIBLE) {
-                            v.setAlpha(0f); v.setVisibility(View.VISIBLE);
-                            v.animate().alpha(1f).setStartDelay(120).setDuration(260).start();
-                        }
+                        if (v.getVisibility() != View.VISIBLE) { v.animate().cancel(); v.setAlpha(1f); v.setVisibility(View.VISIBLE); }
                     }
                 }, h);
             } catch (Throwable t) { frostBusy = Math.max(0, frostBusy - 1); }
@@ -285,6 +295,110 @@ public class MainActivity extends Activity {
             }
         }
         b.setPixels(px, 0, w, 0, 0, w, ht);
+    }
+
+    // ---- the pictures kept on the TV. A poster comes from the provider's server at its full size (often
+    // thousands of pixels for a card two hundred wide) and was asked for again at every start: slow to fetch and
+    // heavy to draw. Here each picture is fetched once, made small, and kept; later it is read from the TV.
+    private static final int PIC_W = 420;
+    private java.io.File picDir() { java.io.File d = new java.io.File(getCacheDir(), "pictures"); d.mkdirs(); return d; }
+    private java.io.File picFile(String url) { return new java.io.File(picDir(), Integer.toHexString(url.hashCode()) + "-" + url.length()); }
+    private static WebResourceResponse none() {
+        return new WebResourceResponse("text/plain", "utf-8", 404, "Not Found", null, new java.io.ByteArrayInputStream(new byte[0]));
+    }
+    private static String kind(java.io.File f) {
+        try (java.io.FileInputStream in = new java.io.FileInputStream(f)) {
+            int b = in.read();
+            return b == 0x89 ? "image/png" : b == 'G' ? "image/gif" : b == 'R' ? "image/webp" : "image/jpeg";
+        } catch (Exception e) { return "image/jpeg"; }
+    }
+
+    private WebResourceResponse picture(Uri u) throws Exception {
+        String scheme = u.getScheme();
+        if (!"http".equals(scheme) && !"https".equals(scheme)) return null;
+        if ("urtv.local".equals(u.getHost())) {   // the owner's photo, from the home screen app (same signing key)
+            try {
+                java.io.InputStream in = getContentResolver().openInputStream(Uri.parse("content://sa.urtv.home.profile/photo"));
+                return in == null ? none() : new WebResourceResponse("image/png", null, in);
+            } catch (Throwable t) { return none(); }
+        }
+        String url = u.toString();
+        java.io.File f = picFile(url);
+        if (!f.isFile() || f.length() == 0) {
+            byte[] raw;
+            try { raw = fetchBytes(url, 8 * 1024 * 1024); } catch (Exception e) { return none(); }
+            byte[] small = shrink(raw);
+            if (small == null) return none();   // not a picture
+            java.io.File tmp = new java.io.File(f.getPath() + "." + Thread.currentThread().getId());
+            try (java.io.FileOutputStream o = new java.io.FileOutputStream(tmp)) { o.write(small); }
+            if (!tmp.renameTo(f)) tmp.delete();
+            return new WebResourceResponse(small.length > 0 && (small[0] & 255) == 0x89 ? "image/png" : kindOf(small), null, new java.io.ByteArrayInputStream(small));
+        }
+        return new WebResourceResponse(kind(f), null, new java.io.FileInputStream(f));
+    }
+    private static String kindOf(byte[] b) { return b[0] == 'G' ? "image/gif" : b[0] == 'R' ? "image/webp" : "image/jpeg"; }
+
+    /** a picture no wider than a card needs (kept as it came when already small); null when it is no picture */
+    private static byte[] shrink(byte[] raw) {
+        android.graphics.BitmapFactory.Options o = new android.graphics.BitmapFactory.Options();
+        o.inJustDecodeBounds = true;
+        android.graphics.BitmapFactory.decodeByteArray(raw, 0, raw.length, o);
+        if (o.outWidth <= 0 || o.outHeight <= 0) return null;
+        if (o.outWidth <= PIC_W && raw.length < 200 * 1024) return raw;
+        int sample = 1;
+        while (o.outWidth / (sample * 2) >= PIC_W) sample *= 2;
+        o = new android.graphics.BitmapFactory.Options();
+        o.inSampleSize = sample;
+        Bitmap b = android.graphics.BitmapFactory.decodeByteArray(raw, 0, raw.length, o);
+        if (b == null) return null;
+        if (b.getWidth() > PIC_W) {
+            Bitmap s = Bitmap.createScaledBitmap(b, PIC_W, Math.max(1, Math.round(b.getHeight() * (PIC_W / (float) b.getWidth()))), true);
+            if (s != b) b.recycle();
+            b = s;
+        }
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream(64 * 1024);
+        if (b.hasAlpha()) b.compress(Bitmap.CompressFormat.PNG, 100, out); else b.compress(Bitmap.CompressFormat.JPEG, 84, out);
+        b.recycle();
+        return out.toByteArray();
+    }
+
+    private static byte[] fetchBytes(String url, int max) throws Exception {
+        for (int hop = 0; hop < 4; hop++) {
+            java.net.HttpURLConnection con = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+            try {
+                con.setInstanceFollowRedirects(false);
+                con.setConnectTimeout(10000); con.setReadTimeout(20000);
+                con.setRequestProperty("User-Agent", "IPTVSmartersPlayer");
+                int code = con.getResponseCode();
+                if (code >= 300 && code < 400) {
+                    String to = con.getHeaderField("Location");
+                    if (to == null) throw new Exception("redirect");
+                    url = new java.net.URL(new java.net.URL(url), to).toString();
+                    continue;
+                }
+                if (code != 200) throw new Exception("HTTP " + code);
+                java.io.InputStream in = con.getInputStream();
+                java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream(128 * 1024);
+                byte[] buf = new byte[32768]; int n;
+                while ((n = in.read(buf)) > 0) { b.write(buf, 0, n); if (b.size() > max) throw new Exception("too large"); }
+                in.close();
+                return b.toByteArray();
+            } finally { con.disconnect(); }
+        }
+        throw new Exception("too many redirects");
+    }
+
+    /** the store stays under 250 MB: past that the pictures not seen for the longest go */
+    private void trimPictures() {
+        try {
+            java.io.File[] fs = picDir().listFiles();
+            if (fs == null) return;
+            long total = 0;
+            for (java.io.File f : fs) total += f.length();
+            if (total < 250L * 1024 * 1024) return;
+            java.util.Arrays.sort(fs, (a, b) -> Long.compare(a.lastModified(), b.lastModified()));
+            for (int i = 0; i < fs.length && total > 150L * 1024 * 1024; i++) { total -= fs[i].length(); fs[i].delete(); }
+        } catch (Throwable ignored) { }
     }
 
     // ---- a key in the app is someone using the TV. The screens are one page: no focus moves between views, so
@@ -446,11 +560,21 @@ public class MainActivity extends Activity {
             });
         }
 
+        /** is this picture already kept on the TV (then the page shows it at once, without its queue)? */
+        @JavascriptInterface public boolean hasImg(String url) {
+            try { java.io.File f = picFile(url); return f.isFile() && f.length() > 0; } catch (Exception e) { return false; }
+        }
+
+        /** is there a newer version? window.onUpdateInfo(latest, mine); latest is -1 when it cannot be read */
+        @JavascriptInterface public void checkUpdate() {
+            new Thread(() -> js("window.onUpdateInfo && onUpdateInfo(" + SelfUpdate.latest() + "," + versionCode() + ")")).start();
+        }
+
         @JavascriptInterface public void update() {
-            net.execute(() -> {
-                String r = SelfUpdate.check(MainActivity.this, "urtv-live.apk", true, false);
+            new Thread(() -> {
+                String r = SelfUpdate.check(getApplicationContext(), "urtv-live.apk", true, false);
                 js("window.onUpdate && onUpdate(" + JSONObject.quote(r) + ")");
-            });
+            }).start();
         }
 
         @JavascriptInterface public void exit() { h.post(MainActivity.this::finish); }
@@ -558,8 +682,10 @@ public class MainActivity extends Activity {
         players.clear();
         for (PlayerView v : views) videos.removeView(v);
         views.clear();
-        // off screen: a newer version installs now (it would wait while watching)
-        net.execute(() -> SelfUpdate.check(this, "urtv-live.apk", false, false));
+        // off screen: a newer version installs now (it would wait while watching). On its own thread: leaving with
+        // Back closes the app's request threads (onDestroy), which cut this check short and no update ever came.
+        final android.content.Context app = getApplicationContext();
+        new Thread(() -> SelfUpdate.check(app, "urtv-live.apk", false, false)).start();
     }
 
     @Override
