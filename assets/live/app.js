@@ -935,7 +935,7 @@ function show(keep){
   ['setup', 'home', 'live', 'movie', 'browse', 'favs', 'search', 'player'].forEach(s => $(s).classList.toggle('on', s === screen));
   $('tv').classList.toggle('video', screen === 'live' || screen === 'player');
   if(screen !== 'live' && screen !== 'player' && Live) Live.stop();
-  if(screen === 'home'){ HOME = null; drawHome(); }
+  if(screen === 'home'){ HOME = null; HOME_AT = Date.now(); drawHome(); myPhoto(); }
   if(screen === 'browse'){ if(keep) GW = ''; drawBrowse(); }
   if(screen === 'favs'){ if(!keep) FSEL = 0; FSEL = Math.max(0, Math.min(FSEL, FAVS().length - 1)); drawFavs(); }
   if(screen === 'movie') drawMovie();
@@ -947,50 +947,45 @@ function show(keep){
 }
 
 // ======================================================================== the remote
-// ---- leaving: «الخروج من التطبيق؟»; «تحديث التطبيق» there looks for a newer version and offers it
-const EXIT = { on: false, mode: 'ask', sel: 0, msg: '', busy: false, latest: 0 };
-function exitBtns(){
-  return EXIT.mode === 'update' ? [['up', 'حدّث التطبيق وأغلقه'], ['stay', 'لا، أبقى في التطبيق']]
-    : [['yes', 'نعم، خروج'], ['stay', 'لا'], ['check', 'تحديث التطبيق']];
-}
+// ---- leaving: one question. The app looks for a newer version by itself (at the start, and again as the
+// question opens): with one the question is «تحديث التطبيق والخروج؟», otherwise «متأكد أنك تريد الخروج من التطبيق؟»
+const EXIT = { on: false, sel: 0, msg: '', busy: false, latest: 0, mine: 0 };
+const newer = () => EXIT.latest > EXIT.mine && EXIT.mine > 0;
+function lookForUpdate(){ if(Live && Live.checkUpdate) Live.checkUpdate(); }
 function drawExit(){
   $('exit').classList.toggle('on', EXIT.on);
   if(!EXIT.on) return;
-  $('xtitle').textContent = EXIT.mode === 'update' ? 'يوجد إصدار جديد ٣٫' + ar(EXIT.latest) : 'الخروج من التطبيق؟';
-  $('xmsg').textContent = EXIT.msg;
-  $('xbtns').innerHTML = exitBtns().map((b, i) => `<div class="btn${b[0] === 'yes' || b[0] === 'up' ? ' main' : ''}${i === EXIT.sel && !EXIT.busy ? ' focus' : ''}">${b[1]}</div>`).join('');
+  $('xtitle').textContent = newer() ? 'تحديث التطبيق والخروج؟' : 'متأكد أنك تريد الخروج من التطبيق؟';
+  $('xmsg').textContent = EXIT.msg || (newer() ? 'يوجد إصدار جديد ٣٫' + ar(EXIT.latest) + ' (الحالي ٣٫' + ar(EXIT.mine) + ')' : '');
+  $('xbtns').innerHTML = ['نعم', 'لا'].map((t, i) => `<div class="btn${i === 0 ? ' main' : ''}${i === EXIT.sel && !EXIT.busy ? ' focus' : ''}">${t}</div>`).join('');
 }
-function openExit(){ Object.assign(EXIT, { on: true, mode: 'ask', sel: 0, msg: '', busy: false }); drawExit(); }
-function closeExit(){ EXIT.on = false; EXIT.busy = false; drawExit(); }
+function openExit(){ Object.assign(EXIT, { on: true, sel: 0, msg: '', busy: false }); drawExit(); lookForUpdate(); }
+function closeExit(){ EXIT.on = false; EXIT.busy = false; clearTimeout(EXIT.t); drawExit(); }
 function exitKey(k){
   if(k === 'Escape') return closeExit();
   if(EXIT.busy) return;
-  const B = exitBtns();
-  if(k === 'ArrowLeft') EXIT.sel = Math.min(B.length - 1, EXIT.sel + 1);
-  else if(k === 'ArrowRight') EXIT.sel = Math.max(0, EXIT.sel - 1);
+  if(k === 'ArrowLeft') EXIT.sel = 1;
+  else if(k === 'ArrowRight') EXIT.sel = 0;
   else if(k === 'Enter'){
-    const act = B[EXIT.sel][0];
-    if(act === 'stay') return closeExit();
-    if(act === 'yes'){ if(Live && Live.exit) Live.exit(); return closeExit(); }
-    if(!Live || !Live.checkUpdate){ EXIT.msg = 'التحديث من هنا يحتاج الإصدار الأحدث من التطبيق'; return drawExit(); }
-    EXIT.busy = true;
-    if(act === 'check'){ EXIT.msg = 'جارٍ البحث عن إصدار جديد…'; Live.checkUpdate(); }
-    else { EXIT.msg = 'جارٍ تنزيل الإصدار الجديد… يُغلق التطبيق عند تثبيته'; Live.update(); }
-    clearTimeout(EXIT.t); EXIT.t = setTimeout(() => { if(EXIT.busy){ EXIT.busy = false; EXIT.msg = 'تعذّر الوصول إلى التحديث، تحقق من الاتصال'; drawExit(); } }, 90000);
+    if(EXIT.sel === 1) return closeExit();
+    if(!newer()){ closeExit(); if(Live && Live.exit) Live.exit(); return; }
+    EXIT.busy = true; EXIT.msg = 'جارٍ تنزيل الإصدار الجديد… يُغلق التطبيق عند تثبيته';
+    Live.update();
+    clearTimeout(EXIT.t); EXIT.t = setTimeout(() => window.onUpdate('تعذّر التحديث: لا يوجد اتصال'), 120000);
   }
   drawExit();
 }
 window.onUpdateInfo = (latest, mine) => {
-  if(!EXIT.on) return;
-  EXIT.busy = false;
-  if(latest > mine) Object.assign(EXIT, { mode: 'update', latest, sel: 0, msg: 'الإصدار الحالي ٣٫' + ar(mine) });
-  else EXIT.msg = latest < 0 ? 'تعذّر البحث عن إصدار جديد، تحقق من الاتصال' : 'التطبيق محدّث (٣٫' + ar(mine) + ')';
-  drawExit();
+  EXIT.latest = latest; EXIT.mine = mine;
+  if(EXIT.on && !EXIT.busy) drawExit();   // the question becomes the update's when a newer version is found
 };
 window.onUpdate = text => {
   if(!EXIT.on) return toast(text);
-  EXIT.busy = false; EXIT.msg = text; drawExit();
-  if(/^جارٍ تثبيت/.test(text)) setTimeout(() => { if(Live && Live.exit) Live.exit(); }, 2500);   // closed: the new version installs
+  clearTimeout(EXIT.t);
+  EXIT.busy = false; EXIT.msg = text;
+  if(/^جارٍ تثبيت/.test(text)){ EXIT.busy = true; setTimeout(() => { if(Live && Live.exit) Live.exit(); }, 2500); }   // closed: the new version installs
+  else { EXIT.latest = 0; EXIT.sel = 0; }   // it could not update: the plain question, so leaving stays possible
+  drawExit();
 };
 
 function key(k, repeat){
@@ -1059,9 +1054,9 @@ function key(k, repeat){
     } else {
       if(k === 'ArrowLeft'){ if(bi % COLS < COLS - 1 && bi < items.length - 1) bi++; }
       else if(k === 'ArrowRight'){ if(bi % COLS === 0) bfocus = 'rail'; else bi--; }
-      // another row: its first card (the one beside the sections)
-      else if(k === 'ArrowDown'){ const n = (Math.floor(bi / COLS) + 1) * COLS; if(n < items.length) bi = n; }
-      else if(k === 'ArrowUp'){ if(bi < COLS){ bfocus = 'search'; } else bi = (Math.floor(bi / COLS) - 1) * COLS; }
+      // another row: the same column (only the home screen's rows start at their first card)
+      else if(k === 'ArrowDown'){ if(Math.floor(bi / COLS) < Math.floor((items.length - 1) / COLS)) bi = Math.min(items.length - 1, bi + COLS); }
+      else if(k === 'ArrowUp'){ if(bi < COLS){ bfocus = 'search'; } else bi -= COLS; }
       else if(k === 'Enter' && repeat && items[bi]){   // a long OK: to the favourites (or off them)
         toggleFav(items[bi]); GW = '';
         const left = curItems().length;
@@ -1076,8 +1071,8 @@ function key(k, repeat){
     if(k === 'Escape'){ screen = 'home'; return show(); }
     if(k === 'ArrowLeft') FSEL = Math.min(f.length - 1, FSEL + 1);
     else if(k === 'ArrowRight') FSEL = Math.max(0, FSEL - 1);
-    else if(k === 'ArrowDown'){ const n = (Math.floor(FSEL / 6) + 1) * 6; if(n < f.length) FSEL = n; }
-    else if(k === 'ArrowUp') FSEL = Math.max(0, (Math.floor(FSEL / 6) - 1) * 6);
+    else if(k === 'ArrowDown'){ if(Math.floor(FSEL / 6) < Math.floor((f.length - 1) / 6)) FSEL = Math.min(f.length - 1, FSEL + 6); }
+    else if(k === 'ArrowUp'){ if(FSEL >= 6) FSEL -= 6; }
     else if(k === 'Enter' && repeat && f[FSEL]){ toggleFav(f[FSEL]); FSEL = Math.max(0, Math.min(FSEL, FAVS().length - 1)); return drawFavs(); }
     else if(k === 'Enter' && f[FSEL]){
       const x = f[FSEL];
@@ -1090,8 +1085,8 @@ function key(k, repeat){
     if(SSEL >= 0){
       if(k === 'ArrowLeft') SSEL = Math.min(SRES.length - 1, SSEL + 1);
       else if(k === 'ArrowRight') SSEL = Math.max(0, SSEL - 1);
-      else if(k === 'ArrowDown'){ const n = (Math.floor(SSEL / 6) + 1) * 6; if(n < SRES.length) SSEL = n; }
-      else if(k === 'ArrowUp'){ if(SSEL < 6){ SSEL = -1; moveFocus($('sres'), -1); $('q').focus(); return; } else SSEL = (Math.floor(SSEL / 6) - 1) * 6; }
+      else if(k === 'ArrowDown'){ if(Math.floor(SSEL / 6) < Math.floor((SRES.length - 1) / 6)) SSEL = Math.min(SRES.length - 1, SSEL + 6); }
+      else if(k === 'ArrowUp'){ if(SSEL < 6){ SSEL = -1; moveFocus($('sres'), -1); $('q').focus(); return; } else SSEL -= 6; }
       else if(k === 'Enter' && repeat && SRES[SSEL]){ const x = SRES[SSEL]; return toggleFav(x.kind === 'live' ? { kind: 'live', id: x.id, name: x.name, img: x.img } : x); }
       else if(k === 'Enter' && SRES[SSEL]) return openResult(SRES[SSEL]);
       if(SSEL >= 0) moveFocus($('sres'), SSEL);
@@ -1201,9 +1196,13 @@ window.remote = (name, rep) => {
   if(name === 'LongOK'){ clearTimeout(LONG.t); if(!LONG.armed){ LONG.armed = true; key('Enter', true); } return; }
   key(name, !!rep);
 };
+let HOME_AT = 0;   // when a screen last gave way to the home screen
 window.onBack = () => {
   if(EXIT.on){ closeExit(); return true; }
-  if(screen === 'home' && !$('setup').classList.contains('on')){ openExit(); return true; }   // leaving is asked first
+  if(screen === 'home' && !$('setup').classList.contains('on')){   // leaving is asked first
+    if(Date.now() - HOME_AT > 900) openExit();   // not by the same Back that just came back to the home screen
+    return true;
+  }
   if(screen === 'setup'){ if(CFG.portal && READY){ screen = 'home'; show(); return true; } return false; }
   if(screen === 'search' && SSEL >= 0){ SSEL = -1; moveFocus($('sres'), -1); $('q').focus(); return true; }
   key('Escape', false);
@@ -1272,6 +1271,17 @@ $('sgo').addEventListener('click', async () => {
   await start();
 });
 
+/** the owner's photo from the home screen app, beside the clock: asked for until it comes (that app may be
+ *  updated after this one, and only then lets it be read) */
+let PHOTO = 0;   // 0 not yet, 1 asking, 2 shown
+function myPhoto(){
+  if(PHOTO || !Live || !Live.hasImg) return;
+  PHOTO = 1;
+  const im = new Image();
+  im.onload = () => { PHOTO = 2; im.className = 'me'; $('prof').appendChild(im); };
+  im.onerror = () => { PHOTO = 0; };
+  im.src = 'https://urtv.local/avatar.png?' + Date.now();
+}
 // ---- start
 function tick(){ const d = new Date(), h = d.getHours() % 12 || 12; $('clk').textContent = `${ar(String(h).padStart(2, '0'))}:${ar(String(d.getMinutes()).padStart(2, '0'))} ${d.getHours() < 12 ? 'ص' : 'م'}`; }
 async function start(){
@@ -1308,11 +1318,7 @@ async function start(){
   $('tv').style.setProperty('--bg', `url(backgrounds/${bgs[Math.floor(Math.random() * bgs.length)]}.jpg)`);
   tick(); setInterval(tick, 10000);
   if(Live && Live.frost) $('tv').classList.add('frosty');   // the app puts the glass under the panels: they come at once
-  if(Live && Live.hasImg){   // the owner's photo from the home screen, when there is one
-    const im = new Image();
-    im.onload = () => { im.className = 'me'; $('prof').appendChild(im); $('prof').classList.add('has'); };
-    im.src = 'https://urtv.local/avatar.png';
-  }
+  setTimeout(lookForUpdate, 8000);   // known before the question at leaving is asked
   $('smac').textContent = CFG.mac || '';
   start();
 })();
