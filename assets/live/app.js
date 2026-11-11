@@ -495,15 +495,17 @@ function openLive(i){
 }
 function drawLive(flash){
   const c = ALL[cur]; if(!c) return;
-  $('inum').textContent = ar(c.num);
-  $('inm').textContent = c.n;
+  if(INFO_OF !== c){ INFO_OF = c; $('inum').textContent = ar(c.num); $('inm').textContent = c.n; }
   const info = $('info');
   if(flash){ info.classList.remove('hide'); clearTimeout(infoT); infoT = setTimeout(() => { info.classList.add('hide'); frostSoon(); }, 3500); }
   if(listOpen){ clearTimeout(infoT); info.classList.add('hide'); }
   $('list').classList.toggle('hide', !listOpen);
   if(listOpen) drawList();
-  frostSoon();
+  // the glass is placed again only when a panel came, went or changed its width: not at every key in the list
+  const fk = listOpen + ':' + catsOpen + ':' + info.classList.contains('hide');
+  if(fk !== FKEY){ FKEY = fk; frostSoon(); }
 }
+let INFO_OF = null, FKEY = '';
 /** one class on one child of a box */
 function mark(box, cls, el){
   const o = box.querySelector(':scope > .' + cls);
@@ -524,7 +526,7 @@ function fitRows(box, now){
   const inner = box.clientHeight - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0);
   return Math.max(3, Math.floor((inner + gap) / (f.offsetHeight + gap)));
 }
-let LROWS = 8, LFROM = 0, LWIN = '', LCATS_OF = null, LCT = 0;
+let LROWS = 8, LFROM = 0, LWIN = '', LNEAR = '', LWFROM = 0, LCATS_OF = null, LCT = 0;
 /** ▲▼ in the sections: the edge moves now; the section's channels show beside it when the key rests */
 function moveCats(){
   const cs = $('lcats');
@@ -551,11 +553,19 @@ function drawList(){
   if(lsel < LFROM) LFROM = lsel; else if(lsel > LFROM + LROWS - 1) LFROM = lsel - LROWS + 1;
   const from = LFROM = Math.max(0, Math.min(LFROM, chans.length - LROWS));
   const win = lcat + ':' + from + ':' + LROWS + ':' + chans.length;
-  if(win !== LWIN){
-    LWIN = win;
-    box.innerHTML = chans.slice(from, from + LROWS).map(x => `<div class="it"><span class="n">${ar(x.num)}</span>`
-      + (x.logo ? `<img class="chanlogo" src="${esc(x.logo)}" onerror="this.remove()">` : '')
-      + `<span class="nm">${esc(x.n)}${isFav('live', x.id) ? ' <small style="display:inline;color:var(--gold-lt)">★</small>' : ''}</span></div>`).join('');
+  const rowOf = x => `<div class="it"><span class="n">${ar(x.num)}</span>`
+    + (x.logo ? `<img class="chanlogo" src="${esc(x.logo)}" onerror="this.remove()">` : '')
+    + `<span class="nm">${esc(x.n)}${isFav('live', x.id) ? ' <small style="display:inline;color:var(--gold-lt)">★</small>' : ''}</span></div>`;
+  const near = lcat + ':' + LROWS + ':' + chans.length;
+  if(win !== LWIN && near === LNEAR && LWIN && Math.abs(from - LWFROM) === 1 && box.children.length === LROWS){
+    // the list moved by one row: one row leaves, one comes (the others, and their logos, stay as they are)
+    if(from > LWFROM){ box.firstElementChild.remove(); box.insertAdjacentHTML('beforeend', rowOf(chans[from + LROWS - 1])); }
+    else { box.lastElementChild.remove(); box.insertAdjacentHTML('afterbegin', rowOf(chans[from])); }
+    LWIN = win; LWFROM = from;
+  }
+  else if(win !== LWIN){
+    LWIN = win; LNEAR = near; LWFROM = from;
+    box.innerHTML = chans.slice(from, from + LROWS).map(rowOf).join('');
     const n = fitRows(box, LROWS);
     if(n !== LROWS){ LROWS = n; return drawList(); }
   }

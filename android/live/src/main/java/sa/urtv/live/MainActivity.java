@@ -187,7 +187,7 @@ public class MainActivity extends Activity {
         @Override public void run() {
             if (frostRects.isEmpty()) return;
             frostNow();
-            h.postDelayed(this, 250);
+            h.postDelayed(this, lastKeyAt + 700 > android.os.SystemClock.uptimeMillis() ? 300 : 600);
         }
     };
 
@@ -238,6 +238,10 @@ public class MainActivity extends Activity {
     }
 
     private void frostNow() {
+        // while keys are coming the glass keeps the picture it has: copying the video's picture at every step of
+        // the cursor took the time the list needed to move
+        if (!frostViews.isEmpty() && frostViews.get(0).getVisibility() == View.VISIBLE
+            && lastKeyAt + 700 > android.os.SystemClock.uptimeMillis()) return;
         if (frostBusy > 0 || layout != 1 || views.isEmpty() || views.get(0).getVisibility() != View.VISIBLE) return;
         View sv = views.get(0).getVideoSurfaceView();
         if (!(sv instanceof SurfaceView) || sv.getWidth() == 0 || !((SurfaceView) sv).getHolder().getSurface().isValid()) return;
@@ -404,7 +408,7 @@ public class MainActivity extends Activity {
     // ---- a key in the app is someone using the TV. The screens are one page: no focus moves between views, so
     // the screensaver's watch (IdleWatch, which sees focus and clicks through accessibility events) saw nothing
     // and came up while the lists were being browsed. Now each key says so, at most once every two seconds.
-    private long lastActive;
+    private long lastActive, lastKeyAt;
     private void active() {
         long now = android.os.SystemClock.uptimeMillis();
         if (now - lastActive < 2000) return;
@@ -630,7 +634,7 @@ public class MainActivity extends Activity {
     @Override
     public boolean dispatchKeyEvent(KeyEvent e) {
         int k = e.getKeyCode();
-        if (e.getAction() == KeyEvent.ACTION_DOWN) active();
+        if (e.getAction() == KeyEvent.ACTION_DOWN) { lastKeyAt = android.os.SystemClock.uptimeMillis(); active(); }
         String name = null;
         switch (k) {
             case KeyEvent.KEYCODE_CHANNEL_UP: name = "ChannelUp"; break;
