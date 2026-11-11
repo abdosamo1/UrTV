@@ -105,9 +105,17 @@ function setLive(ch, cats){
   ALL = ch;
   const by = new Map();
   for(const c of ALL){ let l = by.get(c.g); if(!l) by.set(c.g, l = []); l.push(c); }
-  CATS = cats.map(c => ({ id: c.id, name: c.name, ch: by.get(c.id) || [] })).filter(c => c.ch.length);
+  CATS = [{ id: '⌕', name: '⌕ بحث عن قناة', find: true, ch: [] }, { id: '★', name: '★ المفضلة', fav: true, ch: [] }]
+    .concat(cats.map(c => ({ id: c.id, name: c.name, ch: by.get(c.id) || [] })).filter(c => c.ch.length));
   const at = new Map(CATS.map((c, i) => [c.id, i]));
   ALL.forEach((c, i) => { c.i = i; c.ci = at.has(c.g) ? at.get(c.g) : -1; });
+  favLive();
+}
+/** the favourite channels' section, made again when one is added or taken off */
+function favLive(){
+  const f = CATS.find(c => c.fav); if(!f) return;
+  f.ch = ALL.filter(c => isFav('live', c.id));
+  LCATS_OF = null; LWIN = '';
 }
 /** items by their section, in the order given */
 function groupBy(items){
@@ -303,6 +311,7 @@ function toggleFav(it){
   const f = FAVS(), at = f.findIndex(x => x.kind === it.kind && x.id === it.id);
   if(at >= 0) f.splice(at, 1); else f.unshift({ kind: it.kind, id: it.id, name: it.name, img: it.img || it.logo || '', cmd: it.cmd || '', r: it.r || null, year: it.year || '' });
   store.set('favs', f); FAVK = null; HOME = null;
+  if(it.kind === 'live') favLive();
   toast(at >= 0 ? 'أُزيل من المفضلة' : 'أُضيف إلى المفضلة');
 }
 const favMark = it => isFav(it.kind, it.id) ? '<b class="fv">★</b> ' : '';
@@ -486,15 +495,17 @@ function openLive(i){
 }
 function drawLive(flash){
   const c = ALL[cur]; if(!c) return;
-  $('inum').textContent = ar(c.num);
-  $('inm').textContent = c.n;
+  if(INFO_OF !== c){ INFO_OF = c; $('inum').textContent = ar(c.num); $('inm').textContent = c.n; }
   const info = $('info');
   if(flash){ info.classList.remove('hide'); clearTimeout(infoT); infoT = setTimeout(() => { info.classList.add('hide'); frostSoon(); }, 3500); }
   if(listOpen){ clearTimeout(infoT); info.classList.add('hide'); }
   $('list').classList.toggle('hide', !listOpen);
   if(listOpen) drawList();
-  frostSoon();
+  // the glass is placed again only when a panel came, went or changed its width: not at every key in the list
+  const fk = listOpen + ':' + catsOpen + ':' + info.classList.contains('hide');
+  if(fk !== FKEY){ FKEY = fk; frostSoon(); }
 }
+let INFO_OF = null, FKEY = '';
 /** one class on one child of a box */
 function mark(box, cls, el){
   const o = box.querySelector(':scope > .' + cls);
@@ -515,13 +526,13 @@ function fitRows(box, now){
   const inner = box.clientHeight - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0);
   return Math.max(3, Math.floor((inner + gap) / (f.offsetHeight + gap)));
 }
-let LROWS = 8, LFROM = 0, LWIN = '', LCATS_OF = null, LCT = 0;
+let LROWS = 8, LFROM = 0, LWIN = '', LNEAR = '', LWFROM = 0, LCATS_OF = null, LCT = 0;
 /** ▲▼ in the sections: the edge moves now; the section's channels show beside it when the key rests */
 function moveCats(){
   const cs = $('lcats');
   mark(cs, 'sel', cs.children[csel]); reveal(cs, cs.children[csel]);
   clearTimeout(LCT);
-  LCT = setTimeout(() => { if(!listOpen || !catsOpen || lcat === csel) return; lcat = csel; lsel = 0; LFROM = 0; drawList(); }, 130);
+  LCT = setTimeout(() => { if(!listOpen || !catsOpen || lcat === csel || CATS[csel].find) return; lcat = csel; lsel = 0; LFROM = 0; drawList(); }, 130);
 }
 /** the channels' list: the sections are built once, the channels only when their window moves; a key between
  *  them moves two classes */
@@ -532,7 +543,7 @@ function drawList(){
   const cs = $('lcats');
   if(LCATS_OF !== CATS){
     LCATS_OF = CATS;
-    cs.innerHTML = CATS.map(c2 => `<div class="c"><span>${esc(c2.name)}</span><small>${ar(c2.ch.length)}</small></div>`).join('');
+    cs.innerHTML = CATS.map(c2 => `<div class="c"><span>${esc(c2.name)}</span><small>${c2.find ? '' : ar(c2.ch.length)}</small></div>`).join('');
   }
   mark(cs, 'cur', cs.children[lcat]);
   mark(cs, 'sel', catsOpen ? cs.children[csel] : null);
@@ -542,11 +553,19 @@ function drawList(){
   if(lsel < LFROM) LFROM = lsel; else if(lsel > LFROM + LROWS - 1) LFROM = lsel - LROWS + 1;
   const from = LFROM = Math.max(0, Math.min(LFROM, chans.length - LROWS));
   const win = lcat + ':' + from + ':' + LROWS + ':' + chans.length;
-  if(win !== LWIN){
-    LWIN = win;
-    box.innerHTML = chans.slice(from, from + LROWS).map(x => `<div class="it"><span class="n">${ar(x.num)}</span>`
-      + (x.logo ? `<img class="chanlogo" src="${esc(x.logo)}" onerror="this.remove()">` : '')
-      + `<span class="nm">${esc(x.n)}${isFav('live', x.id) ? ' <small style="display:inline;color:var(--gold-lt)">★</small>' : ''}</span></div>`).join('');
+  const rowOf = x => `<div class="it"><span class="n">${ar(x.num)}</span>`
+    + (x.logo ? `<img class="chanlogo" src="${esc(x.logo)}" onerror="this.remove()">` : '')
+    + `<span class="nm">${esc(x.n)}${isFav('live', x.id) ? ' <small style="display:inline;color:var(--gold-lt)">★</small>' : ''}</span></div>`;
+  const near = lcat + ':' + LROWS + ':' + chans.length;
+  if(win !== LWIN && near === LNEAR && LWIN && Math.abs(from - LWFROM) === 1 && box.children.length === LROWS){
+    // the list moved by one row: one row leaves, one comes (the others, and their logos, stay as they are)
+    if(from > LWFROM){ box.firstElementChild.remove(); box.insertAdjacentHTML('beforeend', rowOf(chans[from + LROWS - 1])); }
+    else { box.lastElementChild.remove(); box.insertAdjacentHTML('afterbegin', rowOf(chans[from])); }
+    LWIN = win; LWFROM = from;
+  }
+  else if(win !== LWIN){
+    LWIN = win; LNEAR = near; LWFROM = from;
+    box.innerHTML = chans.slice(from, from + LROWS).map(rowOf).join('');
     const n = fitRows(box, LROWS);
     if(n !== LROWS){ LROWS = n; return drawList(); }
   }
@@ -893,25 +912,27 @@ function drawFavs(){
     + `${x.kind === 'live' ? '<div class="kind">قناة</div>' : ''}<div class="cap">${esc(x.name)}</div></div>`).join('')}</div>`;
 }
 let FSEL = 0, SSEL = -1, SRES = [], searchT = 0, LAST_IDS = '';
+let SCOPE = 'vod';   // what the search looks in: 'vod', 'series' or 'live', by where it was opened from
+const SWORD = { vod: ['بحث في الأفلام', 'اسم فيلم…'], series: ['بحث في المسلسلات', 'اسم مسلسل…'], live: ['بحث عن قناة', 'اسم قناة أو رقمها…'] };
+function openSearch(scope){ SCOPE = scope; screen = 'search'; show(); }
+function leaveSearch(){
+  if(SCOPE === 'live') return openLive(cur);
+  screen = 'browse'; show(true);
+}
 function drawSearch(){
   const q = $('q').value.trim();
-  if(q.length < 2){ SRES = []; $('sres').innerHTML = '<div class="none">اكتب حرفين أو أكثر، أو استخدم البحث الصوتي من جهاز التحكم</div>'; return; }
+  $('stitle').textContent = SWORD[SCOPE][0]; $('q').placeholder = SWORD[SCOPE][1];
   clearTimeout(searchT);
+  if(q.length < (SCOPE === 'live' ? 1 : 2)){ SRES = []; LAST_IDS = ''; $('sres').innerHTML = '<div class="none">' + (SCOPE === 'live' ? 'اكتب اسم القناة أو رقمها' : 'اكتب حرفين أو أكثر') + '، أو استخدم البحث الصوتي من جهاز التحكم</div>'; return; }
   searchT = setTimeout(async () => {
-    const chans = firstN(ALL, c => c.n.toLowerCase().includes(q.toLowerCase()), 6).map(c => ({ kind: 'live', id: c.id, name: c.n, img: c.logo, ch: c }));
+    const lq = q.toLowerCase(), has = x => x.name.toLowerCase().includes(lq), kind = SCOPE === 'vod' ? 'أفلام' : 'مسلسلات';
     let found;
-    if(M3U){
-      const lq = q.toLowerCase(), all = (PAGES['أفلام:*'] || { items: [] }).items.concat((PAGES['مسلسلات:*'] || { items: [] }).items);
-      found = firstN(all, x => x.name.toLowerCase().includes(lq), 24);
-    } else if(XT){
-      const lq = q.toLowerCase();
-      found = firstN(XVOD, x => x.name.toLowerCase().includes(lq), 12).concat(firstN(XSER, x => x.name.toLowerCase().includes(lq), 12));
-    } else {
-      const [v, s] = await Promise.all(['vod', 'series'].map(t => call(`type=${t}&action=get_ordered_list&search=${enc(q)}&category=*&genre=*&p=1&sortby=added`).catch(() => null)));
-      found = listOf(v).map(x => vItem(x, 'vod')).concat(listOf(s).map(x => vItem(x, 'series')));
-    }
-    if($('q').value.trim() !== q) return;
-    const next = chans.concat(found).slice(0, 30), ids = next.map(x => x.kind + x.id).join();
+    if(SCOPE === 'live') found = firstN(ALL, c => c.n.toLowerCase().includes(lq) || String(c.num) === q, 30).map(c => ({ kind: 'live', id: c.id, name: c.n, img: c.logo, ch: c }));
+    else if(M3U) found = firstN((PAGES[kind + ':*'] || { items: [] }).items, has, 30);
+    else if(XT) found = firstN(SCOPE === 'vod' ? XVOD : XSER, has, 30);
+    else found = listOf(await call(`type=${SCOPE}&action=get_ordered_list&search=${enc(q)}&category=*&genre=*&p=1&sortby=added`).catch(() => null)).map(x => vItem(x, SCOPE));   // one request, of this kind only
+    if($('q').value.trim() !== q || screen !== 'search') return;
+    const next = found.slice(0, 30), ids = SCOPE + next.map(x => x.kind + x.id).join();
     if(ids === LAST_IDS) return;   // the same results: nothing drawn again
     LAST_IDS = ids; SRES = next;
     SSEL = -1; drawSearchRes(q);
@@ -1018,6 +1039,7 @@ function key(k, repeat){
       else if(k === 'Escape'){ screen = 'home'; show(); }
     } else {
       const chans = (CATS[lcat] || { ch: [] }).ch;
+      setTimeout(listIdle, 0);   // after this key has done its work (it may close the list itself)
       if(catsOpen){
         if(k === 'ArrowDown' || k === 'ArrowUp'){
           const n = Math.max(0, Math.min(CATS.length - 1, csel + (k === 'ArrowDown' ? 1 : -1)));
@@ -1025,13 +1047,14 @@ function key(k, repeat){
           return;
         }
         clearTimeout(LCT);
+        if((k === 'Enter' || k === 'ArrowLeft') && CATS[csel] && CATS[csel].find) return openSearch('live');
         if(k === 'Enter' || k === 'ArrowLeft'){ if(lcat !== csel){ lcat = csel; lsel = 0; LFROM = 0; } catsOpen = false; }
         else if(k === 'Escape') catsOpen = false;
       }
       else if(k === 'ArrowDown') lsel = Math.min(chans.length - 1, lsel + 1);
       else if(k === 'ArrowUp') lsel = Math.max(0, lsel - 1);
       else if(k === 'ArrowRight'){ catsOpen = true; csel = lcat; }
-      else if(k === 'Enter' && repeat){ const c = chans[lsel]; if(c && !LONG.done){ LONG.done = true; toggleFav({ kind: 'live', id: c.id, name: c.n, img: c.logo }); LWIN = ''; } }
+      else if(k === 'Enter' && repeat){ const c = chans[lsel]; if(c && !LONG.done){ LONG.done = true; toggleFav({ kind: 'live', id: c.id, name: c.n, img: c.logo }); lsel = Math.max(0, Math.min(lsel, (CATS[lcat] || { ch: [] }).ch.length - 1)); } }
       else if(k === 'Enter'){
         if(!chans[lsel]) return;
         cur = chans[lsel].i; listOpen = false;
@@ -1043,7 +1066,7 @@ function key(k, repeat){
   } else if(screen === 'browse'){
     const items = curItems();
     if(bfocus === 'search'){
-      if(k === 'Enter'){ screen = 'search'; return show(); }
+      if(k === 'Enter') return openSearch(VTYPE[bKind]);
       if(k === 'ArrowDown') bfocus = 'rail';
       else if(k === 'Escape'){ screen = 'home'; return show(); }
     } else if(bfocus === 'rail'){
@@ -1081,7 +1104,7 @@ function key(k, repeat){
     }
     moveFocus($('favbody'), FSEL);
   } else if(screen === 'search'){
-    if(k === 'Escape'){ screen = 'home'; return show(); }
+    if(k === 'Escape') return leaveSearch();
     if(SSEL >= 0){
       if(k === 'ArrowLeft') SSEL = Math.min(SRES.length - 1, SSEL + 1);
       else if(k === 'ArrowRight') SSEL = Math.max(0, SSEL - 1);
@@ -1158,7 +1181,13 @@ function key(k, repeat){
     showPbar();
   }
 }
-function openList(){ listOpen = true; catsOpen = false; const c = ALL[cur]; lcat = Math.max(0, c ? c.ci : 0); lsel = Math.max(0, (CATS[lcat] || { ch: [] }).ch.indexOf(c)); LFROM = lsel - (LROWS >> 1); drawLive(false); }
+/** the channels' list closes by itself five seconds after the last key */
+let LIDLE = 0;
+function listIdle(){
+  clearTimeout(LIDLE);
+  if(listOpen) LIDLE = setTimeout(() => { if(screen !== 'live' || !listOpen) return; clearTimeout(LCT); listOpen = false; catsOpen = false; drawLive(false); }, 5000);
+}
+function openList(){ listOpen = true; listIdle(); catsOpen = false; const c = ALL[cur]; lcat = c && c.ci >= 0 ? c.ci : Math.min(2, CATS.length - 1); lsel = Math.max(0, (CATS[lcat] || { ch: [] }).ch.indexOf(c)); LFROM = lsel - (LROWS >> 1); drawLive(false); }
 
 // a long OK (the key held): favourites for a channel, the activation screen from «الرئيسية»
 const LONG = { done: false };
@@ -1167,7 +1196,7 @@ document.addEventListener('keydown', e => {
   if(screen === 'setup') return setupKey(e);
   if(t && (t.id === 'q' || t.id === 'mic' || t.id === 'lang')){
     if(t.id === 'q' && e.key === 'ArrowDown' && SRES.length){ e.preventDefault(); t.blur(); $('tv').focus(); SSEL = 0; moveFocus($('sres'), 0); }
-    if(e.key === 'Escape'){ e.preventDefault(); screen = 'home'; show(); }
+    if(e.key === 'Escape'){ e.preventDefault(); if(screen === 'search') leaveSearch(); else { screen = 'home'; show(); } }
     return;
   }
   const map = { Backspace: 'Escape', GoBack: 'Escape' };

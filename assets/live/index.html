@@ -90,7 +90,7 @@
   .list{flex-direction:row!important;gap:1em;transition:width .35s cubic-bezier(.2,.8,.2,1),opacity .3s,transform .35s cubic-bezier(.2,.9,.25,1.1)!important}
   .list.wide{width:56%}
   .list .chans{flex:1;display:flex;flex-direction:column;min-width:0}
-  .list .cats{position:relative;width:0;overflow:hidden;display:flex;flex-direction:column;gap:.35em;transition:width .35s cubic-bezier(.2,.8,.2,1),opacity .3s;opacity:0}
+  .list .cats{position:relative;width:0;overflow:hidden;display:flex;flex-direction:column;gap:.35em;opacity:0;contain:layout paint}
   .list.wide .cats{width:36%;opacity:1;border-left:1px solid rgba(255,255,255,.14);padding-left:1em}
   .list .cats .c{flex:0 0 auto;padding:.6em .9em;border-radius:.9em;font-size:1.15em;display:flex;justify-content:space-between;gap:.6em;white-space:nowrap}
   .list .cats .c span{overflow:hidden;text-overflow:ellipsis;min-width:0}
@@ -101,8 +101,8 @@
   .list.wide .chans{opacity:.55}
   .list .cat{display:flex;align-items:center;justify-content:space-between;font-size:1.3em;padding:.2em .3em .8em;color:var(--gold-lt)}
   .list .cat .hint{font-size:.7em;color:var(--dim)}
-  .list .items{flex:1;overflow:hidden;display:flex;flex-direction:column;gap:.45em}
-  .list .it{flex:0 0 auto;display:flex;align-items:center;gap:.9em;padding:.65em .9em;border-radius:.9em;font-size:1.15em;min-height:3.5em;transition:background .15s}
+  .list .items{flex:1;overflow:hidden;display:flex;flex-direction:column;gap:.45em;contain:layout paint}
+  .list .it{flex:0 0 auto;display:flex;align-items:center;gap:.9em;padding:.65em .9em;border-radius:.9em;font-size:1.15em;min-height:3.5em}
   .list .it .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .list .it .n{font-family:'ThmanyahDisplay';color:var(--dim);min-width:2em;text-align:center}
   .list .it.cur .n{color:var(--gold-lt)}
@@ -135,7 +135,7 @@
   #browse .shade{position:absolute;inset:0;background:linear-gradient(270deg,rgba(0,0,0,.55),rgba(0,0,0,.75))}
   .btop{position:absolute;top:4%;right:4%;left:4%;display:flex;align-items:center;justify-content:space-between}
   .rail{position:absolute;top:15%;bottom:5%;right:3%;width:22%;border-radius:1.6em;padding:1em;display:flex;flex-direction:column;gap:.35em;overflow:hidden}
-  .rail .c{flex:0 0 auto;padding:.7em 1em;border-radius:.9em;font-size:1.2em;display:flex;justify-content:space-between;gap:.6em;transition:background .15s}
+  .rail .c{flex:0 0 auto;padding:.7em 1em;border-radius:.9em;font-size:1.2em;display:flex;justify-content:space-between;gap:.6em}
   .rail .c span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
   .rail .c small{color:var(--dim)}
   .rail .c.cur{color:var(--gold-lt)}
@@ -322,8 +322,8 @@
   <!-- search -->
   <section class="screen" id="search">
     <div class="shade" style="position:absolute;inset:0;background:rgba(0,0,0,.65)"></div>
-    <div class="btop"><div class="brand">بحث</div></div>
-    <div class="sfield glass">⌕<input id="q" placeholder="اسم فيلم أو مسلسل أو قناة…" autocomplete="off">
+    <div class="btop"><div class="brand" id="stitle">بحث</div></div>
+    <div class="sfield glass">⌕<input id="q" placeholder="اسم فيلم…" autocomplete="off">
       <button class="lang" id="lang" title="لغة البحث الصوتي">ع</button>
       <button class="mic" id="mic" title="البحث الصوتي"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <rect x="9" y="3" width="6" height="11" rx="3" fill="rgba(241,207,138,.25)"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8.5 21h7"/></svg></button></div>
