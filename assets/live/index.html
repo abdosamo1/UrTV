@@ -182,14 +182,44 @@
   .prof{position:relative;overflow:hidden}
   .prof .me{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%}
   /* ---- leaving the app */
-  #exit{position:absolute;inset:0;display:none;z-index:8;background:rgba(0,0,0,.6);font-size:1.1cqw}
-  #exit.on{display:block}
-  #exit .box{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);min-width:38%;max-width:70%;border-radius:2em;padding:2.2em 2.6em;text-align:center}
-  #exit h2{font-family:'ThmanyahDisplay';font-size:2.1em;margin:0 0 .3em}
-  #exit .msg{color:var(--dim);font-size:1.15em;min-height:1.6em;margin-bottom:1.2em}
-  #exit .btns{display:flex;gap:1em;justify-content:center}
-  #exit .btn{padding:.75em 1.7em;border-radius:999px;font-size:1.25em;border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.07);transition:transform .15s}
-  #exit .btn.main{background:rgba(241,207,138,.3);border-color:rgba(241,207,138,.7)}
+  .modal{position:absolute;inset:0;display:none;z-index:8;background:rgba(0,0,0,.62);font-size:1.1cqw}
+  .modal.on{display:block;animation:dim .22s ease-out}
+  .modal.out{animation:dimout .16s ease-in forwards}
+  .modal .box{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);min-width:38%;max-width:74%;border-radius:2em;padding:2.2em 2.6em;text-align:center;
+    background:linear-gradient(165deg,rgba(255,255,255,.16),rgba(255,255,255,.04) 45%,rgba(255,255,255,.08)),rgba(22,24,23,.92);backdrop-filter:none;-webkit-backdrop-filter:none}
+  /* the popup grows a little as it clears, and settles (it does not slide: it belongs to the middle) */
+  .modal.on .box{animation:pop .28s cubic-bezier(.2,.9,.25,1.15)}
+  .modal.out .box{animation:popout .16s ease-in forwards}
+  @keyframes dim{from{opacity:0}}
+  @keyframes dimout{to{opacity:0}}
+  @keyframes pop{from{opacity:0;transform:translate(-50%,-47%) scale(.9)}}
+  @keyframes popout{to{opacity:0;transform:translate(-50%,-49%) scale(.95)}}
+  .modal h2{font-family:'ThmanyahDisplay';font-size:2.1em;margin:0 0 .3em}
+  .modal .msg{color:var(--dim);font-size:1.15em;min-height:1.6em;margin-bottom:1.2em}
+  .modal .btns{display:flex;gap:1em;justify-content:center}
+  .modal .btn{padding:.75em 1.7em;border-radius:999px;font-size:1.25em;border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.07);transition:transform .15s}
+  .modal .btn.main{background:rgba(241,207,138,.3);border-color:rgba(241,207,138,.7)}
+  /* ---- the accounts' popup */
+  #apop .box{width:56%;padding:2em 2.6em 1.8em}
+  .accts{display:flex;gap:1.4em;justify-content:center;flex-wrap:wrap;padding:1em .5em .6em}
+  .acard{width:11.5em;padding:1.5em 1em 1.3em;border-radius:1.4em;border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.06);transition:transform .15s}
+  .acard.cur{border-color:rgba(241,207,138,.6);background:rgba(241,207,138,.14)}
+  .acard .ava{width:4.6em;height:4.6em;margin:0 auto .8em;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--gold-lt);
+    border:1px solid rgba(241,207,138,.5);background:rgba(241,207,138,.12)}
+  .acard .ava svg{width:56%;height:56%}
+  .acard .ava.plus{font-size:1em;border-style:dashed;border-color:rgba(255,255,255,.45);background:none;color:var(--txt)}
+  .acard .ava.plus{font-family:'ThmanyahDisplay'}
+  .acard .plus{line-height:1;font-size:2.6em!important;width:1.77em!important;height:1.77em!important}
+  .acard b{display:block;font-size:1.35em;font-weight:500;direction:ltr}
+  .acard.add b{direction:rtl}
+  .acard small{display:block;color:var(--dim);font-size:.95em;margin-top:.25em}
+  #apop .lbl{color:var(--gold-lt);font-size:1.05em;margin:1em 0 .5em}
+  #apop .mac{font-family:'ThmanyahDisplay';direction:ltr;font-size:2.3em;letter-spacing:.06em;padding:.15em 0 .25em;border-radius:.4em;background:rgba(0,0,0,.25);border:1px solid rgba(241,207,138,.45)}
+  #apop input{width:100%;direction:ltr;text-align:left;border-radius:999px;padding:.7em 1.2em;font:inherit;font-size:1.15em;color:var(--txt);border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);outline:none}
+  #apop input:focus{border-color:var(--gold-lt);box-shadow:0 0 0 .15em var(--gold-lt)}
+  #apop .btns{margin-top:1.3em}
+  #apop .st{min-height:1.5em;margin-top:.9em;color:var(--gold-lt);font-size:1em}
+  #apop .ver{margin-top:.3em;font-size:.85em;color:rgba(255,253,246,.4)}
   /* ---- on the device: the video is under the page */
   /* over a bright picture the glass needs a dark base to stay readable */
   /* the app puts the video's own picture, blurred, under each panel (Live.frost): with this tint and the
@@ -353,7 +383,9 @@
     </div>
   </section>
   <!-- leaving the app: asked first; the update is looked for from here -->
-  <div id="exit"><div class="box glass"><h2 id="xtitle"></h2><div class="msg" id="xmsg"></div><div class="btns" id="xbtns"></div></div></div>
+  <div id="exit" class="modal"><div class="box glass"><h2 id="xtitle"></h2><div class="msg" id="xmsg"></div><div class="btns" id="xbtns"></div></div></div>
+  <!-- the accounts (the owner's photo beside the clock): a card each and «+»; a card opens the MAC and the link here -->
+  <div id="apop" class="modal"><div class="box glass"><h2 id="atitle"></h2><div id="abody"></div></div></div>
   <div class="loading" id="loading" style="display:none">جارٍ التحميل…</div>
   <div class="toast glass" id="toast"></div>
 </div>
