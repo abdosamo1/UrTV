@@ -2,19 +2,18 @@
 
 <h1 align="center">تلفزيونك · UrTV</h1>
 
-<p align="center" dir="rtl"> واجهة رئيسية عربية وشاشة توقف للتلفزيونات مخصصة لبدلان أوروبا Android TV و Google TV، وتسريع آمن للتلفزيون.<br>يركّبها لك مساعد ذكاء اصطناعي بأمر واحد.</p>
+<p align="center" dir="rtl"> شاشتك محتاجة تغيير - تطبيق تلفزيونك ببدل شاشتك وشاشة توقف بشاشة أخف وأسهل الاستخدام مع توقيت الصلوات باستخدام موقع مواقيت في أوروبا<br></p>
 
-<p align="center">An Arabic home screen and a Saudi screensaver for Android TV / Google TV, and a safe speed-up.<br>Your AI agent sets it all up.</p>
+<p align="center">An Arabic home screen and a screensaver for Android TV / Google TV, and a safe speed-up.<br>Your AI agent sets it all up.</p>
 
 <p align="center"><img src=".github/screens/before-after-home.jpg" alt="Before: Google TV home. After: the تلفزيونك home screen" width="100%"></p>
 <p align="center"><img src=".github/screens/before-after-screensaver.jpg" alt="Before: the Google screensaver. After: شاشة تلفزيونك" width="100%"></p>
 
 <div dir="rtl">
 
-> **هذه النسخة** مبنية على [tshi-dev/UrTV](https://github.com/tshi-dev/UrTV) مع إضافات:
 > مواقيت الأذان والإقامة والجمعة من جامعك على [مواقيت](https://mawaqit.net) (تختاره من الإعدادات برابطه)،
 > والمدينة والطقس والتوقيت تلقائياً حسب موقع الاتصال (خارج الدول العربية بلغة البلد: «Stuttgart, Deutschland»)،
-> وبدون مؤشرات الأسواق.
+
 
 ## ركّبه في 3 خطوات
 
@@ -35,8 +34,8 @@
 
 > ركّب تلفزيوني من https://github.com/abdosamo1/UrTV: انسخ المستودع واتبع `docs/SETUP-PROMPT.md` خطوة بخطوة. أنت على كمبيوتر متصل بنفس شبكة الواي فاي حقت التلفزيون.
 
-#### وش يصير بعد اللصق؟
-يسألك عن **مدينتك** و**أنديتك**، والتلفزيون يسألك **Allow** مرة وحدة، وبعدها خلّه يشتغل: 40 دقيقة وكم إعادة تشغيل.
+#### شو بصير بعد اللصق؟
+يسألك عن **مدينتك** و**أنديتك** ورابط اقرب جامع الك على تطبيق مواقيت وإذا حابب تضيف صورة خاصة فيك بتطلع بالأعلى جنب الاسم، والتلفزيون يسألك **Allow** مرة وحدة، وبعدها خلّه يشتغل: 40 دقيقة وكم إعادة تشغيل.
 
 #### بترجعه مثل ما كان؟
 نعم، بأي وقت: تطبيقاتنا تنحذف، واللي أطفأناه يرجع، وشاشة التلفزيون الأصلية ترجع.
@@ -44,7 +43,7 @@
 
 #### نزلت نسخة جديدة؟
 ما تحتاج شي: الشاشة والتطبيقين يتحدّثون لحالهم من الإنترنت كل ٦ ساعات، بدون لابتوب، وإعداداتك كلها باقية.
-وتقدر تحدّث فوراً من الإعدادات: «حدّث الآن». (التلفزيونات المركّبة قبل هذي الميزة تحتاج تحديث أخير واحد من اللابتوب.)
+وتقدر تحدّث فوراً من الإعدادات: «حدّث الآن».
 <sub>`optimize/install.sh all`</sub>
 
 #### نزل تحديث للنظام وقفل تطبيقنا؟
@@ -73,7 +72,7 @@ Settings → About → press OK on **Build** 7 times. Then go to **Developer opt
 > Set up my TV with https://github.com/abdosamo1/UrTV: clone it and follow `docs/SETUP-PROMPT.md` step by step. You are on a computer on the same Wi-Fi as the TV.
 
 #### What happens after pasting?
-It asks your **city** and your **clubs**, the TV asks **Allow** once, then leave it: 40 minutes, a few restarts.
+It asks your **name**, your**picture** (if you want), your **city**, your **clubs**, the TV asks **Allow** once, then leave it: 40 minutes, a few restarts.
 
 #### Can I put it back as it was?
 Yes, anytime: our apps are removed, what we turned off comes back on, the TV's own screen returns.
