@@ -1462,7 +1462,7 @@ async function start(){
   $('loading').style.display = 'none';
 }
 (function(){
-  const bgs = ['9hWJs7iblh8', 'LAj90eAXOZA', 'XDtzu1D2P8c', 'f5ZB0LHwi0s'];
+  const bgs = ['islamic-green', 'calligraphy', 'lanterns-gold', 'lantern-teal'];   // the bundled backgrounds (lantern-cream: too light for the screens)
   $('tv').style.setProperty('--bg', `url(backgrounds/${bgs[Math.floor(Math.random() * bgs.length)]}.jpg)`);
   tick(); setInterval(tick, 10000);
   if(Live && Live.frost) $('tv').classList.add('frosty');   // the app puts the glass under the panels: they come at once

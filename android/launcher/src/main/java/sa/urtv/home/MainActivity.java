@@ -355,16 +355,16 @@ public class MainActivity extends Activity {
         LinearLayout right = new LinearLayout(this);
         right.setGravity(Gravity.CENTER_VERTICAL);
         right.setClipChildren(false);
-        TextView saver = pill("شاشة التوقف", R.drawable.ic_screensaver);
+        // one settings button: «إعداداتك» opens the app's own settings (a popup over this screen); the TV's settings
+        // have their own key on the remote
+        TextView saver = pill("إعداداتك", R.drawable.ic_settings);
         saver.setOnClickListener(v -> openPackage(SAVER_PKG));
         TextView inputs = pill("المصادر", R.drawable.ic_input);
         inputs.setOnClickListener(v -> showInputs(v));
         wifiPill = pill("واي فاي", R.drawable.ic_wifi);
         wifiPill.setOnClickListener(v -> launch(new Intent(Settings.ACTION_WIFI_SETTINGS)));
-        TextView settings = pill("الإعدادات", R.drawable.ic_settings);
-        settings.setOnClickListener(v -> launch(new Intent(Settings.ACTION_SETTINGS)));
-        for (TextView p : isInstalled(SAVER_PKG) ? new TextView[]{inputs, wifiPill, settings, saver}
-                                                  : new TextView[]{inputs, wifiPill, settings}) {
+        for (TextView p : isInstalled(SAVER_PKG) ? new TextView[]{inputs, wifiPill, saver}
+                                                  : new TextView[]{inputs, wifiPill}) {
             right.addView(p, llp(-2, dp(30), dp(10), 0, 0, 0));
             pills.add(p);
         }

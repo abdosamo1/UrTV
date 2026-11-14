@@ -48,8 +48,10 @@
         android:theme="@android:style/Theme.Material.NoActionBar">
 
         <!-- opening the app shows its settings -->
+        <!-- a popup over the screen it is opened from (translucent: the home screen stays behind it) -->
         <activity
             android:name=".SettingsActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar.Fullscreen"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -117,7 +117,7 @@ final class Prefs {
     /** the voice for Dhuhr, Asr, Maghrib and Isha (a file in assets/adhan) */
     String adhanVoice() {
         String v = sp.getString("adhanVoice", Adhan.DEFAULT_VOICE);
-        return Adhan.isChoice(v) ? v : Adhan.DEFAULT_VOICE;
+        return Adhan.isChoice(v) && !Adhan.fajrOnly(v) ? v : Adhan.DEFAULT_VOICE;   // a Fajr adhan only at Fajr
     }
     void setAdhanVoice(String v) { sp.edit().putString("adhanVoice", v).apply(); }
 

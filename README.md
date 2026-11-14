@@ -1,18 +1,20 @@
-<p align="center"><img src=".github/brand/hero-2.png" alt="تلفزيونك · UrTV" width="100%"></p>
+<p align="center"><img src=".github/brand/hero-3.png" alt="تلفزيونك · UrTV" width="100%"></p>
 
 <h1 align="center">تلفزيونك · UrTV</h1>
 
 <p align="center">A new Arabic home screen, a screensaver and a live TV app for Android TV / Google TV, made for Muslim families in Europe.<br>Prayer times and the adhan from your own mosque, a lighter, faster TV, and your AI agent sets it all up.</p>
 
-<p align="center"><img src=".github/screens/home-2.jpg" alt="Before: Google TV home. After: the UrTV home screen" width="100%"></p>
-<p align="center"><img src=".github/screens/screensaver-2.jpg" alt="Before: the Google screensaver. After: the UrTV screensaver with prayer times" width="100%"></p>
+<p align="center"><img src=".github/screens/home-3.jpg" alt="Before: Google TV home. After: the UrTV home screen" width="100%"></p>
+<p align="center"><img src=".github/screens/screensaver-3.jpg" alt="Before: the Google screensaver. After: the UrTV screensaver with prayer times" width="100%"></p>
 
-<p align="center"><img src=".github/screens/adhan-2.jpg" alt="A notice before the adhan over a film, and the muezzin choice" width="100%"></p>
+<p align="center"><img src=".github/screens/adhan-3.jpg" alt="A notice before the adhan over a film, and the muezzin choice" width="100%"></p>
+<p align="center"><img src=".github/screens/settings-3.jpg" alt="«إعداداتك»: the settings in a glass popup over the home screen" width="100%"></p>
 
 > **Prayer times from your mosque.** Pick your mosque on [Mawaqit](https://mawaqit.net) by its link: the adhan,
 > iqama and Friday times on the screen are the ones your mosque publishes. The city, weather and time zone follow
 > where the TV is connected, named in the country's language («Stuttgart, Deutschland»). The adhan plays on the TV
-> at each prayer, with a separate voice for Fajr and its own volume.
+> at each prayer, with its own volume. Fajr has its own adhans («الصلاة خير من النوم»), offered for Fajr only.
+> «إعداداتك» on the home screen opens every setting (mosque, adhan, city, teams) in a glass popup over it.
 
 ### تلفزيونك المباشر · live TV
 
@@ -20,7 +22,7 @@ Live channels, films and series from your provider's link (Xtream, M3U or a MAG 
 remote: continue watching, favourites with a long OK, search in each section, your progress on each episode, and
 several accounts. The prayer notice shows over it like over any other app.
 
-<p align="center"><img src=".github/screens/live-tv-2.jpg" alt="تلفزيونك المباشر: live channels, films and series" width="100%"></p>
+<p align="center"><img src=".github/screens/live-tv-3.jpg" alt="تلفزيونك المباشر: live channels, films and series" width="100%"></p>
 
 ## Set it up in 3 steps
 
@@ -65,9 +67,9 @@ screen: [docs/RECREATE-PROMPT.md](docs/RECREATE-PROMPT.md).
 
 | | | |
 |---|---|---|
-| **شاشة تلفزيونك** · screensaver | Clock, Hijri date, prayer times and iqama, Ramadan, the adhan from your mosque, your teams' matches, weather, and beside the clock your choice of today's prayers, the 5-day forecast, all your teams' games, or a verse/hadith of the day, over landscape photos | `urtv-screensaver.apk` |
+| **شاشة تلفزيونك** · screensaver | Clock, Hijri date, prayer times and iqama, Ramadan, the adhan from your mosque, your teams' matches, weather, and beside the clock your choice of today's prayers, the 5-day forecast, all your teams' games, or a verse/hadith of the day, over Islamic-art backgrounds | `urtv-screensaver.apk` |
 | **تلفزيونك المباشر** · live TV | Live channels, films and series from your provider's link (Xtream, M3U or MAG portal): continue watching, favourites (long OK), search per section, progress on each episode, several accounts | `urtv-live.apk` |
-| **تلفزيونك** · home screen | Clean Arabic launcher: favourites row (5–10 apps) arranged in «ترتيب المفضلة», all apps, inputs, Wi-Fi, settings; optional card from the screensaver (off by default) | `urtv-home.apk` |
+| **تلفزيونك** · home screen | Clean Arabic launcher: favourites row (5–10 apps) arranged in «ترتيب المفضلة», all apps, inputs, Wi-Fi, «إعداداتك»; optional card from the screensaver (off by default) | `urtv-home.apk` |
 | **Two free apps** | [TV Bro](https://github.com/truefedex/tv-bro), a web browser for the TV, and [SmartTube](https://github.com/yuliskov/SmartTube), YouTube without ads, from their own releases (skip with `SKIP_EXTRAS=1`) | `optimize/install.sh extras` |
 | **Speed-up** | Telemetry, ads and demos off (reversibly), closed apps frozen, Play Store kept from running in the background, faster animations | `optimize/` |
 

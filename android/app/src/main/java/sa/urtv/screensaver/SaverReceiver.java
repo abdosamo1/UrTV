@@ -163,7 +163,8 @@ public class SaverReceiver extends BroadcastReceiver {
         String adhan = i.getStringExtra("adhan"), adhanVoice = i.getStringExtra("adhan_voice"),
             adhanFajr = i.getStringExtra("adhan_fajr"), adhanVolume = i.getStringExtra("adhan_volume");
         if (adhan != null && !adhan.matches("true|false")) return "error: adhan is true or false";
-        if (adhanVoice != null && !Adhan.isChoice(adhanVoice)) return "error: adhan_voice is one of " + voices();
+        if (adhanVoice != null && (!Adhan.isChoice(adhanVoice) || Adhan.fajrOnly(adhanVoice)))
+            return "error: adhan_voice is one of " + voices() + " (not a Fajr adhan: those are for adhan_fajr)";
         if (adhanFajr != null && !adhanFajr.equals("off") && !Adhan.isChoice(adhanFajr))
             return "error: adhan_fajr is off or one of " + voices();
         if (adhanVolume != null && !adhanVolume.matches("\\d{1,3}") ) return "error: adhan_volume is a number, e.g. 10";

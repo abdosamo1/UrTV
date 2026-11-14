@@ -34,14 +34,14 @@ final class Adhan {
     static final String[][] VOICES = {
         {"makki-1", "الحرم المكي ١"},
         {"makki-2", "الحرم المكي ٢"},
-        {"madani", "الحرم المدني"},
+        {"madani", "الحرم المدني - فجر"},
         {"aqsa", "القدس"},
         {"ahmad-jalal-yahya", "أحمد جلال يحيى"},
         {"voice-7", "أذان ٧"},
         {"voice-8", "أذان ٨"},
         {"fajr-trabulsi", "أحمد الطرابلسي · أذان الفجر"},
     };
-    static final String[] FAJR_FIRST = {"fajr-trabulsi"};
+    static final String[] FAJR_FIRST = {"fajr-trabulsi", "madani"};   // Fajr adhans: offered for Fajr only
 
     static final String DEFAULT_VOICE = "makki-1";
     static final String DEFAULT_FAJR = "fajr-trabulsi";
@@ -54,6 +54,9 @@ final class Adhan {
 
     /** a voice, or RANDOM (what the settings store) */
     static boolean isChoice(String id) { return RANDOM.equals(id) || isVoice(id); }
+
+    /** a Fajr adhan («الصلاة خير من النوم»): never for the other four prayers */
+    static boolean fajrOnly(String id) { return java.util.Arrays.asList(FAJR_FIRST).contains(id); }
 
     /** the file to play for a stored choice: RANDOM picks one now. Fajr may get a Fajr voice; the others never
      *  (it carries «الصلاة خير من النوم»). */

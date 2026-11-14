@@ -9,9 +9,9 @@
 #   optimize/saver.sh mosque URL ['اسم']           adhan, iqama and Jumu'a from the mosque's Mawaqit page
 #                                                  (https://mawaqit.net/de/SLUG, or SLUG); `mosque none` = calculated
 #   optimize/saver.sh adhan true                   the adhan at each prayer time (true|false; on by default)
-#   optimize/saver.sh adhan-voice makki-1          random makki-1 makki-2 madani aqsa ahmad-jalal-yahya voice-7 voice-8
-#                                                  fajr-trabulsi  (Dhuhr, Asr, Maghrib, Isha)
-#   optimize/saver.sh adhan-fajr off               Fajr: off (the default) or one of the voices
+#   optimize/saver.sh adhan-voice makki-1          random makki-1 makki-2 aqsa ahmad-jalal-yahya voice-7 voice-8
+#                                                  (Dhuhr, Asr, Maghrib, Isha)
+#   optimize/saver.sh adhan-fajr off               Fajr: off (the default), fajr-trabulsi, madani, or one of the above
 #   optimize/saver.sh adhan-volume 10              the TV volume it plays at (then the volume goes back)
 #   optimize/saver.sh adhan-test | adhan-stop      play the adhan now / stop it
 #   optimize/saver.sh football KEY                 the next five games from football-data.org (a free key; none = off)

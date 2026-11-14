@@ -64,18 +64,75 @@ public class SettingsActivity extends Activity {
         list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
         list.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
-        list.setPadding(dp(8), dp(36), dp(8), dp(48));
-        int width = Math.min(getResources().getDisplayMetrics().widthPixels - dp(170), dp(860));   // room for the rail
+        list.setPadding(dp(8), dp(8), dp(8), dp(40));
+
+        // a popup over the screen it was opened from (the home screen): a liquid-glass panel in the middle, the
+        // screen behind dimmed and, where the TV can, blurred (Android 12+)
+        android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+        int pw = Math.min(Math.round(dm.widthPixels * .66f), dp(880)), ph = Math.round(dm.heightPixels * .88f);
+        int width = pw - dp(96);   // room for the rail
         frame.addView(list, new android.widget.FrameLayout.LayoutParams(width, -2, Gravity.CENTER_HORIZONTAL));
         scroll.addView(frame);
 
+        android.widget.FrameLayout panel = new android.widget.FrameLayout(this);
+        panel.setBackground(glass());
+        panel.setElevation(dp(24));
+        panel.setClipToOutline(true);
+        TextView title = new TextView(this);
+        title.setText("إعداداتك");
+        title.setTextColor(0xFFF6EFE0);
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
+        title.setTypeface(font("ThmanyahDisplay-Bold"));
+        android.widget.FrameLayout.LayoutParams tp = new android.widget.FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.RIGHT);
+        tp.setMargins(0, dp(22), dp(40), 0);
+        panel.addView(title, tp);
+        android.widget.FrameLayout.LayoutParams sp = new android.widget.FrameLayout.LayoutParams(-1, -1);
+        sp.topMargin = dp(68);
+        panel.addView(scroll, sp);
+        panel.addView(rail(ph - dp(48)), new android.widget.FrameLayout.LayoutParams(-2, -2, Gravity.LEFT | Gravity.CENTER_VERTICAL));
+
         android.widget.FrameLayout root = new android.widget.FrameLayout(this);
-        root.setBackground(new android.graphics.drawable.GradientDrawable(
-            android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xFF0A2016, 0xFF04120C, 0xFF020806}));
-        root.addView(scroll, new android.widget.FrameLayout.LayoutParams(-1, -1));
-        root.addView(rail(), new android.widget.FrameLayout.LayoutParams(-2, -2, Gravity.LEFT | Gravity.CENTER_VERTICAL));
+        root.setBackgroundColor(0x99000000);
+        root.addView(panel, new android.widget.FrameLayout.LayoutParams(pw, ph, Gravity.CENTER));
+        getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0));
+        if (android.os.Build.VERSION.SDK_INT >= 31) {
+            try {
+                getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
+                android.view.WindowManager.LayoutParams a = getWindow().getAttributes();
+                a.setBlurBehindRadius(dp(30));
+                getWindow().setAttributes(a);
+            } catch (RuntimeException ignored) { }   // a TV without blur: the dim alone
+        }
         setContentView(root);
         render();
+        // it comes in as the app's other popups do: it grows a little as it clears
+        root.setAlpha(0f);
+        root.animate().alpha(1f).setDuration(200).start();
+        panel.setScaleX(.94f); panel.setScaleY(.94f);
+        panel.animate().scaleX(1f).scaleY(1f).setDuration(320)
+            .setInterpolator(new android.view.animation.OvershootInterpolator(1.1f)).start();
+    }
+
+    /** Liquid glass: a dark tint, light pooling at the top edge, a bright rim (as the home screen's and the live
+     *  app's panels) */
+    private android.graphics.drawable.Drawable glass() {
+        android.graphics.drawable.GradientDrawable tint = new android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xE0222B26, 0xE6141B17, 0xEB0B110E});
+        tint.setCornerRadius(dp(30));
+        android.graphics.drawable.GradientDrawable shine = new android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.TL_BR, new int[]{0x2EFFFFFF, 0x08FFFFFF, 0x00FFFFFF, 0x12FFFFFF});
+        shine.setCornerRadius(dp(30));
+        android.graphics.drawable.GradientDrawable rim = new android.graphics.drawable.GradientDrawable();
+        rim.setCornerRadius(dp(30));
+        rim.setColor(0);
+        rim.setStroke(Math.max(1, Math.round(1.5f * getResources().getDisplayMetrics().density)), 0x59FFFFFF);
+        return new android.graphics.drawable.LayerDrawable(new android.graphics.drawable.Drawable[]{tint, shine, rim});
+    }
+
+    @Override
+    public void finish() {   // it goes out quickly, the screen behind as it was
+        super.finish();
+        overridePendingTransition(0, android.R.anim.fade_out);
     }
 
     @Override
@@ -93,7 +150,7 @@ public class SettingsActivity extends Activity {
     }
 
     /** The rail on the left, the screen's whole height: it fills (gold) as you go down, full on the last row. */
-    private View rail() {
+    private View rail(int h) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -112,7 +169,6 @@ public class SettingsActivity extends Activity {
         railFill.setPivotY(0);
         railFill.setScaleY(0);
         track.addView(railFill, new android.widget.FrameLayout.LayoutParams(-1, -1));
-        int h = getResources().getDisplayMetrics().heightPixels - dp(48);   // the whole height, a margin top and bottom
         box.addView(track, new LinearLayout.LayoutParams(dp(6), h));
         return box;
     }
@@ -285,7 +341,8 @@ public class SettingsActivity extends Activity {
         if (fajr) { ids.add(""); labels.add("بدون أذان للفجر"); }
         for (String f : Adhan.FAJR_FIRST) if (fajr) { ids.add(f); labels.add(Adhan.label(f)); }
         ids.add(Adhan.RANDOM); labels.add(Adhan.RANDOM_LABEL);
-        for (String[] v : Adhan.VOICES) if (!ids.contains(v[0])) { ids.add(v[0]); labels.add(v[1]); }
+        for (String[] v : Adhan.VOICES)   // the Fajr adhans are in Fajr's list only
+            if (!ids.contains(v[0]) && !Adhan.fajrOnly(v[0])) { ids.add(v[0]); labels.add(v[1]); }
         String cur = fajr ? prefs.adhanFajr() : prefs.adhanVoice();
         new AlertDialog.Builder(this, DIALOG_THEME).setTitle(fajr ? "أذان الفجر" : "صوت الأذان")
             .setSingleChoiceItems(labels.toArray(new String[0]), Math.max(0, ids.indexOf(cur)), (d, i) -> {
