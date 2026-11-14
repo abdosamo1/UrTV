@@ -29,7 +29,7 @@ short folder such as `C:/UrTV`; or in an existing folder `git fetch origin`, `gi
 4. `optimize/selftest.sh`: an upload, Arabic text, the screensaver from ADB, and the apps a home screen can list.
    Copy all its output into the report.
 5. Club search, one call each: `optimize/saver.sh find-team الهلال`, then `السعودية`, `النصر`, `ريال مدريد`,
-   `الاهلي` (the Saudi club must come first) and `Atletico Madrid`.
+   `الاهلي` (both namesakes listed), `Real` (Real Madrid first) and `Atletico Madrid`.
 6. `optimize/shot.sh home`, and look at the picture.
 
 Then write one report, in English, that I can paste to the developer:

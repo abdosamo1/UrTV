@@ -312,7 +312,7 @@
 
     <div class="markets">
       <div class="wxline"><span class="wxt" id="wx-temp"></span><span class="wxd" id="wx-desc"></span></div>
-      <div class="wxsub"><span id="wx-city">الرياض</span><span class="wxr" id="wx-range"></span></div>
+      <div class="wxsub"><span id="wx-city">لندن</span><span class="wxr" id="wx-range"></span></div>
       <div class="rule l"></div>
     </div>
   </header>
@@ -322,7 +322,7 @@
       <div class="clock">
         <span class="ampm" id="ck-ap">—</span><span class="d" id="ck-h">--</span><span class="sep">:</span><span class="d" id="ck-m">--</span>
       </div>
-      <div class="subline"><span class="dot"></span><span id="clock-sub">بتوقيت الرياض</span></div>
+      <div class="subline"><span class="dot"></span><span id="clock-sub">بتوقيت لندن</span></div>
     </div>
 
     <div class="week">
@@ -364,10 +364,10 @@ const _Q = new URLSearchParams((location.hash || '').replace(/^#/, ''));
 const _list = k => (_Q.get(k) || '').split(',').map(x=>x.trim()).filter(Boolean);
 const _num = (k, d) => { const v = parseFloat(_Q.get(k)); return isNaN(v) ? d : v; };
 const CONFIG = {
-  city: _Q.get('city') || 'الرياض',
-  latitude: _num('lat', 24.7136),
-  longitude: _num('lon', 46.6753),
-  timezone: _Q.get('tz') || 'Asia/Riyadh',
+  city: _Q.get('city') || 'لندن',
+  latitude: _num('lat', 51.5072),
+  longitude: _num('lon', -0.1276),
+  timezone: _Q.get('tz') || 'Europe/London',
   // #loc=auto: city, coordinates and time zone from the internet connection (cached; #city/#lat/#lon until then)
   autoLocation: _Q.get('loc') === 'auto',
   // #mosque=<Mawaqit slug>: the mosque's own adhan, iqama and Jumu'a times instead of calculated ones
@@ -375,7 +375,7 @@ const CONFIG = {
   prayerMethod: 4,
   // followed teams in priority order: #teams=id,id,... (up to 10); older builds send team1/team2
   teamIds: (_Q.has('teams') ? _Q.get('teams').split(',')
-            : [_Q.has('team1') ? _Q.get('team1') : '136013', _Q.has('team2') ? _Q.get('team2') : '136137'])
+            : [_Q.has('team1') ? _Q.get('team1') : '133738', _Q.has('team2') ? _Q.get('team2') : '133739'])
     .map(x=>(x||'').trim()).filter(x=>/^\d+$/.test(x)).slice(0, 10),
   sportsKey: '123',
   // #fdkey=: a free football-data.org key (kept on the TV only): the next five games of each followed club it

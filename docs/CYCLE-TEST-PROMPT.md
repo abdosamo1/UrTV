@@ -39,8 +39,8 @@ Note the clock time at the start and end of each numbered step.
    - `optimize/saver.sh city الرياض`
    - the clubs, new and random each cycle: `optimize/venv/bin/python -I optimize/random-clubs.py` prints a seed and
      6 to 10 names, as people would write them (always a Saudi club in Arabic, a national team, and a club abroad
-     in English). Run `optimize/saver.sh find-team <name>` for each, exactly as printed, take the club meant (a
-     Saudi one before a namesake abroad), then `optimize/saver.sh teams <id:Name> ...` with all of them, in that
+     in English). Run `optimize/saver.sh find-team <name>` for each, exactly as printed, take the club meant (by its
+     league when two share a name), then `optimize/saver.sh teams <id:Name> ...` with all of them, in that
      order. Write the seed and each search's first line in the report
    - `optimize/saver.sh card verse`, `optimize/saver.sh home-card none`
    - `optimize/dock.sh apps`, then `optimize/dock.sh set <the 6 packages>` in my order

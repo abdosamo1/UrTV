@@ -1,5 +1,5 @@
 # query<TAB>first result id ("-" = no results)<TAB>ids that must be in the results<TAB>ids that must not be
-# Saudi clubs first when names clash: 136013 Al-Hilal, 136022 Al-Nassr, 136137 Saudi Arabia, 150639 Saudi Al-Arabi
+# When names match alike the world's big clubs come first (TeamSearch.BIG), then the exact spelling, then the list's order
 الهلال	136013		136017,136018
 هلال	136013
 الهِلاَل	136013
@@ -14,14 +14,14 @@ hilal sfc	136013
 النصر	136022	137831
 نصر	136022
 Al Nassr	136022
-Al-Nasr	136022	137831
+Al-Nasr	137831	136022
 نادي النصر	136022
 الاتحاد	136018
 Al Ittihad	136018
 Al-Ittihad	136018
 الوحدة	136199	137836
 الوحده	136199	137836
-Al Wahda	136199	137836
+Al Wahda	137836	136199
 الاهلي	137721	138995
 الأهلي	137721	138995
 الإهلي	137721	138995
@@ -83,3 +83,8 @@ x	-
 fc	-
 Zzzzzzqx	-
 😀	-
+Real	133738
+ريال	133738
+Manchester	133612	133613
+مانشستر	133612	133613
+Borussia	133650
