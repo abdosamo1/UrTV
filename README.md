@@ -1,17 +1,26 @@
-<p align="center"><img src=".github/brand/hero.png" alt="تلفزيونك · UrTV" width="100%"></p>
+<p align="center"><img src=".github/brand/hero-2.png" alt="تلفزيونك · UrTV" width="100%"></p>
 
 <h1 align="center">تلفزيونك · UrTV</h1>
 
 <p align="center">A new Arabic home screen, a screensaver and a live TV app for Android TV / Google TV, made for Muslim families in Europe.<br>Prayer times and the adhan from your own mosque, a lighter, faster TV, and your AI agent sets it all up.</p>
 
-<p align="center"><img src=".github/screens/before-after-home.jpg" alt="Before: Google TV home. After: the UrTV home screen" width="100%"></p>
-<p align="center"><img src=".github/screens/before-after-screensaver.jpg" alt="Before: the Google screensaver. After: the UrTV screensaver with prayer times" width="100%"></p>
-<p align="center"><img src=".github/screens/live-tv.jpg" alt="تلفزيونك المباشر: live channels, films and series" width="100%"></p>
+<p align="center"><img src=".github/screens/home-2.jpg" alt="Before: Google TV home. After: the UrTV home screen" width="100%"></p>
+<p align="center"><img src=".github/screens/screensaver-2.jpg" alt="Before: the Google screensaver. After: the UrTV screensaver with prayer times" width="100%"></p>
+
+<p align="center"><img src=".github/screens/adhan-2.jpg" alt="A notice before the adhan over a film, and the muezzin choice" width="100%"></p>
 
 > **Prayer times from your mosque.** Pick your mosque on [Mawaqit](https://mawaqit.net) by its link: the adhan,
 > iqama and Friday times on the screen are the ones your mosque publishes. The city, weather and time zone follow
 > where the TV is connected, named in the country's language («Stuttgart, Deutschland»). The adhan plays on the TV
 > at each prayer, with a separate voice for Fajr and its own volume.
+
+### تلفزيونك المباشر · live TV
+
+Live channels, films and series from your provider's link (Xtream, M3U or a MAG portal), in one Arabic app made for the
+remote: continue watching, favourites with a long OK, search in each section, your progress on each episode, and
+several accounts. The prayer notice shows over it like over any other app.
+
+<p align="center"><img src=".github/screens/live-tv-2.jpg" alt="تلفزيونك المباشر: live channels, films and series" width="100%"></p>
 
 ## Set it up in 3 steps
 
