@@ -2,55 +2,16 @@
 
 <h1 align="center">تلفزيونك · UrTV</h1>
 
-<p align="center" dir="rtl"> شاشتك محتاجة تغيير - تطبيق تلفزيونك ببدل شاشتك وشاشة توقف بشاشة أخف وأسهل الاستخدام مع توقيت الصلوات باستخدام موقع مواقيت في أوروبا<br></p>
+<p align="center">A new Arabic home screen, a screensaver and a live TV app for Android TV / Google TV, made for Muslim families in Europe.<br>Prayer times and the adhan from your own mosque, a lighter, faster TV, and your AI agent sets it all up.</p>
 
-<p align="center">An Arabic home screen and a screensaver for Android TV / Google TV, and a safe speed-up.<br>Your AI agent sets it all up.</p>
+<p align="center"><img src=".github/screens/before-after-home.jpg" alt="Before: Google TV home. After: the UrTV home screen" width="100%"></p>
+<p align="center"><img src=".github/screens/before-after-screensaver.jpg" alt="Before: the Google screensaver. After: the UrTV screensaver with prayer times" width="100%"></p>
+<p align="center"><img src=".github/screens/live-tv.jpg" alt="تلفزيونك المباشر: live channels, films and series" width="100%"></p>
 
-<p align="center"><img src=".github/screens/before-after-home.jpg" alt="Before: Google TV home. After: the تلفزيونك home screen" width="100%"></p>
-<p align="center"><img src=".github/screens/before-after-screensaver.jpg" alt="Before: the Google screensaver. After: شاشة تلفزيونك" width="100%"></p>
-
-<div dir="rtl">
-
-> مواقيت الأذان والإقامة والجمعة من جامعك على [مواقيت](https://mawaqit.net) (تختاره من الإعدادات برابطه)،
-> والمدينة والطقس والتوقيت تلقائياً حسب موقع الاتصال (خارج الدول العربية بلغة البلد: «Stuttgart, Deutschland»)،
-
-
-## ركّبه في 3 خطوات
-
-### ① التلفزيون
-الإعدادات ← حول ← اضغط OK على **Build** سبع مرات. بعدها روح إلى **خيارات المطوّر** ← شغّل **USB debugging**.
-
-### ② كمبيوتر على نفس الواي فاي، وعليه واحد من هذي
-
-| **Codex** (OpenAI) | **Claude Code** (Anthropic) |
-|---|---|
-| مجاني بحساب ChatGPT | يحتاج اشتراك Claude Pro (20$ بالشهر) |
-| حمّل تطبيق Codex | حمّل تطبيق Claude ← تبويب **Code** |
-| الموافقات: اختر **«Approve for me»** | الموافقات: **Allow** للمهمة كلها |
-
-<sub>ويندوز: ركّب Git وPython أول (`winget install Git.Git Python.Python.3.12`). Gemini CLI مجاني وناس قالوا يشتغل؛ ما جرّبناه.</sub>
-
-### ③ الصق هذا
-
-> ركّب تلفزيوني من https://github.com/abdosamo1/UrTV: انسخ المستودع واتبع `docs/SETUP-PROMPT.md` خطوة بخطوة. أنت على كمبيوتر متصل بنفس شبكة الواي فاي حقت التلفزيون.
-
-#### شو بصير بعد اللصق؟
-يسألك عن **مدينتك** و**أنديتك** ورابط اقرب جامع الك على تطبيق مواقيت وإذا حابب تضيف صورة خاصة فيك بتطلع بالأعلى جنب الاسم، والتلفزيون يسألك **Allow** مرة وحدة، وبعدها خلّه يشتغل: 40 دقيقة وكم إعادة تشغيل.
-
-#### بترجعه مثل ما كان؟
-نعم، بأي وقت: تطبيقاتنا تنحذف، واللي أطفأناه يرجع، وشاشة التلفزيون الأصلية ترجع.
-<sub>`optimize/reset.sh`</sub>
-
-#### نزلت نسخة جديدة؟
-ما تحتاج شي: الشاشة والتطبيقين يتحدّثون لحالهم من الإنترنت كل ٦ ساعات، بدون لابتوب، وإعداداتك كلها باقية.
-وتقدر تحدّث فوراً من الإعدادات: «حدّث الآن».
-<sub>`optimize/install.sh all`</sub>
-
-#### نزل تحديث للنظام وقفل تطبيقنا؟
-أعد الإعداد كله بأمر واحد، وإعداداتك باقية.
-<sub>`optimize/run.sh again`</sub>
-
-</div>
+> **Prayer times from your mosque.** Pick your mosque on [Mawaqit](https://mawaqit.net) by its link: the adhan,
+> iqama and Friday times on the screen are the ones your mosque publishes. The city, weather and time zone follow
+> where the TV is connected, named in the country's language («Stuttgart, Deutschland»). The adhan plays on the TV
+> at each prayer, with a separate voice for Fajr and its own volume.
 
 ## Set it up in 3 steps
 
@@ -72,14 +33,14 @@ Settings → About → press OK on **Build** 7 times. Then go to **Developer opt
 > Set up my TV with https://github.com/abdosamo1/UrTV: clone it and follow `docs/SETUP-PROMPT.md` step by step. You are on a computer on the same Wi-Fi as the TV.
 
 #### What happens after pasting?
-It asks your **name**, your**picture** (if you want), your **city**, your **clubs**, the TV asks **Allow** once, then leave it: 40 minutes, a few restarts.
+It asks your **name**, your **picture** (optional, shown beside the clock), your **city**, the link of your nearest mosque on **Mawaqit**, and your **clubs**. The TV asks **Allow** once, then leave it: 40 minutes, a few restarts.
 
 #### Can I put it back as it was?
 Yes, anytime: our apps are removed, what we turned off comes back on, the TV's own screen returns.
 <sub>`optimize/reset.sh`</sub>
 
 #### A new version came out?
-Update both apps; all your settings stay. The screen itself updates on its own. The settings row tells you when one exists.
+Nothing to do: the apps update themselves from the internet every 6 hours, no laptop needed, and all your settings stay. «حدّث الآن» in the settings updates at once; تلفزيونك المباشر offers the update when you leave it.
 <sub>`optimize/install.sh all`</sub>
 
 #### The TV updated its system and locked our app out?
@@ -95,7 +56,8 @@ screen: [docs/RECREATE-PROMPT.md](docs/RECREATE-PROMPT.md).
 
 | | | |
 |---|---|---|
-| **شاشة تلفزيونك** · screensaver | Clock, Hijri date, prayer times and iqama, Ramadan, the adhan from your mosque, your teams' matches, weather, and beside the clock your choice of today's prayers, the 5-day forecast, all your teams' games, or a verse/hadith of the day, over Saudi landscapes | `urtv-screensaver.apk` |
+| **شاشة تلفزيونك** · screensaver | Clock, Hijri date, prayer times and iqama, Ramadan, the adhan from your mosque, your teams' matches, weather, and beside the clock your choice of today's prayers, the 5-day forecast, all your teams' games, or a verse/hadith of the day, over landscape photos | `urtv-screensaver.apk` |
+| **تلفزيونك المباشر** · live TV | Live channels, films and series from your provider's link (Xtream, M3U or MAG portal): continue watching, favourites (long OK), search per section, progress on each episode, several accounts | `urtv-live.apk` |
 | **تلفزيونك** · home screen | Clean Arabic launcher: favourites row (5–10 apps) arranged in «ترتيب المفضلة», all apps, inputs, Wi-Fi, settings; optional card from the screensaver (off by default) | `urtv-home.apk` |
 | **Two free apps** | [TV Bro](https://github.com/truefedex/tv-bro), a web browser for the TV, and [SmartTube](https://github.com/yuliskov/SmartTube), YouTube without ads, from their own releases (skip with `SKIP_EXTRAS=1`) | `optimize/install.sh extras` |
 | **Speed-up** | Telemetry, ads and demos off (reversibly), closed apps frozen, Play Store kept from running in the background, faster animations | `optimize/` |
@@ -133,6 +95,7 @@ dist/urtv.html        stand-alone page, fonts and photos inlined: open in any br
 dist/tv.html          light page the Android app loads (0.3 MB); the app serves fonts and photos from disk
 android/app           the screensaver app (sa.urtv.screensaver): DreamService, settings, auto-update
 android/launcher      the home screen (sa.urtv.home)
+android/live          تلفزيونك المباشر (sa.urtv.live): the page in assets/live over Media3 players
 assets/               fonts, bundled photos, Arabic team names, verse and hadith texts
 photos/               the hosted photo set (5 shown per 4 days, rotating every 30 min)
 optimize/             TV tools (Python ADB client, no adb binary needed); lists/ says what may be turned off
@@ -141,7 +104,7 @@ docs/                 the agent prompts (setup, recreate), what we learned on re
 tests/run.sh          every check: build, data, fonts, scripts, private data, flaky-ADB upload, the screen in a browser
 ```
 
-A push to `master` builds both APKs in GitHub Actions and publishes them to `apk-latest` and a numbered `v3.N`
+A push to `master` builds the three APKs in GitHub Actions and publishes them to `apk-latest` and a numbered `v3.N`
 release; a push to `next` publishes `apk-next` instead (a test build). `tests/run.sh` runs on `master`, `next`,
 `content` and pull requests. Local Android build (needs the SDK): `python3 src/build.py && gradle -p android assembleRelease`
 (signed with the debug key; the release key lives only in the repository's secrets).
@@ -149,13 +112,13 @@ release; a push to `next` publishes `apk-next` instead (a test build). `tests/ru
 **Screen settings** come from the URL fragment (works on `file://` and in WebView):
 
 ```
-urtv.html#city=جدة&lat=21.5433&lon=39.1728&tz=Asia/Riyadh&teams=136013,136137&panel=prayers
+urtv.html#city=Stuttgart&lat=48.7758&lon=9.1829&tz=Europe/Berlin&mosque=<mawaqit-slug>&teams=133604&panel=prayers
 ```
 
 `teams`: up to 10 TheSportsDB ids in priority order. `panel`: the card beside the clock: `auto` (the four in turn every 30 s, the default), `prayers`,
 `forecast`, `matches`, `verse` or `none`. `mosque`: a Mawaqit slug; `loc=auto`: the place from the connection.
 
-**Data** (free, no keys): Aladhan (prayer times, Umm al-Qura), Open-Meteo (weather), Mawaqit (the mosque's timetable),
+**Data** (free, no keys): Mawaqit (your mosque's timetable), Aladhan (prayer times when no mosque is chosen), Open-Meteo (weather),
 TheSportsDB (matches). Everything fails soft: offline, the clock, dates, prayer and Ramadan
 countdowns still work and the last good data stays on screen. A finished game's score stays up for a day.
 
