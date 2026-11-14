@@ -12,8 +12,8 @@ spellings that differ only in doubled letters or vowels are one name too («Al-N
 A club matches by how much of its name the query is, best first:
   the same name (exactly, or only in doubled letters and vowels)   the start of a word, or of the name
   the start of every word
-Ties: Saudi clubs first (Saudi Al-Ain before the Emirati one, Al-Nassr before Al Nasr), then the exact spelling
-(«Mainz» before Monza), then the order of the list.
+Ties: the world's big clubs first (BIG: «Real» finds Real Madrid first), then the exact spelling («Mainz» before
+Monza), then the order of the list.
 """
 import re
 import unicodedata
@@ -75,7 +75,11 @@ def tier(q, name):
     return 9
 
 
-GROUP = {0: 0, 1: 0, 2: 1, 3: 2}   # a misspelt name still ranks as the same name, so the Saudi club wins
+GROUP = {0: 0, 1: 0, 2: 1, 3: 2}   # a misspelt name still ranks as the same name
+
+# the world's big clubs, in this order (the same list is TeamSearch.BIG on the TV): Real Madrid, Barcelona, Bayern,
+# Dortmund, Man United, Man City, Liverpool, Arsenal, Chelsea, PSG, Juventus, Inter, Milan
+BIG = ["133738", "133739", "133664", "133650", "133612", "133613", "133602", "133604", "133610", "133714", "133676", "133681", "133667"]
 
 
 ARTICLES = {"ال", "al", "el"}   # a query of nothing else finds nothing
@@ -92,8 +96,10 @@ def names_of(club):
     return [club.get("en"), club.get("ar"), *(club.get("alt") or [])]
 
 
-def is_saudi(club):
-    return any("Saudi" in l for l in club.get("leagues") or [])
+def big(club):
+    """its place among the big clubs, or len(BIG)"""
+    i = str(club.get("id"))
+    return BIG.index(i) if i in BIG else len(BIG)
 
 
 def search(clubs, query, limit=None):
@@ -106,7 +112,7 @@ def search(clubs, query, limit=None):
         for n, club in enumerate(clubs or []):
             t = min((tier(q, normalize(x)) for x in names_of(club) if x), default=9)
             if t < 9:
-                ranked.append((GROUP[t], not is_saudi(club), t, n, club))
+                ranked.append((GROUP[t], big(club), t, n, club))
         ranked.sort(key=lambda r: r[:4])
         found = [r[4] for r in ranked]
         return found[:limit] if limit else found

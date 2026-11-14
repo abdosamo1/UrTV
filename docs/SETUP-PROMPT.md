@@ -206,7 +206,7 @@ Lines starting with `!!` are the scripts telling you to stop and act. These are 
 | `left off by the TV itself` (keep.sh) | a protected package was already off before UrTV and the TV won't turn it on (TCL ships Alexa off outside its regions) | nothing to do: go on |
 | the TV's own screensaver screenshot is black | Android hides it from screenshots | expected; ours can be shot |
 | our screensaver shot has no weather or matches yet | data still loading | `optimize/saver.sh update`, wait a minute, shoot again |
-| `find-team` finds nothing | a spelling our list doesn't have, or a club outside the app's leagues | once with the English name; or `optimize/saver.sh find-team --list <league word>` (e.g. `Saudi`, `Premier`) and pick it from there |
+| `find-team` finds nothing | a spelling our list doesn't have, or a club outside the app's leagues | once with the English name; or `optimize/saver.sh find-team --list <league word>` (e.g. `Premier`, `Bundesliga`) and pick it from there |
 | `screensaver: preview` (shot.sh), or «not measured» for a screensaver | this Android won't start the screensaver from ADB (some Android 14 sets) | expected: the shot is our app's preview of the same page; don't look for other ways to start it |
 | `optimize/run.sh status` has no «protected features» step | an old copy of this repo | `git pull`, then `optimize/run.sh` |
 
@@ -263,7 +263,7 @@ itself) and tell me. Some TCL firmware keeps its own home: then `SKIP_LAUNCHER=1
 ```
 optimize/saver.sh autoloc true                    # city, weather, time zone from the connection (city <name> <lat> <lon> ONLY if I named one)
 optimize/saver.sh mosque <the link I sent>        # or: mosque none; the screen then shows that mosque's adhan, iqama and Jumu'a
-optimize/saver.sh find-team <club as I wrote it>  # Arabic is fine (الهلال): one call per club, Saudi clubs first;
+optimize/saver.sh find-team <club as I wrote it>  # Arabic is fine (الهلال): one call per club, the world's big clubs first;
                                                   # then: optimize/saver.sh teams <id:Name> <id:Name> ...  (my order)
 optimize/saver.sh card <one of: auto, verse, prayers, forecast, matches, none>   # beside the clock (auto unless I said otherwise)
 optimize/saver.sh home-card auto                  # home screen: the same cards in turn
@@ -284,7 +284,7 @@ mine (on the step 1 screenshot) or that I asked for; `optimize/dock.sh hide <pkg
 list it for me in step 7 instead of choosing.
 
 Take every id from `find-team`'s output, which comes from our list of every club in the app's leagues and the
-national teams; never guess one. If it gives several, pick the one I meant (a Saudi club before a namesake abroad).
+national teams; never guess one. If it gives several, pick the one I meant (ask me if two clubs share the name).
 If I said «لا شي» to clubs, skip `find-team` and `teams`. `optimize/saver.sh` without arguments lists every option.
 
 ## 5. Check (5 minutes)

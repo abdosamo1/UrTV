@@ -39,16 +39,17 @@ final class Prefs {
     }
 
     // TheSportsDB id, Arabic name; more teams come from the in-app search
+    // the big clubs offered first in «إضافة فريق» (any other: browse the leagues or search); the first two are also
+    // the teams of a TV where none were ever chosen
     static final String[][] TEAM_PRESETS = {
-        {"136013", "الهلال"}, {"136137", "المنتخب السعودي"},
+        {"133738", "ريال مدريد"}, {"133739", "برشلونة"}, {"133664", "بايرن ميونخ"}, {"133650", "دورتموند"},
+        {"133612", "مانشستر يونايتد"}, {"133613", "مانشستر سيتي"},
     };
 
     // League name exactly as TheSportsDB spells it (checked from CI by .github/tools/team_ids.py), Arabic label.
     // Their clubs come from assets/shared/teams.json (Teams), which CI builds from these leagues' matches
     // (.github/tools/team_ids.py reads this list); a new league here needs its minimum club count there.
     static final String[][] LEAGUES = {
-        {"Saudi-Arabian Pro League", "دوري روشن السعودي"},
-        {"Saudi First Division League", "دوري يلو (الدرجة الأولى)"},
         {"English Premier League", "الدوري الإنجليزي"},
         {"Spanish La Liga", "الدوري الإسباني"},
         {"Italian Serie A", "الدوري الإيطالي"},
@@ -57,6 +58,8 @@ final class Prefs {
         {"Portuguese Primeira Liga", "الدوري البرتغالي"},
         {"Dutch Eredivisie", "الدوري الهولندي"},
         {"Turkish Super Lig", "الدوري التركي"},
+        {"Saudi-Arabian Pro League", "دوري روشن السعودي"},
+        {"Saudi First Division League", "دوري يلو (الدرجة الأولى)"},
         {"Egyptian Premier League", "الدوري المصري"},
         {"UAE Pro League", "الدوري الإماراتي"},
         {"Qatar Stars League", "الدوري القطري"},
@@ -83,9 +86,9 @@ final class Prefs {
 
     Prefs(Context c) { sp = c.getSharedPreferences("settings", Context.MODE_PRIVATE); }
 
-    /** {name, latitude, longitude}; Riyadh until the user picks */
+    /** {name, latitude, longitude}; London until the user picks (the place from the connection is used first) */
     String[] city() {
-        return new String[] {sp.getString("cityName", "الرياض"), sp.getString("cityLat", "24.6877"), sp.getString("cityLon", "46.7219")};
+        return new String[] {sp.getString("cityName", "لندن"), sp.getString("cityLat", "51.5072"), sp.getString("cityLon", "-0.1276")};
     }
     /** Picking a city by hand turns the automatic location off. */
     void setCity(String name, String lat, String lon) {

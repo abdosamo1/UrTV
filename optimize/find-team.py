@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Find a club's TheSportsDB id, by its Arabic or English name, or list a league's clubs to pick from.
 
-    optimize/saver.sh find-team الهلال          a club: every match in our list, Saudi clubs first
-    optimize/saver.sh find-team --list Saudi    every club of the leagues whose name has "Saudi"
+    optimize/saver.sh find-team Real Madrid     a club: every match in our list, the world's big clubs first
+    optimize/saver.sh find-team --list Spanish  every club of the leagues whose name has "Spanish"
 
 Our list, assets/shared/teams.json, has every club of the app's leagues and the national teams, with their ids
 (built in CI from their matches: TheSportsDB's free search misses some clubs, the Saudi Al-Hilal among them). It is
 searched as the TV's settings screen searches it (optimize/team_search.py: «الاهلي» = «الأهلي», «Atletico» =
-«Atlético», the Saudi club first when names clash). Only a club that isn't in it is searched online: Arabic names go through assets/shared/teams-ar.json to their
+«Atlético», the big clubs first when names match alike). Only a club that isn't in it is searched online: Arabic names go through assets/shared/teams-ar.json to their
 English spellings, and the usual spellings are tried too (Al-Hilal, Al Hilal, Hilal, … FC).
 Prints `id:Name  |  Arabic  |  leagues`, ready for `optimize/saver.sh teams`.
 """
@@ -75,8 +75,7 @@ def main():
     if sys.argv[1] == "--list":
         words = [w.lower() for w in sys.argv[2:]]
         found = [c for c in CLUBS if any(all(w in l.lower() for w in words) for l in c["leagues"])] if words else CLUBS
-        saudi = lambda c: not any("Saudi" in l for l in c["leagues"])   # noqa: E731
-        show(sorted(found, key=lambda c: (saudi(c), c["en"])), limit=None)
+        show(sorted(found, key=lambda c: (team_search.big(c), c["en"])), limit=None)
         return
     hit = ours(q)
     if hit:
@@ -101,7 +100,7 @@ def main():
                     found[t["idTeam"]] = t
     if not found:
         sys.exit(f"Nothing found for {q} (tried: {', '.join(sorted(tried))}). Try the city, or the English name.")
-    for t in sorted(found.values(), key=lambda t: (t.get("strCountry") != "Saudi Arabia", t["strTeam"])):
+    for t in sorted(found.values(), key=lambda t: t["strTeam"]):
         print(f"{t['idTeam']}:{t['strTeam']}  |  {t.get('strLeague') or ''}  |  {t.get('strCountry') or ''}")
 
 

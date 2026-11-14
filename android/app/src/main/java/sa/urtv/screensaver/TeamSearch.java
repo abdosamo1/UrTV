@@ -18,6 +18,11 @@ import java.util.regex.Pattern;
 final class TeamSearch {
     private TeamSearch() {}
 
+    /** The world's big clubs, in this order: shown first in «إضافة فريق» (Prefs.TEAM_PRESETS) and first in a
+     *  search when names match alike. Real Madrid, Barcelona, Bayern, Dortmund, Man United, Man City, Liverpool,
+     *  Arsenal, Chelsea, PSG, Juventus, Inter, Milan. The same list is in optimize/team_search.py. */
+    static final String[] BIG = {"133738", "133739", "133664", "133650", "133612", "133613", "133602", "133604", "133610", "133714", "133676", "133681", "133667"};
+
     /** One entry of teams.json. */
     static final class Team {
         final String id, en, ar;
@@ -25,9 +30,10 @@ final class TeamSearch {
         Team(String id, String en, String ar, String[] leagues, String[] alt) {
             this.id = id; this.en = en; this.ar = ar; this.leagues = leagues; this.alt = alt;
         }
-        boolean saudi() {
-            for (String l : leagues) if (l.contains("Saudi")) return true;
-            return false;
+        /** its place among the world's big clubs (they come first when names match alike), or BIG.length */
+        int big() {
+            for (int i = 0; i < BIG.length; i++) if (BIG[i].equals(id)) return i;
+            return BIG.length;
         }
     }
 
@@ -124,7 +130,7 @@ final class TeamSearch {
         return 3;
     }
 
-    private static final int[] GROUP = {0, 0, 1, 2};   // a misspelt name still ranks as the same name: Saudi first
+    private static final int[] GROUP = {0, 0, 1, 2};   // a misspelt name still ranks as the same name: big clubs first
 
     private static final Set<String> ARTICLES = set("ال", "al", "el");   // a query of nothing else finds nothing
 
@@ -142,7 +148,7 @@ final class TeamSearch {
         try {
             final List<String> q = queryWords(query);
             if (q.isEmpty() || join(q).length() < 2 || teams == null) return out;
-            final List<int[]> ranked = new ArrayList<>();   // {group, not saudi, tier, index}
+            final List<int[]> ranked = new ArrayList<>();   // {group, big club's place, tier, index}
             for (int n = 0; n < teams.size(); n++) {
                 Team t = teams.get(n);
                 int best = 9;
@@ -151,7 +157,7 @@ final class TeamSearch {
                 names.add(t.ar);
                 if (t.alt != null) Collections.addAll(names, t.alt);
                 for (String x : names) if (x != null && !x.isEmpty()) best = Math.min(best, tier(q, normalize(x)));
-                if (best < 9) ranked.add(new int[] {GROUP[best], t.saudi() ? 0 : 1, best, n});
+                if (best < 9) ranked.add(new int[] {GROUP[best], t.big(), best, n});
             }
             Collections.sort(ranked, new Comparator<int[]>() {
                 public int compare(int[] a, int[] b) {

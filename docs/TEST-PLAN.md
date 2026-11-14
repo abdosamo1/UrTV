@@ -142,7 +142,7 @@ Use the TV's clock or wait for the real moment; take a screenshot at each.
 | T2 | `optimize/dock.sh hide <pkg of an app in the grid>`, look at the home screen, then `optimize/dock.sh show <pkg>` | `hidden: <pkg>` and the app leaves the grid; `shown: <pkg>` and it is back |
 | T3 | `optimize/check-home.sh` | «OK: Home opens تلفزيونك»; if no app can be opened: a `!!` line and exit 1 |
 | T4 | `optimize/share.sh --agent "tester" "test note"` | «Sent to the author», or a QR code opens; `optimize/run/share.md` holds no IP address and no user folder (`grep` for the TV's IP and your user name prints nothing) |
-| T5 | `optimize/saver.sh find-team الأهلي` | The Saudi club first, then «الأهلي المصري»; each line `id:Name \| league` |
+| T5 | `optimize/saver.sh find-team الأهلي` | Both clubs named الأهلي, each with its league; each line `id:Name \| league`. `Real` → Real Madrid first |
 | T7 | `optimize/selftest.sh` | `OK upload`, `OK Arabic`, then the screensaver and the app counts; no `FAILED` |
 | T8 | `optimize/venv/bin/python -I optimize/random-clubs.py 8 1` | `seed: 1` and 8 names; the same on every run |
 | T9 | `optimize/reset.sh`, then `optimize/venv/bin/python -I optimize/tv.py pm list packages sa.urtv` and `optimize/venv/bin/python -I optimize/tv.py settings get secure screensaver_enabled` | The package list is empty; `screensaver_enabled` is the value in `optimize/run-*/backup.txt` (under «== screensaver»: the components line, then this one; `null` means unset) |
